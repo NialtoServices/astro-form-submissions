@@ -1,0 +1,20 @@
+{{heading}}
+{{#siteHost}}via {{siteHost}}{{/siteHost}}{{#submittedAt}} · {{submittedAt}}{{/submittedAt}}
+
+==================================================
+
+{{#fields}}
+{{label}}:
+{{value}}
+
+{{/fields}}
+{{#attachments}}
+{{attachmentsLabel}}:
+{{#items}}
+{{name}}{{#size}} ({{size}}){{/size}}: {{url}}
+{{/items}}
+
+{{/attachments}}
+--------------------------------------------------
+{{footerText}}{{#siteURL}}
+{{siteURL}}{{/siteURL}}

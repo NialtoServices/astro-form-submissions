@@ -1,0 +1,30 @@
+{{heading}}
+{{#formName}}{{formName}}{{/formName}}{{#submittedAt}}{{#formName}} · {{/formName}}{{submittedAt}}{{/submittedAt}}
+
+{{#greeting}}{{greeting}}
+
+{{/greeting}}{{message}}
+
+{{#hasFields}}
+==================================================
+
+{{/hasFields}}
+{{#fields}}
+{{label}}:
+{{value}}
+
+{{/fields}}
+{{#attachments}}
+{{attachmentsLabel}}:
+{{#items}}
+{{name}}{{#size}} ({{size}}){{/size}}: {{url}}
+{{/items}}
+
+{{/attachments}}
+--------------------------------------------------
+{{#hasContact}}{{#brandName}}{{brandName}}
+{{/brandName}}{{/hasContact}}{{#contactEmail}}{{contactEmail}}
+{{/contactEmail}}{{#contactPhone}}{{contactPhone}}
+{{/contactPhone}}{{#contactAddress}}{{contactAddress}}
+{{/contactAddress}}{{footerText}}{{#siteURL}}
+{{siteURL}}{{/siteURL}}

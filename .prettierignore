@@ -1,0 +1,10 @@
+node_modules/
+dist/
+pnpm-lock.yaml
+
+# Generated audit artifacts and external model reports
+audit/
+AUDIT-*.md
+
+# Generated from the .mustache sources at build time
+src/dispatchers/*-sources.ts
