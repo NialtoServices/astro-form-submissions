@@ -59,9 +59,18 @@ type ValidatorOf<S extends SchemaInput> = S extends (context: SchemaContext) => 
 /**
  * The submission handed to inspectors/enrichers/dispatchers: the schema's validated output, inferred so
  * the type can't drift from the validation. Request/site context (siteURL, etc.) is not merged in — it
- * travels on each stage's context. (`& FormSubmission` supplies the record index the stage generics require.)
+ * travels on each stage's context.
+ *
+ * The output is constrained to a {@link FormSubmission} via `infer O extends FormSubmission` rather than
+ * intersected with it: intersecting would widen `keyof` to `string | number`, collapsing the
+ * `keyof E & string` field-key checks (in `FieldSpec`/`FieldInput`) to plain `string` so typos in a
+ * `fields` list pass. Constraining instead keeps the real key union for a concrete object output while
+ * still satisfying every `E extends FormSubmission` stage bound. An output that isn't a record (the
+ * Standard Schema spec leaves `Output` unconstrained, so a generic `S` isn't provably one) falls back to
+ * the base record, which the route already fails closed on at runtime.
  */
-export type Submission<S extends SchemaInput> = StandardSchemaV1.InferOutput<ValidatorOf<S>> & FormSubmission
+export type Submission<S extends SchemaInput> =
+  StandardSchemaV1.InferOutput<ValidatorOf<S>> extends infer Output extends FormSubmission ? Output : FormSubmission
 
 /**
  * Resolve a {@link SchemaInput} to this request's validator. A factory is detected by the absence of
