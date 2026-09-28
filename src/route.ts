@@ -535,7 +535,7 @@ export interface LazyRouteOptions {
  * Works for any {@link APIRoute}, including {@link createFileRoute}.
  *
  * Pass `onError` to report a failed build: it runs before the route exists, so the route's own `onError`
- * never sees it. Pair it with {@link requireEnv} so a missing secret is reported by name.
+ * never sees it. Pair it with `requireEnv` so a missing secret is reported by name.
  */
 export function defineLazyRoute(build: () => APIRoute | Promise<APIRoute>, options: LazyRouteOptions = {}): APIRoute {
   let cached: Promise<APIRoute> | undefined

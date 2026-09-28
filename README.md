@@ -137,9 +137,9 @@ compatibility_flags = ["nodejs_compat"]
 
 ## How it works
 
-The factory runs, in order: **guards** (before the body is read) → read the form data →
-**schema** validation → **inspectors** (in order) → **enrichers** (in order) → **dispatchers**
-(concurrently, or in groups run in order). Guards, enrichers, and file uploads are optional — a simple contact form uses only
+The factory runs, in order: **guards** (before the body is read) → read the form data → **schema**
+validation → **inspectors** (in order) → **enrichers** (in order) → **dispatchers** (concurrently, or in
+groups run in order). Guards, enrichers, and file uploads are optional — a simple contact form uses only
 `schema`, `inspectors`, and `dispatchers`.
 
 <details>
@@ -232,14 +232,14 @@ values from a schema you declare once, and resolves them from the right source o
 
 Cloudflare exposes secrets only on a request-time binding — `cloudflare:workers` doesn't resolve at
 module scope, and a module-scope `await import` breaks `astro dev` — so read `env` inside the handler
-and build the route lazily on first request. Wrap the build in `defineLazyRoute`, which memoises it
-(and retries if a build throws) so you don't hand-write the `let route; route ??= …` singleton. Give it `{ onError }` to
-report a build that throws: the build runs before the route's own `onError` exists, so it is called with
-`stage: 'build'` and the same reporter serves both. Only
-the secret source changes; `schema`, `errors`, `inspectors`, and `dispatchers` are identical to above.
-`requireEnv` fails the build with one `MissingEnvError` naming every absent key, so a secret lost in a
-rotation or a new environment is named in the logs instead of surfacing as a provider's error or, for
-Turnstile, as "verification failed" to every sender:
+and build the route lazily on first request. Wrap the build in `defineLazyRoute`, which memoises it (and
+retries if a build throws) so you don't hand-write the `let route; route ??= …` singleton. Give it
+`{ onError }` to report a build that throws: the build runs before the route's own `onError` exists, so it
+is called with `stage: 'build'` and the same reporter serves both. Only the secret source changes;
+`schema`, `errors`, `inspectors`, and `dispatchers` are identical to above. `requireEnv` fails the build
+with one `MissingEnvError` naming every absent key, so a secret lost in a rotation or a new environment
+is named in the logs instead of surfacing as a provider's error or, for Turnstile, as "verification
+failed" to every sender:
 
 ```ts
 import { createFormRoute, defineLazyRoute, requireEnv } from '@nialto-services/astro-form-submissions'
