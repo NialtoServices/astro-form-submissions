@@ -52,8 +52,11 @@ export const DEFAULT_ERROR_COPY: Record<ToolkitErrorKey, string> = {
 
 // MARK: - Config
 
-/** Which swallowed failure an {@link FormRouteConfig.onError} call describes. */
-export type FormErrorStage = 'guard' | 'inspection' | 'enrichment' | 'delivery' | 'unexpected'
+/**
+ * Which swallowed failure an {@link FormRouteConfig.onError} call describes; `build` is a failed
+ * {@link defineLazyRoute} build, reported through {@link LazyRouteOptions.onError}.
+ */
+export type FormErrorStage = 'build' | 'guard' | 'inspection' | 'enrichment' | 'delivery' | 'unexpected'
 
 // MARK: - Resource inference
 
@@ -490,11 +493,12 @@ export function createFormRoute<
 /** Options for {@link defineLazyRoute}. */
 export interface LazyRouteOptions {
   /**
-   * Called once per failed build (however many requests were waiting on it), before the error is rethrown.
-   * A build fails before the route's own `onError` exists, so this is where it reaches your reporter.
-   * Awaited and contained: a reporter that throws cannot replace the build's error.
+   * Called once per failed build (however many requests were waiting on it), with `stage: 'build'`, before
+   * the error is rethrown. A build fails before the route's own `onError` exists, so this is where it reaches
+   * your reporter; the signature matches the route's, so one reporter can serve both. Awaited and contained:
+   * a reporter that throws cannot replace the build's error.
    */
-  onError?: (error: unknown) => void | Promise<void>
+  onError?: (error: unknown, context: { stage: FormErrorStage }) => void | Promise<void>
 }
 
 /**
@@ -530,7 +534,7 @@ export function defineLazyRoute(build: () => APIRoute | Promise<APIRoute>, optio
         cached = undefined
 
         try {
-          await options.onError?.(error)
+          await options.onError?.(error, { stage: 'build' })
         } catch {
           // Nowhere left to report a broken reporter; the build's own error is what the caller must see.
         }

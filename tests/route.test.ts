@@ -1191,7 +1191,23 @@ describe('defineLazyRoute', () => {
     )
 
     await expect(route(contextFor(validForm()))).rejects.toBe(failure)
-    expect(onError).toHaveBeenCalledExactlyOnceWith(failure)
+    expect(onError).toHaveBeenCalledExactlyOnceWith(failure, { stage: 'build' })
+  })
+
+  it("accepts the route's own onError reporter, so one reporter serves both", async () => {
+    const reported: string[] = []
+    const reporter: NonNullable<FormRouteConfig<typeof contactSchema>['onError']> = (_error, { stage }) => {
+      reported.push(stage)
+    }
+    const route = defineLazyRoute(
+      () => {
+        throw new Error('env not ready')
+      },
+      { onError: reporter }
+    )
+
+    await expect(route(contextFor(validForm()))).rejects.toThrow('env not ready')
+    expect(reported).toEqual(['build'])
   })
 
   it('reports a failed build once for all the requests that shared it', async () => {

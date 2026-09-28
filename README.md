@@ -234,7 +234,8 @@ Cloudflare exposes secrets only on a request-time binding — `cloudflare:worker
 module scope, and a module-scope `await import` breaks `astro dev` — so read `env` inside the handler
 and build the route lazily on first request. Wrap the build in `defineLazyRoute`, which memoises it
 (and retries if a build throws) so you don't hand-write the `let route; route ??= …` singleton. Give it `{ onError }` to
-report a build that throws: the build runs before the route's own `onError` exists. Only
+report a build that throws: the build runs before the route's own `onError` exists, so it is called with
+`stage: 'build'` and the same reporter serves both. Only
 the secret source changes; `schema`, `errors`, `inspectors`, and `dispatchers` are identical to above.
 `requireEnv` fails the build with one `MissingEnvError` naming every absent key, so a secret lost in a
 rotation or a new environment is named in the logs instead of surfacing as a provider's error or, for
