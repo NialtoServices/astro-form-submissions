@@ -22,7 +22,7 @@ in full in the **Design** section below, which is the spec for this plan.
 
 Background: in 0.1.1 every dispatcher starts at once (`Promise.all`, `src/route.ts:386`). When the owner
 notification (`required`) fails but the acknowledgement (best-effort) succeeds, the sender is told the send
-failed *and* emailed "we have received your request". A retry sends another acknowledgement and another
+failed _and_ emailed "we have received your request". A retry sends another acknowledgement and another
 Discord ping, which the README currently documents as an accepted trade-off.
 
 1. **Two accepted shapes.** `dispatchers: [a, b, c]` is one group: exactly today's behaviour.
@@ -35,7 +35,7 @@ Discord ping, which the README currently documents as an accepted trade-off.
    dispatcher in it (or an earlier one) failed, later groups do not run. A best-effort failure does not stop
    later groups. The failure itself is reported through `onError` as today; skipped groups are not reported.
 4. **Skips stay skips.** A dispatcher withheld by quarantine or by `deliverWhen` returning `false` is neither
-   a delivery nor a failure, and never stops a later group. A `deliverWhen` that *throws* is a failure (as
+   a delivery nor a failure, and never stops a later group. A `deliverWhen` that _throws_ is a failure (as
    today), so on a `required` dispatcher it stops later groups.
 5. **Every existing rule counts across all groups:** a `required` failure returns 502; every attempted
    delivery failing returns 502; acquired resources roll back unless an exposing delivery succeeded (a
@@ -86,6 +86,7 @@ Discord ping, which the README currently documents as an accepted trade-off.
 ### Task 1: Dispatch groups in the route
 
 **Files:**
+
 - Modify: `src/route.ts` (config type at 103-104, factory docblock at 147-153, dispatch loop at 383-421)
 - Modify: `src/dispatchers/dispatcher.ts:35-43` (docblock only)
 - Modify: `src/index.ts` (export the new type)
@@ -95,6 +96,7 @@ Discord ping, which the README currently documents as an accepted trade-off.
 - Test: `tests/resources-typing.test.ts` (new `it` block)
 
 **Interfaces:**
+
 - Consumes: `Dispatcher<E, A>` from `src/dispatchers/dispatcher.ts` (unchanged).
 - Produces: `export type DispatchGroup<E extends FormSubmission = FormSubmission, A = object> = Dispatcher<E, A>[]`
   in `src/route.ts`, exported from `src/index.ts`. `FormRouteConfig['dispatchers']` becomes
@@ -103,12 +105,14 @@ Discord ping, which the README currently documents as an accepted trade-off.
 - [ ] **Step 1: Install and generate sources**
 
 Run:
+
 ```bash
 cd ~/Developer/astro-form-submissions
 corepack pnpm install --frozen-lockfile
 node scripts/generate-email-template-sources.mjs
 corepack pnpm exec vitest run
 ```
+
 Expected: every existing test passes. If anything fails before a change is made, stop and report it.
 
 - [ ] **Step 2: Write the failing behaviour tests**
@@ -332,25 +336,25 @@ Add to `tests/resources-typing.test.ts`, inside the existing `describe('resource
 first `it`:
 
 ```ts
-  it('checks every dispatcher in every group against what the enrichers provide', () => {
-    // Happy: groups of correctly typed dispatchers.
-    createFormRoute({ schema, enrichers: [filesEnricher], dispatchers: [[needsFiles], [needsNothing]] })
+it('checks every dispatcher in every group against what the enrichers provide', () => {
+  // Happy: groups of correctly typed dispatchers.
+  createFormRoute({ schema, enrichers: [filesEnricher], dispatchers: [[needsFiles], [needsNothing]] })
 
-    // Mismatch inside a later group is still caught.
-    createFormRoute({
-      schema,
-      enrichers: [filesEnricher],
-      // @ts-expect-error a grouped dispatcher reading `attachments` has no enricher providing it
-      dispatchers: [[needsFiles], [needsAttachments]]
-    })
-
-    // A mix of the flat and grouped shapes is rejected.
-    createFormRoute({
-      schema,
-      // @ts-expect-error dispatchers must be all dispatchers or all groups
-      dispatchers: [needsNothing, [needsNothing]]
-    })
+  // Mismatch inside a later group is still caught.
+  createFormRoute({
+    schema,
+    enrichers: [filesEnricher],
+    // @ts-expect-error a grouped dispatcher reading `attachments` has no enricher providing it
+    dispatchers: [[needsFiles], [needsAttachments]]
   })
+
+  // A mix of the flat and grouped shapes is rejected.
+  createFormRoute({
+    schema,
+    // @ts-expect-error dispatchers must be all dispatchers or all groups
+    dispatchers: [needsNothing, [needsNothing]]
+  })
+})
 ```
 
 If `tsc` reports either error on the inner element's line rather than on the `dispatchers:` line, move that
@@ -418,7 +422,7 @@ function dispatchGroupsFrom<D>(dispatchers: readonly (D | readonly D[])[]): (rea
 In `createFormRoute`, directly after the `report` helper and before `return async (context) => {`, add:
 
 ```ts
-  const dispatchGroups = dispatchGroupsFrom<Dispatcher<Submission<S>, MergedProvided<Es>>>(config.dispatchers ?? [])
+const dispatchGroups = dispatchGroupsFrom<Dispatcher<Submission<S>, MergedProvided<Es>>>(config.dispatchers ?? [])
 ```
 
 The explicit type argument matters: inferring `D` from the `Dispatcher[] | DispatchGroup[]` union can widen
@@ -429,41 +433,41 @@ it to the union itself.
 Replace lines 383-410 (from `let succeeded = 0` through the closing `)` of `await Promise.all(`) with:
 
 ```ts
-      let succeeded = 0
-      let failed = 0
-      let requiredFailed = false
-      for (const group of dispatchGroups) {
-        await Promise.all(
-          group.map(async (dispatcher) => {
-            // A quarantined submission is withheld from every destination that hasn't opted in. The skip
-            // is a no-op — not a success or failure — so a fully quarantined submission still returns 200.
-            if (quarantined && !dispatcher.acceptsQuarantined) return
+let succeeded = 0
+let failed = 0
+let requiredFailed = false
+for (const group of dispatchGroups) {
+  await Promise.all(
+    group.map(async (dispatcher) => {
+      // A quarantined submission is withheld from every destination that hasn't opted in. The skip
+      // is a no-op — not a success or failure — so a fully quarantined submission still returns 200.
+      if (quarantined && !dispatcher.acceptsQuarantined) return
 
-            try {
-              // A per-submission opt-out (e.g. no acknowledgement without a recipient). Evaluated inside
-              // the try so a throwing predicate is a delivery failure, not an uncaught rejection; a `false`
-              // verdict is a no-op skip — the early return counts as neither delivered nor failed.
-              if (dispatcher.deliverWhen && !dispatcher.deliverWhen(submission, dispatchContext)) return
+      try {
+        // A per-submission opt-out (e.g. no acknowledgement without a recipient). Evaluated inside
+        // the try so a throwing predicate is a delivery failure, not an uncaught rejection; a `false`
+        // verdict is a no-op skip — the early return counts as neither delivered nor failed.
+        if (dispatcher.deliverWhen && !dispatcher.deliverWhen(submission, dispatchContext)) return
 
-              await dispatcher.dispatch(submission, dispatchContext)
-              succeeded += 1
+        await dispatcher.dispatch(submission, dispatchContext)
+        succeeded += 1
 
-              // A resolved dispatch is a real delivery; unless it declares it doesn't carry the acquired
-              // resources, treat it as having exposed them to a recipient.
-              if (dispatcher.exposesResources !== false) resourcesExposed = true
-            } catch (error) {
-              await report(error, 'delivery')
-              failed += 1
-              if (dispatcher.required) requiredFailed = true
-            }
-          })
-        )
-
-        // A later group may depend on this one having landed (an acknowledgement promises the owner has
-        // the submission), so a failed required delivery ends dispatch; the sender's retry then reaches
-        // no later group twice.
-        if (requiredFailed) break
+        // A resolved dispatch is a real delivery; unless it declares it doesn't carry the acquired
+        // resources, treat it as having exposed them to a recipient.
+        if (dispatcher.exposesResources !== false) resourcesExposed = true
+      } catch (error) {
+        await report(error, 'delivery')
+        failed += 1
+        if (dispatcher.required) requiredFailed = true
       }
+    })
+  )
+
+  // A later group may depend on this one having landed (an acknowledgement promises the owner has
+  // the submission), so a failed required delivery ends dispatch; the sender's retry then reaches
+  // no later group twice.
+  if (requiredFailed) break
+}
 ```
 
 Replace the quarantine-warning condition (was line 414) with:
@@ -503,14 +507,15 @@ In `src/index.ts`, add `type DispatchGroup,` to the `#route.js` export list, alp
 `defineLazyRoute`.
 
 In `README.md`:
+
 - Line 142: replace `**dispatchers** (in parallel)` with `**dispatchers** (concurrently, or in groups run in
-  order)`. Line 160: replace `delivers (in parallel, terminal)` with `delivers (concurrently within a group,
-  groups in order, terminal)`.
+order)`. Line 160: replace `delivers (in parallel, terminal)` with `delivers (concurrently within a group,
+groups in order, terminal)`.
 - Options table, `dispatchers` row (line 327): `Delivery destinations: a flat list runs concurrently; a list of
-  groups runs in order, and a failed required delivery stops later groups. A quarantined submission reaches
-  only those with acceptsQuarantined.` Keep the table's column padding consistent; prettier will realign it.
+groups runs in order, and a failed required delivery stops later groups. A quarantined submission reaches
+only those with acceptsQuarantined.` Keep the table's column padding consistent; prettier will realign it.
 - "Dispatchers" section, line 474: replace `All dispatchers run in parallel.` with `A flat list of dispatchers
-  runs concurrently; see [Dispatch groups](#dispatch-groups) to order them.`
+runs concurrently; see [Dispatch groups](#dispatch-groups) to order them.`
 - Replace the note at lines 547-549 ("Note: because dispatchers run in parallel…") with this new subsection:
 
 ````md
@@ -539,13 +544,14 @@ group, so it still fires when the owner notification fails: often the moment it 
 ````
 
 - Acknowledgement recipe (lines 660-663): replace `It runs in parallel with your inbox notification — **no
-  pipeline change, just another dispatcher**.` with `Put it in a group after your inbox notification
-  (see [Dispatch groups](#dispatch-groups)), so a sender is never thanked for a submission that failed to
-  reach you.` Leave the rest of that paragraph as it is.
+pipeline change, just another dispatcher**.` with `Put it in a group after your inbox notification
+(see [Dispatch groups](#dispatch-groups)), so a sender is never thanked for a submission that failed to
+reach you.` Leave the rest of that paragraph as it is.
 
 - [ ] **Step 10: Verify and commit**
 
 Run:
+
 ```bash
 corepack pnpm format
 corepack pnpm exec prettier --check .
@@ -554,6 +560,7 @@ corepack pnpm check
 corepack pnpm test
 corepack pnpm build
 ```
+
 Expected: all pass.
 
 ```bash
@@ -575,12 +582,14 @@ EOF
 ### Task 2: `requireEnv` and `MissingEnvError`
 
 **Files:**
+
 - Create: `src/env.ts`
 - Modify: `src/index.ts` (export both)
 - Modify: `README.md` (lines 231-254 Cloudflare example, 992-1003 "Secrets")
 - Test: `tests/env.test.ts`
 
 **Interfaces:**
+
 - Consumes: nothing from Task 1.
 - Produces:
   - `export class MissingEnvError extends Error { readonly keys: readonly string[] }`
@@ -738,9 +747,9 @@ rotation or a new environment is named in the logs instead of surfacing as a pro
 Turnstile, as "verification failed" to every sender. ``
 
 In "Secrets" (line 994), after the first paragraph, add:
-`` Validate them where you read them: `requireEnv(env, [...keys])` returns the values typed as present and
+``Validate them where you read them: `requireEnv(env, [...keys])` returns the values typed as present and
 throws a `MissingEnvError` listing every key that is absent or empty (never a value, so it is safe to log).
-Leave optional ones, such as a Discord webhook, out of the list. ``
+Leave optional ones, such as a Discord webhook, out of the list.``
 
 - [ ] **Step 6: Verify and commit**
 
@@ -763,11 +772,13 @@ EOF
 ### Task 3: Report failed lazy builds
 
 **Files:**
+
 - Modify: `src/route.ts:449-483` (`defineLazyRoute`)
 - Modify: `README.md` (the Cloudflare paragraph above the example, lines 233-237)
 - Test: `tests/route.test.ts` (`describe('defineLazyRoute')`, lines 1137-1182)
 
 **Interfaces:**
+
 - Consumes: `MissingEnvError` is the typical error but is not referenced; `onError` receives `unknown`.
 - Produces: `export interface LazyRouteOptions { onError?: (error: unknown) => void | Promise<void> }`, exported
   from `src/index.ts`; `defineLazyRoute(build, options?: LazyRouteOptions): APIRoute`.
@@ -777,58 +788,58 @@ EOF
 Add inside `describe('defineLazyRoute')` in `tests/route.test.ts`:
 
 ```ts
-  it('reports a failed build to onError and still rejects with the original error', async () => {
-    const onError = vi.fn()
-    const failure = new Error('POSTMARK_TOKEN missing')
-    const route = defineLazyRoute(
-      () => {
-        throw failure
-      },
-      { onError }
-    )
+it('reports a failed build to onError and still rejects with the original error', async () => {
+  const onError = vi.fn()
+  const failure = new Error('POSTMARK_TOKEN missing')
+  const route = defineLazyRoute(
+    () => {
+      throw failure
+    },
+    { onError }
+  )
 
-    await expect(route(contextFor(validForm()))).rejects.toBe(failure)
-    expect(onError).toHaveBeenCalledExactlyOnceWith(failure)
-  })
+  await expect(route(contextFor(validForm()))).rejects.toBe(failure)
+  expect(onError).toHaveBeenCalledExactlyOnceWith(failure)
+})
 
-  it('reports a failed build once for all the requests that shared it', async () => {
-    const onError = vi.fn()
-    let rejectBuild!: (error: Error) => void
-    const build = vi.fn(
-      () =>
-        new Promise<APIRoute>((_resolve, reject) => {
-          rejectBuild = reject
-        })
-    )
-    const route = defineLazyRoute(build, { onError })
-
-    const inFlight = [route(contextFor(validForm())), route(contextFor(validForm()))]
-    rejectBuild(new Error('env not ready'))
-    const results = await Promise.allSettled(inFlight)
-
-    expect(results.map((result) => result.status)).toEqual(['rejected', 'rejected'])
-    expect(onError).toHaveBeenCalledOnce()
-  })
-
-  it('a throwing onError cannot replace the build failure, and the next request still retries', async () => {
-    const failure = new Error('env not ready')
-    const build = vi
-      .fn<() => APIRoute>()
-      .mockImplementationOnce(() => {
-        throw failure
+it('reports a failed build once for all the requests that shared it', async () => {
+  const onError = vi.fn()
+  let rejectBuild!: (error: Error) => void
+  const build = vi.fn(
+    () =>
+      new Promise<APIRoute>((_resolve, reject) => {
+        rejectBuild = reject
       })
-      .mockImplementation(() => async () => new Response('ok'))
-    const route = defineLazyRoute(build, {
-      onError: async () => {
-        throw new Error('reporter down')
-      }
+  )
+  const route = defineLazyRoute(build, { onError })
+
+  const inFlight = [route(contextFor(validForm())), route(contextFor(validForm()))]
+  rejectBuild(new Error('env not ready'))
+  const results = await Promise.allSettled(inFlight)
+
+  expect(results.map((result) => result.status)).toEqual(['rejected', 'rejected'])
+  expect(onError).toHaveBeenCalledOnce()
+})
+
+it('a throwing onError cannot replace the build failure, and the next request still retries', async () => {
+  const failure = new Error('env not ready')
+  const build = vi
+    .fn<() => APIRoute>()
+    .mockImplementationOnce(() => {
+      throw failure
     })
-
-    await expect(route(contextFor(validForm()))).rejects.toBe(failure)
-
-    const response = await route(contextFor(validForm()))
-    expect(await response.text()).toBe('ok')
+    .mockImplementation(() => async () => new Response('ok'))
+  const route = defineLazyRoute(build, {
+    onError: async () => {
+      throw new Error('reporter down')
+    }
   })
+
+  await expect(route(contextFor(validForm()))).rejects.toBe(failure)
+
+  const response = await route(contextFor(validForm()))
+  expect(await response.text()).toBe('ok')
+})
 ```
 
 - [ ] **Step 2: Run the tests to see them fail**
@@ -894,8 +905,8 @@ Expected: PASS, including the three existing `defineLazyRoute` tests.
 - [ ] **Step 5: Update the README**
 
 In the Cloudflare paragraph (lines 233-237), after "…so you don't hand-write the `let route; route ??= …`
-singleton." add: `` Give it `{ onError }` to report a build that throws: the build runs before the route's own
-`onError` exists. ``
+singleton." add: ``Give it `{ onError }` to report a build that throws: the build runs before the route's own
+`onError` exists.``
 
 Add `{ onError: (error) => console.error('Contact form build error:', error) }` as the second argument to the
 `defineLazyRoute` call in the example Task 2 wrote, so the call closes with `}, { onError: … })`.
@@ -921,6 +932,7 @@ EOF
 ### Task 4: Release 0.2.0
 
 **Files:**
+
 - Modify: `package.json` (`version`)
 
 - [ ] **Step 1: Bump the version**
