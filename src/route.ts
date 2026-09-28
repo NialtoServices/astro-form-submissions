@@ -3,6 +3,7 @@ import { FileUploads, type Enricher, type EnrichmentContext } from '#enrichers/i
 import { formError, type FormError, type FormErrors, type ToolkitErrorKey } from '#errors.js'
 import { RateLimitGuard, type Guard, type GuardContext } from '#guards/index.js'
 import { TurnstileInspector, type InspectionContext, type Inspector } from '#inspectors/index.js'
+import { type FormSubmission } from '#pipeline.js'
 import { jsonFormError, jsonOk, jsonValidationError } from '#responses.js'
 import {
   formDataToObject,
@@ -77,6 +78,13 @@ export type MergedProvided<Es extends readonly unknown[]> = [Es] extends [readon
   ? object
   : UnionToIntersection<ProvidedOf<Es[number]>>
 
+/**
+ * Dispatchers that deliver concurrently. Groups in {@link FormRouteConfig.dispatchers} run one after another,
+ * and a failed `required` delivery ends the sequence, so a later group can depend on an earlier one having
+ * landed (e.g. an acknowledgement only once the owner has the submission).
+ */
+export type DispatchGroup<E extends FormSubmission = FormSubmission, A = object> = Dispatcher<E, A>[]
+
 export interface FormRouteConfig<
   S extends SchemaInput,
   Es extends readonly Enricher<Submission<S>, unknown>[] = readonly Enricher<Submission<S>, unknown>[]
@@ -100,8 +108,12 @@ export interface FormRouteConfig<
    */
   enrichers?: Es
 
-  /** Destinations run in parallel after the enrichers (e.g. email, a chat webhook). A quarantined submission reaches only those with `acceptsQuarantined`. */
-  dispatchers?: Dispatcher<Submission<S>, MergedProvided<Es>>[]
+  /**
+   * Destinations run after the enrichers (e.g. email, a chat webhook): either a flat list, which runs
+   * concurrently as one group, or a list of {@link DispatchGroup}s, which run in order. A failed `required`
+   * delivery stops later groups. A quarantined submission reaches only those with `acceptsQuarantined`.
+   */
+  dispatchers?: Dispatcher<Submission<S>, MergedProvided<Es>>[] | DispatchGroup<Submission<S>, MergedProvided<Es>>[]
 
   /**
    * Per-site copy overrides keyed by {@link FormError.key} — a static map, or a {@link CopyResolver}
@@ -142,11 +154,26 @@ function summarizeError(error: unknown): string {
   return parts.join(' ')
 }
 
+/**
+ * The configured dispatchers as ordered groups: a flat list is one group, a list of groups is itself. A mix
+ * is a misconfiguration the types forbid; an untyped caller learns about it when the route is built rather
+ * than on a live submission.
+ */
+function dispatchGroupsFrom<D>(dispatchers: readonly (D | readonly D[])[]): (readonly D[])[] {
+  const groupCount = dispatchers.filter((entry) => Array.isArray(entry)).length
+  if (groupCount === 0) return [dispatchers as readonly D[]]
+  if (groupCount === dispatchers.length) return dispatchers as (readonly D[])[]
+
+  throw new TypeError(
+    '`dispatchers` must be a list of dispatchers or a list of dispatch groups, not a mix of dispatchers and groups.'
+  )
+}
+
 // MARK: - Factory
 
 /**
  * Builds the `POST` handler for a form endpoint: guards (pre-body) → schema validate →
- * inspectors (in order) → enrichers (in order) → dispatchers (in parallel).
+ * inspectors (in order) → enrichers (in order) → dispatchers (concurrently, in groups run in order).
  *
  * A site keeps only its `src/pages/api/<form>.ts` with `export const prerender = false`
  * and `export const POST = createFormRoute({ ... })`.
@@ -171,6 +198,8 @@ export function createFormRoute<
       /* see above */
     }
   }
+
+  const dispatchGroups = dispatchGroupsFrom<Dispatcher<Submission<S>, MergedProvided<Es>>>(config.dispatchers ?? [])
 
   return async (context) => {
     const { request, site, url } = context
@@ -383,35 +412,45 @@ export function createFormRoute<
       let succeeded = 0
       let failed = 0
       let requiredFailed = false
-      await Promise.all(
-        (config.dispatchers ?? []).map(async (dispatcher) => {
-          // A quarantined submission is withheld from every destination that hasn't opted in. The skip
-          // is a no-op — not a success or failure — so a fully quarantined submission still returns 200.
-          if (quarantined && !dispatcher.acceptsQuarantined) return
+      for (const group of dispatchGroups) {
+        await Promise.all(
+          group.map(async (dispatcher) => {
+            // A quarantined submission is withheld from every destination that hasn't opted in. The skip
+            // is a no-op — not a success or failure — so a fully quarantined submission still returns 200.
+            if (quarantined && !dispatcher.acceptsQuarantined) return
 
-          try {
-            // A per-submission opt-out (e.g. no acknowledgement without a recipient). Evaluated inside
-            // the try so a throwing predicate is a delivery failure, not an uncaught rejection; a `false`
-            // verdict is a no-op skip — the early return counts as neither delivered nor failed.
-            if (dispatcher.deliverWhen && !dispatcher.deliverWhen(submission, dispatchContext)) return
+            try {
+              // A per-submission opt-out (e.g. no acknowledgement without a recipient). Evaluated inside
+              // the try so a throwing predicate is a delivery failure, not an uncaught rejection; a `false`
+              // verdict is a no-op skip — the early return counts as neither delivered nor failed.
+              if (dispatcher.deliverWhen && !dispatcher.deliverWhen(submission, dispatchContext)) return
 
-            await dispatcher.dispatch(submission, dispatchContext)
-            succeeded += 1
+              await dispatcher.dispatch(submission, dispatchContext)
+              succeeded += 1
 
-            // A resolved dispatch is a real delivery; unless it declares it doesn't carry the acquired
-            // resources, treat it as having exposed them to a recipient.
-            if (dispatcher.exposesResources !== false) resourcesExposed = true
-          } catch (error) {
-            await report(error, 'delivery')
-            failed += 1
-            if (dispatcher.required) requiredFailed = true
-          }
-        })
-      )
+              // A resolved dispatch is a real delivery; unless it declares it doesn't carry the acquired
+              // resources, treat it as having exposed them to a recipient.
+              if (dispatcher.exposesResources !== false) resourcesExposed = true
+            } catch (error) {
+              await report(error, 'delivery')
+              failed += 1
+              if (dispatcher.required) requiredFailed = true
+            }
+          })
+        )
+
+        // A later group may depend on this one having landed (an acknowledgement promises the owner has
+        // the submission), so a failed required delivery ends dispatch; the sender's retry then reaches
+        // no later group twice.
+        if (requiredFailed) break
+      }
 
       // A quarantined submission with nowhere to go is a silent 200 with zero delivery. Computed from
       // the configured dispatchers so it still fires when the array is empty.
-      if (quarantined && !(config.dispatchers ?? []).some((dispatcher) => dispatcher.acceptsQuarantined === true)) {
+      const acceptsQuarantine = dispatchGroups.some((group) =>
+        group.some((dispatcher) => dispatcher.acceptsQuarantined === true)
+      )
+      if (quarantined && !acceptsQuarantine) {
         await report(
           new Error(
             'Submission quarantined but no dispatcher accepts quarantined submissions — nothing was delivered.'

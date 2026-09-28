@@ -96,6 +96,7 @@ export {
   createFormRoute,
   DEFAULT_ERROR_COPY,
   defineLazyRoute,
+  type DispatchGroup,
   ERRORS,
   type FormErrorStage,
   type FormRouteConfig,

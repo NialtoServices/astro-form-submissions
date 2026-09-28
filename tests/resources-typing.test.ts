@@ -4,7 +4,7 @@ import { EmailDispatcher, type EmailTransport } from '#dispatchers/index.js'
 import { submissionNotificationTemplates } from '#dispatchers/submission-notification.js'
 import type { Enricher, FileLink } from '#enrichers/index.js'
 import { createFormRoute } from '#route.js'
-import { describe, expectTypeOf, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 
 // The resource-threading contract is a compile-time guarantee, so these assertions are the test: they
 // run as no-ops but `tsc` (npm run check) enforces every `@ts-expect-error` and typed assignment. They
@@ -52,6 +52,28 @@ describe('resource threading types', () => {
       // @ts-expect-error a dispatcher reading `files` has no enricher providing it
       dispatchers: [needsFiles]
     })
+  })
+
+  it('checks every dispatcher in every group against what the enrichers provide', () => {
+    // Happy: groups of correctly typed dispatchers.
+    createFormRoute({ schema, enrichers: [filesEnricher], dispatchers: [[needsFiles], [needsNothing]] })
+
+    // Mismatch inside a later group is still caught.
+    createFormRoute({
+      schema,
+      enrichers: [filesEnricher],
+      // @ts-expect-error a grouped dispatcher reading `attachments` has no enricher providing it
+      dispatchers: [[needsFiles], [needsAttachments]]
+    })
+
+    // A mix of the flat and grouped shapes is rejected, and throws for a caller that gets past the types.
+    expect(() =>
+      createFormRoute({
+        schema,
+        // @ts-expect-error dispatchers must be all dispatchers or all groups
+        dispatchers: [needsNothing, [needsNothing]]
+      })
+    ).toThrow(TypeError)
   })
 
   it('infers the resource a built-in email needs through its templates', () => {

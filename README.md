@@ -138,8 +138,8 @@ compatibility_flags = ["nodejs_compat"]
 ## How it works
 
 The factory runs, in order: **guards** (before the body is read) → read the form data →
-**schema** validation → **inspectors** (in order) → **enrichers** (in order) → **dispatchers** (in
-parallel). Guards, enrichers, and file uploads are optional — a simple contact form uses only
+**schema** validation → **inspectors** (in order) → **enrichers** (in order) → **dispatchers**
+(concurrently, or in groups run in order). Guards, enrichers, and file uploads are optional — a simple contact form uses only
 `schema`, `inspectors`, and `dispatchers`.
 
 <details>
@@ -157,7 +157,7 @@ is usually the right one:
 3. **inspector** — screens an **already-valid** submission; read-only with respect to it (may
    `quarantine` it). Bot verification, spam screening.
 4. **enricher** — acquires a resource onto `context.resources` (leaving the submission untouched), with rollback. File uploads.
-5. **dispatcher** — delivers (in parallel, terminal).
+5. **dispatcher** — delivers (concurrently within a group, groups in order, terminal).
 
 The inspector→enricher split is deliberate: it makes **"screen before you acquire"** structural —
 reject bots before spending storage on their uploads. For a fuzzy edge (an async policy check like a
@@ -324,7 +324,7 @@ read, so the resolver receives no `data` and falls back to default-locale copy.
 | `schema`      | —               | Required. A Standard Schema validator (or a factory returning one) that validates and shapes the submission.                                                                                                                                                                                                                                                                                             |
 | `inspectors`  | `[]`            | Inspections run in order; each may accept, quarantine, drop, or reject (see below).                                                                                                                                                                                                                                                                                                                      |
 | `enrichers`   | `[]`            | Resource acquisition run after inspectors; each provides a resource onto `context.resources` and can roll back (see [Uploads](#file-uploads)).                                                                                                                                                                                                                                                           |
-| `dispatchers` | `[]`            | Delivery destinations run in parallel; a quarantined submission reaches only those with `acceptsQuarantined`.                                                                                                                                                                                                                                                                                            |
+| `dispatchers` | `[]`            | Delivery destinations: a flat list runs concurrently; a list of groups runs in order, and a failed required delivery stops later groups. A quarantined submission reaches only those with `acceptsQuarantined`.                                                                                                                                                                                          |
 | `errors`      | `{}`            | Per-site copy overrides by error key (see [Errors](#errors)).                                                                                                                                                                                                                                                                                                                                            |
 | `onError`     | `console.error` | Called on a swallowed guard/inspection/enrichment/delivery/unexpected error, so failures reach logs. The default logs a **PII-safe summary** (stage, error class, any `code`/`status`) — never the error's message/object, since provider errors can quote submission data (e.g. a `Reply-To`). Override it to log the full error where your pipeline can hold that PII, or to forward structured codes. |
 
@@ -471,7 +471,8 @@ The only sanctioned built-in defaults are protocol-level, not business fields �
 
 ## Dispatchers
 
-A dispatcher is a delivery destination. All dispatchers run in parallel. A `dispatch` call that
+A dispatcher is a delivery destination. A flat list of dispatchers runs concurrently; see
+[Dispatch groups](#dispatch-groups) to order them. A `dispatch` call that
 **resolves counts as a delivery** and a throw as a failure — there is no "resolved but skipped" state,
 so never early-`return` to skip; a quarantined submission is withheld by the route (see
 `acceptsQuarantined` below) before `dispatch` is called. Each carries these knobs:
@@ -544,9 +545,28 @@ the trusted `context.siteURL`.
   })
   ```
 
-Note: because dispatchers run in parallel, a required-dispatcher failure (→ 502 → the sender retries) may fire
-best-effort dispatchers again — a duplicate Discord ping is the accepted trade-off for no ordering
-complexity.
+### Dispatch groups
+
+Pass a list of groups instead of a flat list when one delivery depends on another. Dispatchers within a
+group run concurrently; each group starts once the previous one has settled. If a `required` delivery
+fails, no later group runs: the sender gets the 502, and their retry reaches the later groups once.
+
+```ts
+dispatchers: [
+  [ownerNotification, operatorPing], // together
+  [acknowledgement] // only once the owner notification has been delivered
+]
+```
+
+Only a failed `required` delivery stops the sequence. A best-effort failure, or a destination skipped by
+quarantine or `deliverWhen`, lets the next group run. The other rules count across every group: a
+`required` failure or a total failure returns 502, uploads roll back unless an exposing delivery
+succeeded, and a quarantine that no group accepts is reported. A flat list is a single group, so it
+behaves exactly as it always has. Mixing the two shapes is a type error, and a `TypeError` when the route
+is built.
+
+Put a destination beside the delivery it should not depend on. Above, the operator ping shares the first
+group, so it still fires when the owner notification fails: often the moment it matters most.
 
 ### Email
 
@@ -657,7 +677,8 @@ new EmailDispatcher({
 })
 ```
 
-It runs in parallel with your inbox notification — **no pipeline change, just another dispatcher**.
+Put it in a group after your inbox notification (see [Dispatch groups](#dispatch-groups)), so a sender
+is never thanked for a submission that failed to reach you.
 Two knobs matter here: `to` is a resolver so it reaches the sender (see [Email](#email)), and
 `required: false` keeps a bounced courtesy email from failing an otherwise-delivered submission. The
 copy is translatable via the same `copy` option shown above; `greeting` and `message` cover the body.

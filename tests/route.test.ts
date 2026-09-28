@@ -1237,3 +1237,212 @@ describe('createFormRoute deliverWhen', () => {
     expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery' })
   })
 })
+
+describe('createFormRoute dispatch groups', () => {
+  /** A dispatcher whose delivery stays pending until the test settles it, so ordering is observable. */
+  function deferredDispatcher(options: { required?: boolean } = {}) {
+    let settle!: { resolve: () => void; reject: (error: Error) => void }
+    const delivery = new Promise<void>((resolve, reject) => {
+      settle = { resolve, reject }
+    })
+    const dispatch = vi.fn((_submission: FormSubmission, _context: DispatchContext) => delivery)
+    const dispatcher: Dispatcher = { required: options.required, dispatch }
+    return { dispatcher, dispatch, resolve: () => settle.resolve(), reject: (error: Error) => settle.reject(error) }
+  }
+
+  /** Lets every queued promise callback run, so a group that was going to start has started. */
+  const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+  it('runs a group concurrently and starts the next only once every dispatcher in it has settled', async () => {
+    const first = deferredDispatcher()
+    const sibling = deferredDispatcher()
+    const later = stubDispatcher()
+
+    const pending = createFormRoute({
+      ...baseConfig,
+      dispatchers: [[first.dispatcher, sibling.dispatcher], [later.dispatcher]]
+    })(contextFor(validForm()))
+
+    await flushPromises()
+    expect(first.dispatch).toHaveBeenCalledOnce()
+    expect(sibling.dispatch).toHaveBeenCalledOnce()
+
+    first.resolve()
+    await flushPromises()
+    expect(later.dispatch).not.toHaveBeenCalled()
+
+    sibling.resolve()
+    const response = await pending
+    expect(response.status).toBe(200)
+    expect(later.dispatch).toHaveBeenCalledOnce()
+  })
+
+  it('a required failure skips every later group and returns 502', async () => {
+    const onError = vi.fn()
+    const notification = stubDispatcher({ required: true, failWith: new Error('recipient inactive') })
+    const acknowledgement = stubDispatcher()
+    const followUp = stubDispatcher()
+
+    const response = await createFormRoute({
+      ...baseConfig,
+      dispatchers: [[notification.dispatcher], [acknowledgement.dispatcher], [followUp.dispatcher]],
+      onError
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(502)
+    expect(acknowledgement.dispatch).not.toHaveBeenCalled()
+    expect(followUp.dispatch).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery' })
+  })
+
+  it('still runs the rest of a group when a required sibling in it fails', async () => {
+    const notification = stubDispatcher({ required: true, failWith: new Error('recipient inactive') })
+    const operatorPing = stubDispatcher()
+    const acknowledgement = stubDispatcher()
+
+    const response = await createFormRoute({
+      ...baseConfig,
+      dispatchers: [[notification.dispatcher, operatorPing.dispatcher], [acknowledgement.dispatcher]]
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(502)
+    expect(operatorPing.dispatch).toHaveBeenCalledOnce()
+    expect(acknowledgement.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('a best-effort failure does not stop later groups', async () => {
+    const onError = vi.fn()
+    const operatorPing = stubDispatcher({ failWith: new Error('discord down') })
+    const notification = stubDispatcher({ required: true })
+
+    const response = await createFormRoute({
+      ...baseConfig,
+      dispatchers: [[operatorPing.dispatcher], [notification.dispatcher]],
+      onError
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(200)
+    expect(notification.dispatch).toHaveBeenCalledOnce()
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery' })
+  })
+
+  it('skips do not stop later groups', async () => {
+    const withheld = stubDispatcher({ required: true, deliverWhen: () => false })
+    const quarantineSkipped = stubDispatcher({ required: true })
+    const ops = stubDispatcher({ acceptsQuarantined: true })
+
+    const response = await createFormRoute({
+      ...baseConfig,
+      inspectors: [{ inspect: async () => ({ action: 'quarantine' as const, reason: 'spam' }) }],
+      dispatchers: [[withheld.dispatcher], [quarantineSkipped.dispatcher], [ops.dispatcher]]
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(200)
+    expect(withheld.dispatch).not.toHaveBeenCalled()
+    expect(quarantineSkipped.dispatch).not.toHaveBeenCalled()
+    expect(ops.dispatch).toHaveBeenCalledOnce()
+  })
+
+  it('a throwing deliverWhen on a required dispatcher stops later groups', async () => {
+    const predicateFailure = stubDispatcher({
+      required: true,
+      deliverWhen: () => {
+        throw new Error('predicate boom')
+      }
+    })
+    const later = stubDispatcher()
+
+    const response = await createFormRoute({
+      ...baseConfig,
+      dispatchers: [[predicateFailure.dispatcher], [later.dispatcher]]
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(502)
+    expect(later.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('every attempted delivery failing across groups → 502 with no required dispatcher', async () => {
+    const first = stubDispatcher({ failWith: new Error('discord down') })
+    const second = stubDispatcher({ failWith: new Error('webhook revoked') })
+
+    const response = await createFormRoute({
+      ...baseConfig,
+      dispatchers: [[first.dispatcher], [second.dispatcher]]
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(502)
+    expect(second.dispatch).toHaveBeenCalledOnce()
+  })
+
+  it('rolls back resources when the only exposing dispatcher sat in a group that never ran', async () => {
+    const rolledBack: string[] = []
+    const enricher = {
+      enrich: vi.fn(async () => ({
+        provide: { files: [] },
+        rollback: async () => void rolledBack.push('files')
+      }))
+    }
+    const notification = stubDispatcher({
+      required: true,
+      exposesResources: false,
+      failWith: new Error('recipient inactive')
+    })
+    const attachmentEmail = stubDispatcher({ exposesResources: true })
+
+    const response = await createFormRoute({
+      ...baseConfig,
+      enrichers: [enricher],
+      dispatchers: [[notification.dispatcher], [attachmentEmail.dispatcher]]
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(502)
+    expect(attachmentEmail.dispatch).not.toHaveBeenCalled()
+    expect(rolledBack).toEqual(['files'])
+  })
+
+  it('warns about a quarantine only when no dispatcher in any group accepts it', async () => {
+    const quarantine = { inspect: async () => ({ action: 'quarantine' as const }) }
+
+    const warned = vi.fn()
+    await createFormRoute({
+      ...baseConfig,
+      inspectors: [quarantine],
+      dispatchers: [[stubDispatcher().dispatcher], [stubDispatcher().dispatcher]],
+      onError: warned
+    })(contextFor(validForm()))
+    expect(warned).toHaveBeenCalledOnce()
+    expect(warned).toHaveBeenCalledWith(expect.any(Error), { stage: 'unexpected' })
+
+    const quiet = vi.fn()
+    await createFormRoute({
+      ...baseConfig,
+      inspectors: [quarantine],
+      dispatchers: [[stubDispatcher().dispatcher], [stubDispatcher({ acceptsQuarantined: true }).dispatcher]],
+      onError: quiet
+    })(contextFor(validForm()))
+    expect(quiet).not.toHaveBeenCalled()
+  })
+
+  it('allows empty groups', async () => {
+    const only = stubDispatcher()
+
+    const response = await createFormRoute({ ...baseConfig, dispatchers: [[], [only.dispatcher], []] })(
+      contextFor(validForm())
+    )
+
+    expect(response.status).toBe(200)
+    expect(only.dispatch).toHaveBeenCalledOnce()
+  })
+
+  it('refuses a mix of dispatchers and groups when the route is built, not on the first submission', () => {
+    const single = stubDispatcher()
+    const grouped = stubDispatcher()
+
+    // An untyped caller can reach this; the type forbids it (see resources-typing.test.ts).
+    const mixed = [single.dispatcher, [grouped.dispatcher]] as unknown as Dispatcher[]
+
+    expect(() => createFormRoute({ ...baseConfig, dispatchers: mixed })).toThrow(TypeError)
+    expect(() => createFormRoute({ ...baseConfig, dispatchers: mixed })).toThrow(/mix of dispatchers and groups/)
+  })
+})

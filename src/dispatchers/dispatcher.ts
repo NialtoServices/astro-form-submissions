@@ -33,8 +33,8 @@ export interface DispatchContext<A = object> {
 }
 
 /**
- * A destination a submission is delivered to (e.g. an email, a chat webhook). All configured
- * dispatchers run in parallel; each decides its own delivery policy from the {@link DispatchContext}.
+ * A destination a submission is delivered to (e.g. an email, a chat webhook). Dispatchers in one group
+ * run concurrently, and groups run in order; each decides its own delivery policy from the {@link DispatchContext}.
  *
  * `A` is the resources this destination reads off `context.resources` (`object` when it reads none). The
  * route infers what the enrichers provide and rejects a dispatcher that reads a resource key nothing
