@@ -160,18 +160,29 @@ function summarizeError(error: unknown): string {
 }
 
 /**
- * The configured dispatchers as ordered groups: a flat list is one group, a list of groups is itself. A mix
- * is a misconfiguration the types forbid; an untyped caller learns about it when the route is built rather
- * than on a live submission.
+ * The configured dispatchers as ordered groups: a flat list is one group, a list of groups is itself. A mix,
+ * a group nested in a group, or an entry that is not a dispatcher is a misconfiguration the types forbid; an
+ * untyped caller learns about it when the route is built rather than as a delivery failure on every
+ * submission.
  */
 function dispatchGroupsFrom<D>(dispatchers: readonly (D | readonly D[])[]): (readonly D[])[] {
   const groupCount = dispatchers.filter((entry) => Array.isArray(entry)).length
-  if (groupCount === 0) return [dispatchers as readonly D[]]
-  if (groupCount === dispatchers.length) return dispatchers as (readonly D[])[]
+  if (groupCount !== 0 && groupCount !== dispatchers.length) {
+    throw new TypeError(
+      '`dispatchers` must be a list of dispatchers or a list of dispatch groups, not a mix of dispatchers and groups.'
+    )
+  }
 
-  throw new TypeError(
-    '`dispatchers` must be a list of dispatchers or a list of dispatch groups, not a mix of dispatchers and groups.'
-  )
+  const groups = groupCount === 0 ? [dispatchers as readonly D[]] : (dispatchers as (readonly D[])[])
+  const isDispatcher = (entry: unknown) =>
+    typeof entry === 'object' && entry !== null && typeof (entry as { dispatch?: unknown }).dispatch === 'function'
+  if (!groups.every((group) => group.every(isDispatcher))) {
+    throw new TypeError(
+      '`dispatchers` must contain only dispatchers (objects with a `dispatch` function), in one list or in groups of them.'
+    )
+  }
+
+  return groups
 }
 
 // MARK: - Factory

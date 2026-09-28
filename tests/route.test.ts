@@ -1524,4 +1524,14 @@ describe('createFormRoute dispatch groups', () => {
     expect(() => createFormRoute({ ...baseConfig, dispatchers: mixed })).toThrow(TypeError)
     expect(() => createFormRoute({ ...baseConfig, dispatchers: mixed })).toThrow(/mix of dispatchers and groups/)
   })
+
+  it('refuses a group nested inside a group, or an entry that is not a dispatcher, when the route is built', () => {
+    const nested = [[[stubDispatcher().dispatcher]]] as unknown as Dispatcher[]
+    const notDispatcher = [[{ required: true }]] as unknown as Dispatcher[]
+
+    expect(() => createFormRoute({ ...baseConfig, dispatchers: nested })).toThrow(TypeError)
+    expect(() => createFormRoute({ ...baseConfig, dispatchers: notDispatcher })).toThrow(
+      /must contain only dispatchers/
+    )
+  })
 })
