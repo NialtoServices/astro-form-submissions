@@ -1378,19 +1378,31 @@ describe('createFormRoute dispatch groups', () => {
     expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery' })
   })
 
-  it('skips do not stop later groups', async () => {
+  it('a deliverWhen skip on a required dispatcher does not stop later groups', async () => {
     const withheld = stubDispatcher({ required: true, deliverWhen: () => false })
+    const later = stubDispatcher()
+
+    const response = await createFormRoute({
+      ...baseConfig,
+      dispatchers: [[withheld.dispatcher], [later.dispatcher]]
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(200)
+    expect(withheld.dispatch).not.toHaveBeenCalled()
+    expect(later.dispatch).toHaveBeenCalledOnce()
+  })
+
+  it('quarantine skips do not stop later groups', async () => {
     const quarantineSkipped = stubDispatcher({ required: true })
     const ops = stubDispatcher({ acceptsQuarantined: true })
 
     const response = await createFormRoute({
       ...baseConfig,
       inspectors: [{ inspect: async () => ({ action: 'quarantine' as const, reason: 'spam' }) }],
-      dispatchers: [[withheld.dispatcher], [quarantineSkipped.dispatcher], [ops.dispatcher]]
+      dispatchers: [[quarantineSkipped.dispatcher], [ops.dispatcher]]
     })(contextFor(validForm()))
 
     expect(response.status).toBe(200)
-    expect(withheld.dispatch).not.toHaveBeenCalled()
     expect(quarantineSkipped.dispatch).not.toHaveBeenCalled()
     expect(ops.dispatch).toHaveBeenCalledOnce()
   })
