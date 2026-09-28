@@ -8,3 +8,6 @@ AUDIT-*.md
 
 # Generated from the .mustache sources at build time
 src/dispatchers/*-sources.ts
+
+# Local agent scratch (git-ignored), never part of the package
+.superpowers/
