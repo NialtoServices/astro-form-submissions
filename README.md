@@ -234,20 +234,24 @@ Cloudflare exposes secrets only on a request-time binding — `cloudflare:worker
 module scope, and a module-scope `await import` breaks `astro dev` — so read `env` inside the handler
 and build the route lazily on first request. Wrap the build in `defineLazyRoute`, which memoises it
 (and retries if a build throws) so you don't hand-write the `let route; route ??= …` singleton. Only
-the secret source changes; `schema`, `errors`, `inspectors`, and `dispatchers` are identical to above:
+the secret source changes; `schema`, `errors`, `inspectors`, and `dispatchers` are identical to above.
+`requireEnv` fails the build with one `MissingEnvError` naming every absent key, so a secret lost in a
+rotation or a new environment is named in the logs instead of surfacing as a provider's error or, for
+Turnstile, as "verification failed" to every sender:
 
 ```ts
-import { createFormRoute, defineLazyRoute } from '@nialto-services/astro-form-submissions'
+import { createFormRoute, defineLazyRoute, requireEnv } from '@nialto-services/astro-form-submissions'
 
 export const POST = defineLazyRoute(async () => {
   const { env } = await import('cloudflare:workers')
+  const secrets = requireEnv(env, ['TURNSTILE_SECRET_KEY', 'POSTMARK_TOKEN', 'POSTMARK_FROM', 'POSTMARK_TO'])
   return createFormRoute({
     schema,
     inspectors: [
       new HoneypotInspector({ fieldName: 'website' }),
-      new TurnstileInspector({ secretKey: env.TURNSTILE_SECRET_KEY })
+      new TurnstileInspector({ secretKey: secrets.TURNSTILE_SECRET_KEY })
     ]
-    // …dispatchers, reading env.POSTMARK_TOKEN, env.POSTMARK_FROM, env.DISCORD_WEBHOOK_URL, …
+    // …dispatchers, reading secrets.POSTMARK_TOKEN, secrets.POSTMARK_FROM, …
   })
 })
 ```
@@ -1020,6 +1024,10 @@ Cloudflare, Wrangler's `.dev.vars` and `wrangler secret`) — and wire them in:
 - Postmark: `token` (transport), `from`/`to` (email dispatcher)
 - Turnstile: `secretKey` (inspector)
 - Discord (optional): a `webhookUrl` (dispatcher)
+
+Validate them where you read them: `requireEnv(env, [...keys])` returns the values typed as present and
+throws a `MissingEnvError` listing every key that is absent or empty (never a value, so it is safe to log).
+Leave optional ones, such as a Discord webhook, out of the list.
 
 `PUBLIC_TURNSTILE_SITE_KEY` stays a build-time public var (each host's `PUBLIC_`/build env) for the widget.
 

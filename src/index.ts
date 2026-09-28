@@ -103,6 +103,8 @@ export {
   type MergedProvided
 } from '#route.js'
 
+export { MissingEnvError, requireEnv } from '#env.js'
+
 export {
   formDataToObject,
   mapIssues,
