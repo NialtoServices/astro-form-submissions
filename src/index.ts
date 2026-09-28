@@ -100,6 +100,7 @@ export {
   ERRORS,
   type FormErrorStage,
   type FormRouteConfig,
+  type LazyRouteOptions,
   type MergedProvided
 } from '#route.js'
 

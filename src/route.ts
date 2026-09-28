@@ -487,6 +487,16 @@ export function createFormRoute<
 
 // MARK: - Lazy construction
 
+/** Options for {@link defineLazyRoute}. */
+export interface LazyRouteOptions {
+  /**
+   * Called once per failed build (however many requests were waiting on it), before the error is rethrown.
+   * A build fails before the route's own `onError` exists, so this is where it reaches your reporter.
+   * Awaited and contained: a reporter that throws cannot replace the build's error.
+   */
+  onError?: (error: unknown) => void | Promise<void>
+}
+
 /**
  * Wraps a route whose construction needs request-time values into a route that builds itself on the
  * first request and reuses that instance thereafter. The build runs where the request-time bindings
@@ -506,15 +516,24 @@ export function createFormRoute<
  * retries — so a transient failure at construction doesn't wedge the endpoint permanently.
  *
  * Works for any {@link APIRoute}, including {@link createFileRoute}.
+ *
+ * Pass `onError` to report a failed build: it runs before the route exists, so the route's own `onError`
+ * never sees it. Pair it with {@link requireEnv} so a missing secret is reported by name.
  */
-export function defineLazyRoute(build: () => APIRoute | Promise<APIRoute>): APIRoute {
+export function defineLazyRoute(build: () => APIRoute | Promise<APIRoute>, options: LazyRouteOptions = {}): APIRoute {
   let cached: Promise<APIRoute> | undefined
   return (context) => {
     const pending = (cached ??= Promise.resolve()
       .then(build)
-      .catch((error) => {
+      .catch(async (error) => {
         // Clear the slot so a construction failure retries on the next request instead of being cached.
         cached = undefined
+
+        try {
+          await options.onError?.(error)
+        } catch {
+          // Nowhere left to report a broken reporter; the build's own error is what the caller must see.
+        }
         throw error
       }))
     return pending.then((route) => route(context))

@@ -1179,6 +1179,57 @@ describe('defineLazyRoute', () => {
     expect(await response.text()).toBe('ok')
     expect(build).toHaveBeenCalledTimes(2)
   })
+
+  it('reports a failed build to onError and still rejects with the original error', async () => {
+    const onError = vi.fn()
+    const failure = new Error('POSTMARK_TOKEN missing')
+    const route = defineLazyRoute(
+      () => {
+        throw failure
+      },
+      { onError }
+    )
+
+    await expect(route(contextFor(validForm()))).rejects.toBe(failure)
+    expect(onError).toHaveBeenCalledExactlyOnceWith(failure)
+  })
+
+  it('reports a failed build once for all the requests that shared it', async () => {
+    const onError = vi.fn()
+    let rejectBuild!: (error: Error) => void
+    const buildPromise = new Promise<APIRoute>((_resolve, reject) => {
+      rejectBuild = reject
+    })
+    const build = vi.fn(() => buildPromise)
+    const route = defineLazyRoute(build, { onError })
+
+    const inFlight = [route(contextFor(validForm())), route(contextFor(validForm()))]
+    rejectBuild(new Error('env not ready'))
+    const results = await Promise.allSettled(inFlight)
+
+    expect(results.map((result) => result.status)).toEqual(['rejected', 'rejected'])
+    expect(onError).toHaveBeenCalledOnce()
+  })
+
+  it('a throwing onError cannot replace the build failure, and the next request still retries', async () => {
+    const failure = new Error('env not ready')
+    const build = vi
+      .fn<() => APIRoute>()
+      .mockImplementationOnce(() => {
+        throw failure
+      })
+      .mockImplementation(() => async () => new Response('ok'))
+    const route = defineLazyRoute(build, {
+      onError: async () => {
+        throw new Error('reporter down')
+      }
+    })
+
+    await expect(route(contextFor(validForm()))).rejects.toBe(failure)
+
+    const response = await route(contextFor(validForm()))
+    expect(await response.text()).toBe('ok')
+  })
 })
 
 describe('createFormRoute deliverWhen', () => {

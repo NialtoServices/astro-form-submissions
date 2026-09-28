@@ -233,7 +233,8 @@ values from a schema you declare once, and resolves them from the right source o
 Cloudflare exposes secrets only on a request-time binding — `cloudflare:workers` doesn't resolve at
 module scope, and a module-scope `await import` breaks `astro dev` — so read `env` inside the handler
 and build the route lazily on first request. Wrap the build in `defineLazyRoute`, which memoises it
-(and retries if a build throws) so you don't hand-write the `let route; route ??= …` singleton. Only
+(and retries if a build throws) so you don't hand-write the `let route; route ??= …` singleton. Give it `{ onError }` to
+report a build that throws: the build runs before the route's own `onError` exists. Only
 the secret source changes; `schema`, `errors`, `inspectors`, and `dispatchers` are identical to above.
 `requireEnv` fails the build with one `MissingEnvError` naming every absent key, so a secret lost in a
 rotation or a new environment is named in the logs instead of surfacing as a provider's error or, for
@@ -242,18 +243,21 @@ Turnstile, as "verification failed" to every sender:
 ```ts
 import { createFormRoute, defineLazyRoute, requireEnv } from '@nialto-services/astro-form-submissions'
 
-export const POST = defineLazyRoute(async () => {
-  const { env } = await import('cloudflare:workers')
-  const secrets = requireEnv(env, ['TURNSTILE_SECRET_KEY', 'POSTMARK_TOKEN', 'POSTMARK_FROM', 'POSTMARK_TO'])
-  return createFormRoute({
-    schema,
-    inspectors: [
-      new HoneypotInspector({ fieldName: 'website' }),
-      new TurnstileInspector({ secretKey: secrets.TURNSTILE_SECRET_KEY })
-    ]
-    // …dispatchers, reading secrets.POSTMARK_TOKEN, secrets.POSTMARK_FROM, …
-  })
-})
+export const POST = defineLazyRoute(
+  async () => {
+    const { env } = await import('cloudflare:workers')
+    const secrets = requireEnv(env, ['TURNSTILE_SECRET_KEY', 'POSTMARK_TOKEN', 'POSTMARK_FROM', 'POSTMARK_TO'])
+    return createFormRoute({
+      schema,
+      inspectors: [
+        new HoneypotInspector({ fieldName: 'website' }),
+        new TurnstileInspector({ secretKey: secrets.TURNSTILE_SECRET_KEY })
+      ]
+      // …dispatchers, reading secrets.POSTMARK_TOKEN, secrets.POSTMARK_FROM, …
+    })
+  },
+  { onError: (error) => console.error('Contact form build error:', error) }
+)
 ```
 
 </details>
