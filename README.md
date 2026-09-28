@@ -557,7 +557,7 @@ the trusted `context.siteURL`.
 
 Pass a list of groups instead of a flat list when one delivery depends on another. Dispatchers within a
 group run concurrently; each group starts once the previous one has settled. If a `required` delivery
-fails, no later group runs: the sender gets the 502, and their retry reaches the later groups once.
+fails, no later group runs, and the sender gets the 502.
 
 ```ts
 dispatchers: [
@@ -575,6 +575,13 @@ is built.
 
 Put a destination beside the delivery it should not depend on. Above, the operator ping shares the first
 group, so it still fires when the owner notification fails: often the moment it matters most.
+
+A 502 invites the sender to retry, and a retry runs the whole pipeline again. Everything that delivered
+the first time delivers again, so a retry after a failed owner notification repeats the operator ping,
+though it never repeats an acknowledgement. Make later groups best-effort (`required: false`, which
+`EmailDispatcher` does not default to): a required failure in a later group returns a 502 after the
+earlier groups have delivered, and the retry sends those deliveries twice. A flat list has the same
+trade-off across all of its dispatchers.
 
 ### Email
 
