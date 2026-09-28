@@ -76,6 +76,18 @@ describe('resource threading types', () => {
     ).toThrow(TypeError)
   })
 
+  it('accepts readonly dispatcher lists and groups, as it does enrichers', () => {
+    const flat = [needsNothing] as const
+    const groups = [[needsFiles], [needsNothing]] as const
+
+    createFormRoute({ schema, dispatchers: flat })
+    createFormRoute({ schema, enrichers: [filesEnricher], dispatchers: groups })
+
+    // Readonly does not loosen the resource check.
+    // @ts-expect-error a grouped dispatcher reading `files` has no enricher providing it
+    createFormRoute({ schema, dispatchers: groups })
+  })
+
   it('infers the resource a built-in email needs through its templates', () => {
     const transport: EmailTransport = { deliver: async () => {} }
 

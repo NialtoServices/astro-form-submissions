@@ -86,7 +86,7 @@ export type MergedProvided<Es extends readonly unknown[]> = [Es] extends [readon
  * and a failed `required` delivery ends the sequence, so a later group can depend on an earlier one having
  * landed (e.g. an acknowledgement only once the owner has the submission).
  */
-export type DispatchGroup<E extends FormSubmission = FormSubmission, A = object> = Dispatcher<E, A>[]
+export type DispatchGroup<E extends FormSubmission = FormSubmission, A = object> = readonly Dispatcher<E, A>[]
 
 export interface FormRouteConfig<
   S extends SchemaInput,
@@ -116,7 +116,9 @@ export interface FormRouteConfig<
    * concurrently as one group, or a list of {@link DispatchGroup}s, which run in order. A failed `required`
    * delivery stops later groups. A quarantined submission reaches only those with `acceptsQuarantined`.
    */
-  dispatchers?: Dispatcher<Submission<S>, MergedProvided<Es>>[] | DispatchGroup<Submission<S>, MergedProvided<Es>>[]
+  dispatchers?:
+    | readonly Dispatcher<Submission<S>, MergedProvided<Es>>[]
+    | readonly DispatchGroup<Submission<S>, MergedProvided<Es>>[]
 
   /**
    * Per-site copy overrides keyed by {@link FormError.key} — a static map, or a {@link CopyResolver}
