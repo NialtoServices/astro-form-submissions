@@ -1,8 +1,9 @@
 import type { EmailMessage } from '#dispatchers/email.js'
-import { PostmarkTransport } from '#dispatchers/postmark.js'
+import { PostmarkDeliveryError, PostmarkTransport } from '#dispatchers/postmark.js'
 import { delay, http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { stubFetch } from '../support/harness.js'
 
 const POSTMARK_URL = 'https://api.postmarkapp.com/email'
 
@@ -82,5 +83,76 @@ describe('PostmarkTransport', () => {
       })
     )
     await expect(new PostmarkTransport({ token: 'tok', timeoutSeconds: 0.05 }).deliver(message)).rejects.toThrow()
+  })
+})
+
+describe('PostmarkTransport on the runtime fetch', () => {
+  let interceptedFetch: typeof fetch
+
+  beforeAll(() => {
+    interceptedFetch = globalThis.fetch
+  })
+
+  afterEach(() => {
+    globalThis.fetch = interceptedFetch
+  })
+
+  // Cloudflare Workers provides only fetch, so that is the path a deployed site takes. The request is
+  // checked there rather than through a Node HTTP client, which would never meet Workers' restrictions.
+  it('sends through the runtime fetch with the token and a JSON body', async () => {
+    const fetchMock = stubFetch(() => Response.json({ ErrorCode: 0, Message: 'OK' }))
+    await new PostmarkTransport({ token: 'tok' }).deliver(message)
+
+    expect(fetchMock).toHaveBeenCalledOnce()
+    const [url, init] = fetchMock.mock.calls[0]!
+    const headers = new Headers(init?.headers)
+    expect(String(url)).toBe(POSTMARK_URL)
+    expect(init?.method).toBe('POST')
+    expect(headers.get('X-Postmark-Server-Token')).toBe('tok')
+    expect(headers.get('Content-Type')).toBe('application/json')
+    expect(headers.get('Accept')).toBe('application/json')
+    expect(JSON.parse(init?.body as string)).toMatchObject({ From: 'from@example.com', MessageStream: 'outbound' })
+  })
+
+  // Workers rejects a request carrying a cache mode it does not support, before it is sent.
+  it('sets no cache mode on the request', async () => {
+    const fetchMock = stubFetch(() => Response.json({ ErrorCode: 0, Message: 'OK' }))
+    await new PostmarkTransport({ token: 'tok' }).deliver(message)
+
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(init).not.toHaveProperty('cache')
+    expect(url).not.toBeInstanceOf(Request)
+  })
+})
+
+describe('PostmarkDeliveryError', () => {
+  it("carries the HTTP status and Postmark's error code and message", async () => {
+    server.use(
+      http.post(POSTMARK_URL, () =>
+        HttpResponse.json({ ErrorCode: 406, Message: 'You tried to send to an inactive recipient.' }, { status: 422 })
+      )
+    )
+
+    const delivery = new PostmarkTransport({ token: 'tok' }).deliver(message)
+
+    await expect(delivery).rejects.toBeInstanceOf(PostmarkDeliveryError)
+    await expect(delivery).rejects.toMatchObject({
+      status: 422,
+      errorCode: 406,
+      message: 'Postmark refused the message (HTTP 422, error 406): You tried to send to an inactive recipient.'
+    })
+  })
+
+  it('carries the status alone when the response is not Postmark JSON', async () => {
+    server.use(http.post(POSTMARK_URL, () => new HttpResponse('<html>Bad gateway</html>', { status: 502 })))
+
+    const delivery = new PostmarkTransport({ token: 'tok' }).deliver(message)
+
+    await expect(delivery).rejects.toBeInstanceOf(PostmarkDeliveryError)
+    await expect(delivery).rejects.toMatchObject({
+      status: 502,
+      errorCode: undefined,
+      message: 'Postmark refused the message (HTTP 502)'
+    })
   })
 })

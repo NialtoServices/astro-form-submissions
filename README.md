@@ -117,7 +117,7 @@ with no install-time build:
 pnpm add @nialto-services/astro-form-submissions zod
 ```
 
-`astro` is a peer dependency; `postmark` ships as a dependency. Add **`zod`** as a direct dependency
+`astro` is a peer dependency. Add **`zod`** as a direct dependency
 of each site: the toolkit validates through the [Standard Schema](https://standardschema.dev) interface
 and never imports Zod itself, so the site brings (and pins) its own. Zod v4 implements Standard Schema
 natively; any Standard-Schema-compatible library works, and validation is structural (`~standard`, not
@@ -127,13 +127,10 @@ natively; any Standard-Schema-compatible library works, and validation is struct
 > not cleanly importable anyway, your schemas don't shift when Astro bumps its copy, and its planned
 > removal of bundled Zod becomes a non-event.
 
-**On Cloudflare Workers only**, `postmark` bundles an HTTP client that can fall back to Node
-built-ins, so enable Node compatibility in the site's `wrangler` config for robust email sending
-across `workerd` builds (Node-based hosts already have these built-ins):
-
-```toml
-compatibility_flags = ["nodejs_compat"]
-```
+The toolkit uses only web-standard APIs, so it needs no Node compatibility flag on Cloudflare Workers.
+`PostmarkTransport` calls Postmark's API with the runtime's own `fetch` rather than an HTTP client
+library: Workers refuses request options it does not support, such as the `cache: 'default'` that
+axios 1.20 began adding, before the request is sent, so a client in between could break every send.
 
 ## How it works
 
@@ -588,7 +585,9 @@ trade-off across all of its dispatchers.
 
 `EmailDispatcher` owns everything email-generic — your `templates` (`subject`/`text`/`html`),
 rendering, addressing (`from`/`to`/`replyTo`), and delivery policy — and delegates the wire call to an
-`EmailTransport`. `PostmarkTransport` is the bundled provider (`{ token, messageStream?, timeoutSeconds? }`);
+`EmailTransport`. `PostmarkTransport` is the bundled provider (`{ token, messageStream?, timeoutSeconds? }`),
+and a message Postmark refuses rejects with a `PostmarkDeliveryError` carrying the HTTP `status` and
+Postmark's own `errorCode` and message;
 adding Resend/SES later means implementing `EmailTransport` (~10 lines of API mapping) while templates
 and addressing stay put.
 

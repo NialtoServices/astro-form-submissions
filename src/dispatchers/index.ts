@@ -35,7 +35,7 @@ export {
 
 export { mustacheTemplates, type MustacheTemplatesOptions } from '#dispatchers/mustache.js'
 
-export { PostmarkTransport, type PostmarkTransportOptions } from '#dispatchers/postmark.js'
+export { PostmarkDeliveryError, PostmarkTransport, type PostmarkTransportOptions } from '#dispatchers/postmark.js'
 
 export {
   DiscordDeliveryError,

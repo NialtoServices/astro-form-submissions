@@ -38,8 +38,7 @@
   },
   "dependencies": {
     "@standard-schema/spec": "^1.1.0",
-    "mustache": "^4.2.0",
-    "postmark": "^4.0.7"
+    "mustache": "^4.2.0"
   },
   "peerDependencies": {
     "astro": "^7.0.0"

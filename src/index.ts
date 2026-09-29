@@ -64,6 +64,7 @@ export {
   submissionAcknowledgementTemplates,
   submissionNotificationTemplates,
   mustacheTemplates,
+  PostmarkDeliveryError,
   PostmarkTransport,
   renderEmail,
   resolveField,
