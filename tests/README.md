@@ -25,7 +25,10 @@ refactor that preserves behaviour breaks a spec, the spec was wrong.
 - Spying on constructors or asserting constructor arguments (wiring, not behaviour).
 - Asserting how options are stored (e.g. function-identity inspectors on a stored callback).
 - Testing private helpers directly — `strings.ts` has no spec on purpose; `clamp`/`humanize` are
-  observed through `resolveField` labels and Discord's embed limits.
+  observed through `resolveField` labels and Discord's embed limits. The one exception is a helper
+  that implements a published standard, checked against that standard's own examples, which no
+  public entry point can reproduce: `sigv4.ts` against AWS's Signature Version 4 vector, and
+  `content-disposition.ts` against RFC 6266 and RFC 5987.
 - Mocking a module when the wire is observable.
 - Snapshot tests and assertions on internal iteration/merge mechanics.
 
