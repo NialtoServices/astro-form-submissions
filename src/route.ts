@@ -1,5 +1,5 @@
 import { admit, clientAddressLookup, ERRORS, type ClientAddressResolver } from '#admission.js'
-import type { DispatchContext, Dispatcher } from '#dispatchers/index.js'
+import { DestinationUnreachableError, type DispatchContext, type Dispatcher } from '#dispatchers/index.js'
 import { FileUploads, UploadedFiles, type Enricher, type EnrichmentContext } from '#enrichers/index.js'
 import type { FormError, FormErrors, ToolkitErrorKey } from '#errors.js'
 import { RateLimitGuard, type Guard } from '#guards/index.js'
@@ -202,6 +202,8 @@ export function createFormRoute<
         }
       }
     }
+
+    // Whether a recipient has, or may have, the acquired resources' links; once true they are kept.
     let resourcesExposed = false
 
     // Held outside the try so an unexpected failure after admission can still hand the copy resolver
@@ -309,6 +311,18 @@ export function createFormRoute<
               await report(error, 'delivery')
               failed += 1
               if (dispatcher.required) requiredFailed = true
+
+              // A destination that couldn't be reached or timed out may still have accepted the message,
+              // so its links may be out; deleting the files could leave a recipient with dead links.
+              if (dispatcher.exposesResources !== false && error instanceof DestinationUnreachableError) {
+                resourcesExposed = true
+                await report(
+                  new Error(
+                    `${error.destination} may have delivered the upload links before failing; the files were kept.`
+                  ),
+                  'delivery'
+                )
+              }
             }
           })
         )

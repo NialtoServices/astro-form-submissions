@@ -555,6 +555,9 @@ the trusted `context.siteURL`.
 - **`exposesResources`** — whether this delivery carries the enrichers' acquired resources (uploaded-file
   links) to a recipient who then needs them to persist. It decides upload rollback: files are kept when
   an exposing delivery succeeds (deleting them would leave dead links) and rolled back when none does.
+  An exposing delivery whose outcome is unknown (its destination timed out or couldn't be reached, a
+  `DestinationUnreachableError`) may still have landed, so it keeps the files too and reports that it
+  did; the submission still fails, and a retry uploads afresh.
   For `EmailDispatcher` this now **derives from the templates**: the built-in
   `submissionNotificationTemplates` / `submissionAcknowledgementTemplates` mark themselves as exposing
   resources exactly when you give them an `attachments` field to render — so a plain acknowledgement with

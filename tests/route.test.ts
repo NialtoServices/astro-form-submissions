@@ -1,4 +1,5 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
+import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
 import { formError } from '#errors.js'
 import type { FormSubmission } from '#pipeline.js'
@@ -638,6 +639,45 @@ describe('createFormRoute enrichers', () => {
     })(contextFor(validForm()))
 
     expect(response.status).toBe(502)
+    expect(rolledBack).toEqual(['ok'])
+  })
+
+  it('keeps the files when an exposing delivery times out, since it may have landed', async () => {
+    const { enricher, rolledBack } = stubEnricher({ provide: { files: [] } })
+    const timeout = new DOMException('This operation was aborted', 'AbortError')
+    const failing = stubDispatcher({
+      required: true,
+      failWith: new DestinationUnreachableError('Postmark', { cause: timeout })
+    })
+    const onError = vi.fn()
+
+    const response = await createFormRoute({
+      ...baseConfig,
+      enrichers: [enricher],
+      dispatchers: [failing.dispatcher],
+      onError
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(502)
+    expect(rolledBack).toEqual([])
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining('the files were kept') }),
+      { stage: 'delivery' }
+    )
+  })
+
+  it('still rolls back when an unreachable delivery never carried the files', async () => {
+    const { enricher, rolledBack } = stubEnricher({ provide: { files: [] } })
+    const failing = stubDispatcher({
+      required: true,
+      exposesResources: false,
+      failWith: new DestinationUnreachableError('Discord', { cause: new TypeError('fetch failed') })
+    })
+
+    await createFormRoute({ ...baseConfig, enrichers: [enricher], dispatchers: [failing.dispatcher] })(
+      contextFor(validForm())
+    )
+
     expect(rolledBack).toEqual(['ok'])
   })
 
