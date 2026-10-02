@@ -623,8 +623,10 @@ templates: submissionNotificationTemplates<ContactEnquiry>({
 
 There's no special "message" field — list a textarea key (`message`, `requirements`, …) in `fields`
 like any other; values render with their line breaks preserved. The HTML version is a
-self-contained, dark-mode-aware, Outlook-safe document; the text version mirrors it. Both live as
-`submission-notification.html.mustache` / `.txt.mustache` in this package's top-level `templates/` folder.
+self-contained, dark-mode-aware, Outlook-safe document; the text version mirrors it. Their sources are
+`submission-notification.html.mustache` / `.txt.mustache` in the repository's
+[`templates/`](https://github.com/NialtoServices/astro-form-submissions/tree/main/templates) folder,
+a starting point for writing your own; the published package carries them compiled in, not as files.
 
 **Translating the copy.** Both built-in templates (this one and the acknowledgement below) take a
 `copy` option that overrides their fixed UI text — the eyebrow, title (`heading`), footer note, and
@@ -1220,6 +1222,12 @@ Cloudflare, Wrangler's `.dev.vars` and `wrangler secret`) — and wire them in:
 - Postmark: `token` (transport), `from`/`to` (email dispatcher)
 - Turnstile: `secretKey` (inspector)
 - Discord (optional): a `webhookUrl` (dispatcher)
+- File uploads (optional): a signing `secret` of at least 32 random characters, shared by `signedLink`,
+  `createFileRoute` and, for direct uploads, `createUploadRoute`, `UploadedFiles`, `WorkerUploadTarget`
+  and `createUploadPutRoute`. Rotating it invalidates every download link already sent and every receipt
+  in flight.
+- Direct uploads to R2 (optional): an R2 API token's `accessKeyId` and `secretAccessKey`
+  (`R2PresignedUploadTarget`)
 
 Validate them where you read them: `requireEnv(env, [...keys])` returns the values typed as present and
 throws a `MissingEnvError` listing every key that is absent or empty (never a value, so it is safe to log).
@@ -1229,8 +1237,9 @@ Leave optional ones, such as a Discord webhook, out of the list.
 
 ## À la carte and bespoke flows
 
-File uploads, rate limiting, and body-size caps are all first-class (see
-[File uploads](#file-uploads) and [Guards](#guards)) — a form that needs them stays on the factory.
+File uploads, rate limiting, and per-file size limits are all first-class (see
+[File uploads](#file-uploads) and [Guards](#guards)), so a form that needs them stays on the factory. A
+true request-body ceiling is your host's job, as [Guards](#guards) explains.
 Genuinely bespoke flows can still import any piece on its own (`TurnstileInspector`, `FileUploads`,
 `EmailDispatcher`, `createFileRoute`, `getField`, the response helpers) rather than the factory.
 
