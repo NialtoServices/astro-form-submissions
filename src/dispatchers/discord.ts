@@ -1,4 +1,5 @@
 import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
+import { DiscordDeliveryError } from '#dispatchers/discord-delivery-error.js'
 import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
 import { resolveField, type FieldSpec } from '#dispatchers/fields.js'
 import type { FormSubmission } from '#pipeline.js'
@@ -118,20 +119,6 @@ export interface DiscordDispatcherSettings<E extends FormSubmission = FormSubmis
 /** Options for constructing a {@link DiscordDispatcher}. */
 export type DiscordDispatcherOptions<E extends FormSubmission = FormSubmission> = DiscordDispatcherSettings<E> &
   DiscordWebhook
-
-/**
- * A Discord webhook delivery failure. Carries the HTTP `status` as a property (so the route's PII-safe reporter can
- * log `status=…` and operators can tell a revoked webhook from rate-limiting or an outage), but never the webhook URL
- * or response body.
- */
-export class DiscordDeliveryError extends Error {
-  // MARK: - Object Lifecycle
-
-  constructor(readonly status: number) {
-    super(`Discord webhook responded with ${status}`)
-    this.name = 'DiscordDeliveryError'
-  }
-}
 
 /**
  * Posts a copy of a form submission to a Discord webhook as an embed.

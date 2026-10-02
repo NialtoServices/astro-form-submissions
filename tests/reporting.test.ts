@@ -1,5 +1,5 @@
 import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
-import { PostmarkDeliveryError } from '#dispatchers/postmark.js'
+import { PostmarkDeliveryError } from '#dispatchers/postmark-delivery-error.js'
 import { defaultErrorReporter } from '#reporting.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 

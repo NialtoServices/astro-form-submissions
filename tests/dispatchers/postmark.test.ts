@@ -1,6 +1,7 @@
 import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 import type { EmailMessage } from '#dispatchers/email.js'
-import { PostmarkDeliveryError, PostmarkTransport } from '#dispatchers/postmark.js'
+import { PostmarkDeliveryError } from '#dispatchers/postmark-delivery-error.js'
+import { PostmarkTransport } from '#dispatchers/postmark.js'
 import { delay, http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'

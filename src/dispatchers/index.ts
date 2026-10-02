@@ -1,9 +1,10 @@
 export type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
 export { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
+export { DiscordDeliveryError } from '#dispatchers/discord-delivery-error.js'
+export { EmailRecipientError } from '#dispatchers/email-recipient-error.js'
 
 export {
   EmailDispatcher,
-  EmailRecipientError,
   renderEmail,
   type AddressInput,
   type EmailContent,
@@ -37,10 +38,10 @@ export {
 
 export { mustacheTemplates, type MustacheTemplatesOptions } from '#dispatchers/mustache.js'
 
-export { PostmarkDeliveryError, PostmarkTransport, type PostmarkTransportOptions } from '#dispatchers/postmark.js'
+export { PostmarkDeliveryError } from '#dispatchers/postmark-delivery-error.js'
+export { PostmarkTransport, type PostmarkTransportOptions } from '#dispatchers/postmark.js'
 
 export {
-  DiscordDeliveryError,
   DiscordDispatcher,
   type DiscordDispatcherOptions,
   type DiscordDispatcherSettings,

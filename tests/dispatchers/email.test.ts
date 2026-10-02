@@ -1,4 +1,5 @@
-import { EmailDispatcher, EmailRecipientError, type EmailTemplates } from '#dispatchers/email.js'
+import { EmailRecipientError } from '#dispatchers/email-recipient-error.js'
+import { EmailDispatcher, type EmailTemplates } from '#dispatchers/email.js'
 import { submissionNotificationTemplates } from '#dispatchers/submission-notification.js'
 import { describe, expect, it, vi } from 'vitest'
 import { dispatchContext } from '../dispatch-context.js'

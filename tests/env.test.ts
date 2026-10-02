@@ -1,4 +1,5 @@
-import { MissingEnvError, requireEnv } from '#env.js'
+import { requireEnv } from '#env.js'
+import { MissingEnvError } from '#missing-env-error.js'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 
 interface SiteEnv {

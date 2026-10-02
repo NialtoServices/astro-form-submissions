@@ -136,7 +136,8 @@ export type { ClientAddressResolver } from '#admission.js'
 
 export { defaultErrorReporter, type ErrorReporter } from '#reporting.js'
 
-export { MissingEnvError, requireEnv } from '#env.js'
+export { requireEnv } from '#env.js'
+export { MissingEnvError } from '#missing-env-error.js'
 
 export {
   formDataToObject,
