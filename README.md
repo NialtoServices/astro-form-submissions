@@ -979,6 +979,10 @@ them against the receipts. A declared type among `accept`'s content-types is sto
 anything else as `application/octet-stream`; the enricher refuses bytes that match nothing accepted, or
 that contradict the type they were stored with.
 
+The two enrichers can share `attachTo` because a genuine request carries either multipart files or
+receipts, never both. A request that carries both is refused (`invalidForm`) and every file it
+stored is deleted, so it can't double the limits or strand either set.
+
 **Setting up R2 for presigned uploads.** Create an R2 API token with Object Read & Write on the bucket,
 and give the bucket a CORS rule for the site's origins:
 

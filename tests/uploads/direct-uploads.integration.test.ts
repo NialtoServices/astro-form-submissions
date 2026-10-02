@@ -257,6 +257,21 @@ describe('direct uploads through the Worker (local development)', () => {
     expect(response.status).toBe(404)
   })
 
+  it('refuses a request carrying both multipart files and receipts, deleting both sets', async () => {
+    const { uploadRoute, putRoute, formRoute, bucket } = site(target())
+    const { uploads } = await requestUploads(uploadRoute, [quote])
+    await putThroughWorker(putRoute, uploads![0]!, quote)
+
+    const data = fields('token-2')
+    data.append('upload', uploads![0]!.receipt)
+    data.append('file', photo)
+    const response = await formRoute(makeRouteContext({ body: data, url: 'https://example.com/api/contact/' }))
+
+    expect(response.status).toBe(400)
+    expect(postmarkRequests).toHaveLength(0)
+    expect(bucket.objects.size).toBe(0)
+  })
+
   it('still accepts a multipart file on the same route, for visitors without JavaScript', async () => {
     const { formRoute } = site(target())
     const data = fields('token-9')

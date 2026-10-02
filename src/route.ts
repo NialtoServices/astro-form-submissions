@@ -262,6 +262,14 @@ export function createFormRoute<
               // that read it (the keys are config-owned, but the guard costs nothing).
               if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue
 
+              // Two enrichers may share a key (multipart and direct uploads both attach to `files`) because a
+              // genuine request only ever feeds one. A request feeding both is crafted: overwriting would
+              // strand the first enricher's files and let it carry each enricher's limits in full.
+              if (Object.hasOwn(resources, key)) {
+                await runRollbacks()
+                return fail(ERRORS.invalidForm, formData)
+              }
+
               resources[key] = value
             }
           }
