@@ -1,6 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { formError, type FormError, type FormErrors } from '#errors.js'
-import type { Guard, GuardContext } from '#guards/index.js'
+import type { AdmittingRoute, Guard, GuardContext } from '#guards/index.js'
 import type { InspectionContext, Inspector } from '#inspectors/index.js'
 import type { FormErrorStage } from '#reporting.js'
 import { jsonFormError, jsonValidationError } from '#responses.js'
@@ -42,6 +42,7 @@ export interface AdmissionConfig<S extends SchemaInput> {
 
 /** What admission reads about the request, and the route's reporters. */
 export interface AdmissionRequest {
+  route: AdmittingRoute
   request: Request
   url: URL
   site?: URL
@@ -99,6 +100,7 @@ export async function admit<S extends SchemaInput>(
   const guardContext: GuardContext = {
     request: request.request,
     requestURL: url,
+    route: request.route,
     siteURL: site,
     submittedAt,
     report: (error) => registerReport(error, 'guard'),

@@ -1,4 +1,4 @@
-export type { Guard, GuardContext } from '#guards/guard.js'
+export type { AdmittingRoute, Guard, GuardContext } from '#guards/guard.js'
 export {
   RateLimitGuard,
   type RateLimiter,

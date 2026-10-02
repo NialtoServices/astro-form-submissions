@@ -1,11 +1,12 @@
-import type { GuardContext } from '#guards/guard.js'
+import type { AdmittingRoute, GuardContext } from '#guards/guard.js'
 import { RateLimitGuard, type RateLimiter } from '#guards/rate-limit.js'
 import { describe, expect, it, vi } from 'vitest'
 
-function guardContext(clientAddress?: string): GuardContext {
+function guardContext(clientAddress?: string, route: AdmittingRoute = 'form'): GuardContext {
   return {
     request: new Request('https://example.com/api/form', { method: 'POST' }),
     requestURL: new URL('https://example.com/api/form'),
+    route,
     siteURL: new URL('https://example.com/'),
     submittedAt: new Date('2026-01-02T03:04:05Z'),
     clientAddress: clientAddress ?? '1.2.3.4'
@@ -44,13 +45,19 @@ describe('RateLimitGuard', () => {
   it('keys by client address by default', async () => {
     const { limiter, limit } = stubLimiter({ success: true })
     await new RateLimitGuard({ limiter }).guard(guardContext('9.9.9.9'))
-    expect(limit).toHaveBeenCalledWith({ key: '9.9.9.9' })
+    expect(limit).toHaveBeenCalledWith({ key: 'form:9.9.9.9' })
   })
 
   it('keys an IPv6 client by its /64 by default', async () => {
     const { limiter, limit } = stubLimiter({ success: true })
     await new RateLimitGuard({ limiter }).guard(guardContext('2001:db8:1:2:aaaa:bbbb:cccc:dddd'))
-    expect(limit).toHaveBeenCalledWith({ key: '2001:db8:1:2::/64' })
+    expect(limit).toHaveBeenCalledWith({ key: 'form:2001:db8:1:2::/64' })
+  })
+
+  it('keys the upload route apart from the form route by default', async () => {
+    const { limiter, limit } = stubLimiter({ success: true })
+    await new RateLimitGuard({ limiter }).guard(guardContext('9.9.9.9', 'upload'))
+    expect(limit).toHaveBeenCalledWith({ key: 'upload:9.9.9.9' })
   })
 
   it('fails open without touching the limiter when there is no address and no custom key', async () => {

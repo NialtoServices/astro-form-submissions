@@ -5,6 +5,9 @@ import { FileUploads } from '#enrichers/file-uploads.js'
 import { UploadedFiles } from '#enrichers/uploaded-files.js'
 import { createFileRoute } from '#files/file-route.js'
 import { signedLink } from '#files/signing.js'
+import type { Guard } from '#guards/guard.js'
+import { InMemoryRateLimiter } from '#guards/in-memory-rate-limiter.js'
+import { RateLimitGuard } from '#guards/rate-limit.js'
 import { TurnstileInspector } from '#inspectors/turnstile.js'
 import { createFormRoute } from '#route.js'
 import { R2Storage } from '#storage/r2.js'
@@ -64,16 +67,17 @@ beforeEach(() => {
 afterEach(() => server.resetHandlers())
 
 /** A site wired as a real one would be: every route sharing one bucket, prefix and secret. */
-function site(target: UploadTarget) {
+function site(target: UploadTarget, { guards = [] }: { guards?: Guard[] } = {}) {
   const bucket = new MemoryBucket()
   const storage = new R2Storage({ bucket, prefix: 'uploads/' })
   const turnstile = new TurnstileInspector({ secretKey: 'turnstile-secret' })
   const limits = { maxFiles: 5, maxFileBytes: 100 * 1024 * 1024, maxTotalBytes: 100 * 1024 * 1024 }
 
-  const uploadRoute = createUploadRoute({ schema, inspectors: [turnstile], target, secret: SECRET, ...limits })
+  const uploadRoute = createUploadRoute({ schema, guards, inspectors: [turnstile], target, secret: SECRET, ...limits })
   const putRoute = createUploadPutRoute({ storage, secret: SECRET })
   const formRoute = createFormRoute({
     schema,
+    guards,
     inspectors: [turnstile],
     enrichers: [
       new FileUploads<Enquiry>({ storage, link: signedLink({ secret: SECRET }), attachTo: 'files' }),
@@ -183,6 +187,21 @@ describe('direct uploads through the Worker (local development)', () => {
     expect(photoDownload.headers.get('Content-Type')).toBe('image/png')
     expect(photoDownload.headers.get('Content-Disposition')).toContain("UTF-8''Kitchen%20%E2%80%93%20before.png")
     expect(new Uint8Array(await quoteDownload.arrayBuffer())).toEqual(PDF)
+  })
+
+  it('counts a submission once per route against a limiter both routes share', async () => {
+    // One submission a minute: the grant and the final post must not spend the same allowance.
+    const guards = [new RateLimitGuard({ limiter: new InMemoryRateLimiter({ limit: 1, windowSeconds: 60 }) })]
+    const { uploadRoute, putRoute, formRoute } = site(target(), { guards })
+
+    const { response, uploads } = await requestUploads(uploadRoute, [quote])
+    expect(response.status).toBe(200)
+    await putThroughWorker(putRoute, uploads![0]!, quote)
+
+    expect((await submitReceipts(formRoute, [uploads![0]!.receipt])).status).toBe(200)
+
+    // A second submission in the same window is still refused, at its first step.
+    expect((await requestUploads(uploadRoute, [quote], 'token-3')).response.status).toBe(429)
   })
 
   it('needs a fresh Turnstile token for the final submission', async () => {

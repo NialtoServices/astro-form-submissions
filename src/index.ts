@@ -2,6 +2,7 @@ export {
   InMemoryRateLimiter,
   RateLimitGuard,
   rateLimitKeyForAddress,
+  type AdmittingRoute,
   type Guard,
   type GuardContext,
   type InMemoryRateLimiterOptions,

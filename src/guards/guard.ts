@@ -1,6 +1,13 @@
 import type { Verdict } from '#pipeline.js'
 
 /**
+ * Which toolkit route is admitting a request: the form route (`createFormRoute`) or the upload route
+ * (`createUploadRoute`). A direct-upload submission passes both, so a guard that counts requests tells
+ * them apart by this.
+ */
+export type AdmittingRoute = 'form' | 'upload'
+
+/**
  * Everything a guard may inspect before the request body is read. Guards run first, so they see only
  * the request envelope (no parsed submission or form data yet).
  */
@@ -10,6 +17,12 @@ export interface GuardContext {
 
   /** The current request's URL. Its host can be proxy/client-influenced, so prefer `siteURL` for trust decisions. */
   requestURL: URL
+
+  /**
+   * The toolkit route admitting the request. Set by the route, never by the client, unlike the
+   * request's path, which a client can vary (a trailing slash, say) while reaching the same route.
+   */
+  route: AdmittingRoute
 
   /** The configured site URL (Astro `site`), or `undefined` when unset — the trusted origin (never request-derived). */
   siteURL?: URL

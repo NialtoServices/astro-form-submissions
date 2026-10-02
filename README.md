@@ -359,8 +359,12 @@ One ships with the package:
   need a shared store — a Cloudflare rate-limit binding, Redis, Upstash, or a Durable Object — since
   each isolate otherwise keeps its own counts). It keys by client address by default, grouping an IPv6
   address by its /64 network (a host can send from any address in its /64, so a per-address key would
-  never throttle it) and an IPv4-mapped IPv6 address by its IPv4 address. A custom `key` can keep that
-  grouping with the exported `rateLimitKeyForAddress(address)`. **Fails open**: a
+  never throttle it) and an IPv4-mapped IPv6 address by its IPv4 address. The default key is also scoped
+  to the admitting route (`form:192.0.2.1`, `upload:192.0.2.1`), because a
+  [direct-upload](#direct-uploads) submission passes the upload route and then the form route: sharing
+  one limiter between them counts it once on each, not twice on one. A custom `key` receives the same
+  `context.route` (`'form'` or `'upload'`) and can keep the address grouping with the exported
+  `rateLimitKeyForAddress(address)`. **Fails open**: a
   limiter outage never blocks a submission (and a Cloudflare binding is simply a no-op under `wrangler
 dev`, where `InMemoryRateLimiter` still throttles). With the default key and no resolvable client
   address it also fails open (rather than throttle every address-less caller against one shared bucket)

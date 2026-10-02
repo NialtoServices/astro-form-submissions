@@ -148,7 +148,16 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
     let admittedFormData: FormData | undefined
 
     try {
-      const admission = await admit(config, { request, url, site, submittedAt, clientAddress, report, registerReport })
+      const admission = await admit(config, {
+        route: 'upload',
+        request,
+        url,
+        site,
+        submittedAt,
+        clientAddress,
+        report,
+        registerReport
+      })
       if (admission.outcome === 'respond') return admission.response
       if (admission.outcome === 'drop' || admission.quarantined) return jsonOk({ uploads: [] })
 

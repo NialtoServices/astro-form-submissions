@@ -26,9 +26,11 @@ export interface RateLimitGuardOptions {
   limiter: RateLimiter
 
   /**
-   * The throttle key for a request. Default: the client address, with an IPv6 address grouped by its
-   * /64 network (see {@link rateLimitKeyForAddress}); with no custom key and no resolvable address, the
-   * guard fails open rather than share one bucket across address-less callers.
+   * The throttle key for a request. Default: the admitting route and the client address, with an IPv6
+   * address grouped by its /64 network (see {@link rateLimitKeyForAddress}), e.g. `form:192.0.2.1`. The
+   * route keeps a direct-upload submission, which passes the upload route and then the form route, from
+   * being counted twice against one limiter. With no custom key and no resolvable address, the guard
+   * fails open rather than share one bucket across address-less callers.
    */
   key?: (context: GuardContext) => string
 }
@@ -60,12 +62,12 @@ export class RateLimitGuard implements Guard {
   // MARK: - Guard API
 
   async guard(context: GuardContext): Promise<Verdict> {
-    const { clientAddress } = context
+    const { clientAddress, route } = context
     const key = this.options.key
       ? this.options.key(context)
       : clientAddress === undefined
         ? undefined
-        : rateLimitKeyForAddress(clientAddress)
+        : `${route}:${rateLimitKeyForAddress(clientAddress)}`
 
     // No per-client key (no custom `key`, no resolvable address) → fail open rather than throttle every
     // such caller against one shared bucket, which would let a single one exhaust everyone's quota.
