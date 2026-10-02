@@ -17,13 +17,5 @@ export default {
   plugins: ['@ianvs/prettier-plugin-sort-imports', 'prettier-plugin-astro'],
   importOrder: ['<BUILTIN_MODULES>', '<THIRD_PARTY_MODULES>', '^@/', '^[../]', '^[./]'],
   importOrderParserPlugins: ['typescript', 'jsx', 'decorators-legacy'],
-  importOrderTypeScriptVersion: '5.0.0',
-  overrides: [
-    {
-      files: '*.astro',
-      options: {
-        parser: 'astro'
-      }
-    }
-  ]
+  importOrderTypeScriptVersion: '5.0.0'
 }
