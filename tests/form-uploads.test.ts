@@ -17,9 +17,10 @@ interface SentUpload {
 
 /**
  * A stand-in for `XMLHttpRequest` that records each upload and answers with a status chosen per call,
- * firing upload progress at half and full size first, as a browser does for a body it can measure.
+ * firing upload progress at half and full size first, as a browser does for a body it can measure. A
+ * `stall` outcome sends nothing and never answers, until aborted.
  */
-function installFakeXHR(statuses: (number | 'network-error')[] = []) {
+function installFakeXHR(statuses: (number | 'network-error' | 'stall')[] = []) {
   const sent: SentUpload[] = []
 
   class FakeXMLHttpRequest extends EventTarget {
@@ -38,9 +39,15 @@ function installFakeXHR(statuses: (number | 'network-error')[] = []) {
       this.headers[name] = value
     }
 
+    abort() {
+      this.dispatchEvent(new Event('abort'))
+    }
+
     send(body: Blob) {
       const outcome = statuses[sent.length] ?? 200
       sent.push({ method: this.method, url: this.url, headers: { ...this.headers }, body })
+      if (outcome === 'stall') return
+
       queueMicrotask(() => {
         for (const loaded of [Math.floor(body.size / 2), body.size]) {
           this.upload.dispatchEvent(
@@ -250,6 +257,26 @@ describe('form script — direct uploads', () => {
 
     expect(status.textContent).toBe('Could not reach the server.')
     expect(fetchSpy).toHaveBeenCalledOnce()
+  })
+
+  it('gives up on an upload that stops making progress, leaving the form ready for a retry', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    installFakeXHR(['stall'])
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true, uploads: grants }))
+    const { form, fileInput, status, submit } = mountForm()
+    form.dataset.astroFormSubmitTimeout = '5000'
+    choose(fileInput, [photo, video])
+
+    submit()
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledOnce())
+    await vi.advanceTimersByTimeAsync(4_999)
+    expect(status.dataset.astroFormState).toBe('pending')
+
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('error'))
+
+    expect(status.textContent).toBe('Could not reach the server.')
+    expect(form.dataset.astroFormSubmitting).toBeUndefined()
   })
 
   it('shows the form route’s refusal after the uploads', async () => {

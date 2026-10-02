@@ -27,7 +27,8 @@
  * - `[data-astro-form-field-error-summary]` — an optional element the script fills with a list of
  *   every field's message, each linking to its field.
  * - `data-astro-form-submit-timeout` — optional per-form request timeout override, in milliseconds
- *   (a non-positive or non-finite value is ignored in favour of the default).
+ *   (a non-positive or non-finite value is ignored in favour of the default). A direct upload uses it as
+ *   an idle deadline: it fails once that long passes with no progress.
  * - `.cf-turnstile` — an optional Turnstile widget container (Cloudflare's own convention); the
  *   script refreshes it after each attempt so a retry never resubmits a spent token.
  *
@@ -274,22 +275,43 @@ function formDataWithoutUploads(formElement: HTMLFormElement, submitter: HTMLEle
 
 /**
  * Upload one file as instructed, reporting bytes sent as they go. Resolves `true` on a 2xx response and
- * `false` on any other status or a network failure. `XMLHttpRequest`, because `fetch` reports no upload
- * progress.
+ * `false` on any other status, a network failure, or `idleTimeoutMs` passing with no progress (a stalled
+ * connection otherwise holds the form pending until the OS gives up). `XMLHttpRequest`, because `fetch`
+ * reports no upload progress.
  */
-function uploadFile(upload: GrantedUpload, file: File, onProgress: (loaded: number) => void): Promise<boolean> {
+function uploadFile(
+  upload: GrantedUpload,
+  file: File,
+  idleTimeoutMs: number,
+  onProgress: (loaded: number) => void
+): Promise<boolean> {
   return new Promise((resolve) => {
     const request = new XMLHttpRequest()
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+
+    // An idle deadline rather than a total one, so a large upload on a slow but moving link still finishes.
+    const restartIdleTimer = () => {
+      clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => request.abort(), idleTimeoutMs)
+    }
+
+    const finish = (stored: boolean) => {
+      clearTimeout(idleTimer)
+      resolve(stored)
+    }
+
     request.open(upload.method, upload.url)
     for (const [name, value] of Object.entries(upload.headers)) request.setRequestHeader(name, value)
 
     request.upload.addEventListener('progress', (event) => {
+      restartIdleTimer()
       if (event.lengthComputable) onProgress(event.loaded)
     })
-    request.addEventListener('load', () => resolve(request.status >= 200 && request.status < 300))
-    request.addEventListener('error', () => resolve(false))
-    request.addEventListener('abort', () => resolve(false))
+    request.addEventListener('load', () => finish(request.status >= 200 && request.status < 300))
+    request.addEventListener('error', () => finish(false))
+    request.addEventListener('abort', () => finish(false))
     request.send(file)
+    restartIdleTimer()
   })
 }
 
@@ -502,7 +524,8 @@ async function submitWithUploads(
     }
 
     onProgress(0)
-    if (!(await uploadFile(upload, file, onProgress))) return { ok: false, error: messages.networkError ?? '' }
+    const stored = await uploadFile(upload, file, resolveSubmitTimeout(formElement), onProgress)
+    if (!stored) return { ok: false, error: messages.networkError ?? '' }
 
     bytesBefore += file.size
   }

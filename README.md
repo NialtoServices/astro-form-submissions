@@ -1016,7 +1016,9 @@ screen readers), guards against double-submits, and re-initialises on Astro View
 works (`<button>`, `<input type="submit">`, multiple named controls), and the clicked control's
 name/value joins the payload. Requests are bounded by a 30-second timeout (override per form with a
 `data-astro-form-submit-timeout` attribute, in milliseconds — a non-positive or non-finite value is
-ignored and the default kept); a timeout shows the network-error copy.
+ignored and the default kept); a timeout shows the network-error copy. A [direct upload](#direct-uploads-in-the-form)
+uses the same value as an idle deadline instead, failing once that long passes with no progress, so a
+large file on a slow but moving connection still finishes.
 Success requires the route's `{ ok: true }` body — any other 2xx response is treated as an error.
 
 ### The contract
