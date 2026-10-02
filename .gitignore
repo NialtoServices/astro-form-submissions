@@ -22,3 +22,6 @@ audit/
 
 # Generated from the .mustache sources at build time
 src/dispatchers/*-sources.ts
+
+# Agent implementation plans, kept local
+docs/superpowers/
