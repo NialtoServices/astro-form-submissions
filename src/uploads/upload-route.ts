@@ -143,12 +143,17 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
       }
     }
 
+    // Held outside the try so an unexpected failure (a throwing upload target, say) can still hand the
+    // copy resolver the sender's form data.
+    let admittedFormData: FormData | undefined
+
     try {
       const admission = await admit(config, { request, url, site, submittedAt, clientAddress, report, registerReport })
       if (admission.outcome === 'respond') return admission.response
       if (admission.outcome === 'drop' || admission.quarantined) return jsonOk({ uploads: [] })
 
       const { formData } = admission
+      admittedFormData = formData
       const fail = (error: Parameters<typeof jsonFormError>[0]) =>
         jsonFormError(error, config.errors, { data: formData })
 
@@ -181,7 +186,7 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
       return jsonOk({ uploads })
     } catch (error) {
       await report(error, 'unexpected')
-      return jsonFormError(ERRORS.unavailable, config.errors)
+      return jsonFormError(ERRORS.unavailable, config.errors, { data: admittedFormData })
     } finally {
       await Promise.allSettled(pendingReports)
     }

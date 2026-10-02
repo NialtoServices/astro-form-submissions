@@ -57,6 +57,26 @@ const photo = { name: 'garden.jpg', size: 2_000_000, type: 'image/jpeg' }
 const video = { name: 'loft.mov', size: 30_000_000, type: 'video/quicktime' }
 
 describe('createUploadRoute', () => {
+  it('localises the failure when the upload target throws', async () => {
+    const route = createUploadRoute({
+      schema,
+      secret: SECRET,
+      onError: () => {},
+      target: {
+        prepare: async () => {
+          throw new Error('presign failed')
+        }
+      },
+      errors: (key, defaultMessage, { data }) =>
+        key === 'unavailable' && data?.get('lang') === 'fr' ? 'Formulaire indisponible.' : defaultMessage
+    })
+
+    const response = await route(request([photo], { name: 'Ada', lang: 'fr' }))
+
+    expect(response.status).toBe(500)
+    expect(await response.json()).toEqual({ error: 'Formulaire indisponible.' })
+  })
+
   it('grants an upload and a receipt per file, in order, under server-generated keys', async () => {
     const { route, prepared } = routeWith({ maxFileBytes: 50_000_000, maxTotalBytes: 100_000_000 })
 

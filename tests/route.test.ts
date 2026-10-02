@@ -816,6 +816,33 @@ describe('createFormRoute responses', () => {
   })
 })
 
+describe('createFormRoute localised copy for unexpected failures', () => {
+  // Answers in French when the posted form asks for it, so a test can tell whether the form data arrived.
+  const frenchWhenAsked: FormRouteConfig<typeof contactSchema>['errors'] = (key, defaultMessage, { data }) =>
+    key === 'unavailable' && data?.get('lang') === 'fr' ? 'Formulaire indisponible.' : defaultMessage
+
+  it('localises the failure when the schema itself throws', async () => {
+    const onError = vi.fn()
+    const throwingSchema: StandardSchemaV1<Record<string, unknown>, Record<string, unknown>> = {
+      '~standard': {
+        version: 1,
+        vendor: 'test',
+        validate: () => {
+          throw new Error('validator bug')
+        }
+      }
+    }
+
+    const response = await createFormRoute({ schema: throwingSchema, errors: frenchWhenAsked, onError })(
+      contextFor(validForm({ lang: 'fr' }))
+    )
+
+    expect(response.status).toBe(500)
+    expect(await response.json()).toEqual({ error: 'Formulaire indisponible.' })
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'validator bug' }), { stage: 'unexpected' })
+  })
+})
+
 describe('createFormRoute inspector contract', () => {
   it('hands inspectors the built submission, raw form data, request/site URLs, and client address', async () => {
     const seen: {

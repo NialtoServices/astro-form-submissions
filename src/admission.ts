@@ -1,3 +1,4 @@
+import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { formError, type FormError, type FormErrors } from '#errors.js'
 import type { Guard, GuardContext } from '#guards/index.js'
 import type { InspectionContext, Inspector } from '#inspectors/index.js'
@@ -133,8 +134,16 @@ export async function admit<S extends SchemaInput>(
   if (!formData) return fail(ERRORS.invalidForm)
 
   const schemaContext: SchemaContext = { data: formData, requestURL: url, siteURL: site, submittedAt }
-  const validator = resolveValidator(config.schema, schemaContext)
-  const validation = await validator['~standard'].validate(formDataToObject(formData))
+  let validation: StandardSchemaV1.Result<unknown>
+  try {
+    const validator = resolveValidator(config.schema, schemaContext)
+    validation = await validator['~standard'].validate(formDataToObject(formData))
+  } catch (error) {
+    // A throwing schema is the site's bug, as a non-object output is below; fail closed with the form
+    // data, so a localising copy resolver still answers in the sender's language.
+    await report(error, 'unexpected')
+    return fail(ERRORS.unavailable, formData)
+  }
 
   // Standard Schema signals failure by the *presence* of `issues` — an empty array is still a
   // failure, so fail closed on any issues result. `mapIssues([])` yields the generic summary with no fieldErrors.

@@ -204,12 +204,17 @@ export function createFormRoute<
     }
     let resourcesExposed = false
 
+    // Held outside the try so an unexpected failure after admission can still hand the copy resolver
+    // the sender's form data (to localise by a `lang` field, say).
+    let admittedFormData: FormData | undefined
+
     try {
       const admission = await admit(config, { request, url, site, submittedAt, clientAddress, report, registerReport })
       if (admission.outcome === 'respond') return admission.response
       if (admission.outcome === 'drop') return jsonOk()
 
       const { formData, submission, quarantined, quarantineReasons } = admission
+      admittedFormData = formData
 
       const enrichmentContext: EnrichmentContext<Submission<S>> = {
         submission,
@@ -336,7 +341,7 @@ export function createFormRoute<
       // strand them. The per-enricher paths handle their own; `runRollbacks` drains, so this is a no-op
       // once they have already run.
       if (!resourcesExposed && rollbacks.length > 0) await runRollbacks()
-      return fail(ERRORS.unavailable)
+      return fail(ERRORS.unavailable, admittedFormData)
     } finally {
       // Drain the context reporters (guard/inspector/enricher) so an async `onError` completes
       // before the platform can freeze the isolate after the response.
