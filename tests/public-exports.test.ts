@@ -15,5 +15,6 @@ describe('package entry', () => {
   it('names one reporter type that serves the route and the lazy build alike', () => {
     expectTypeOf<toolkit.LazyRouteOptions['onError']>().toEqualTypeOf<toolkit.ErrorReporter | undefined>()
     expectTypeOf<NonNullable<toolkit.FormRouteConfig<never>['onError']>>().toEqualTypeOf<toolkit.ErrorReporter>()
+    expectTypeOf(toolkit.defaultErrorReporter).toExtend<toolkit.ErrorReporter>()
   })
 })

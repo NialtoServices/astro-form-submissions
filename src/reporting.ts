@@ -34,9 +34,16 @@ function summarizeError(error: unknown): string {
   return parts.join(' ')
 }
 
-/** The reporter a route uses when the site configures none: a PII-safe summary on `console.error`. */
-export const defaultErrorReporter: ErrorReporter = (error, { stage }) =>
+/**
+ * The {@link ErrorReporter} a route uses when the site configures none: a PII-safe summary on
+ * `console.error`.
+ *
+ * @param error - The swallowed failure.
+ * @param context - The stage it happened in.
+ */
+export function defaultErrorReporter(error: unknown, { stage }: { stage: FormErrorStage }): void {
   console.error(`[astro-form-submissions] ${stage} error: ${summarizeError(error)}`)
+}
 
 /**
  * Wraps a reporter so every call is awaited (an async hook can't detach into an unhandled rejection)

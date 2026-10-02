@@ -129,7 +129,11 @@ export async function verifyClaims(token: string, secret: string): Promise<Recor
  * path segment 404s under `trailingSlash: 'always'` (Astro #16140); {@link tokenFromPathSegment}
  * reverses it.
  */
-export const tokenToPathSegment = (token: string) => token.replaceAll('.', '~')
+export function tokenToPathSegment(token: string): string {
+  return token.replaceAll('.', '~')
+}
 
 /** Reverses {@link tokenToPathSegment}. */
-export const tokenFromPathSegment = (segment: string) => segment.replaceAll('~', '.')
+export function tokenFromPathSegment(segment: string): string {
+  return segment.replaceAll('~', '.')
+}
