@@ -33,9 +33,6 @@ export interface UploadRouteConfig<S extends SchemaInput> extends AdmissionConfi
   /** Receipt lifetime in seconds. Default one hour. */
   receiptTTLSeconds?: number
 
-  /** @deprecated Renamed to `receiptTTLSeconds`; this spelling will be removed in a future release. */
-  receiptTtlSeconds?: number
-
   /** Form field carrying the JSON file descriptors. Default `uploads`; the form script posts under `data-astro-form-upload-field`. */
   field?: string
 
@@ -120,14 +117,13 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
   assertValidSigningSecret(config.secret)
   assertFileLimitOptions('createUploadRoute', config)
   assertPositiveNumberOption('createUploadRoute `receiptTTLSeconds`', config.receiptTTLSeconds)
-  assertPositiveNumberOption('createUploadRoute `receiptTtlSeconds`', config.receiptTtlSeconds)
 
   const report = containedReporter(config.onError)
   const field = config.field ?? 'uploads'
   const maxFiles = config.maxFiles ?? DEFAULT_MAX_FILES
   const maxFileBytes = config.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES
   const maxTotalBytes = config.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES
-  const receiptTTLSeconds = config.receiptTTLSeconds ?? config.receiptTtlSeconds ?? DEFAULT_RECEIPT_TTL_SECONDS
+  const receiptTTLSeconds = config.receiptTTLSeconds ?? DEFAULT_RECEIPT_TTL_SECONDS
   const acceptedTypes = new Set((config.accept ?? ALL_TYPES).map((matcher) => matcher.contentType))
 
   return async (context) => {
