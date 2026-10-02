@@ -212,6 +212,53 @@ describe('form script submit controls', () => {
     expect(body.get('action')).toBe('publish')
   })
 
+  it('posts to the triggering control’s formaction when it has one', async () => {
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { form, status } = mountWithControl(`
+      <button type="submit">Send</button>
+      <button type="submit" formaction="/api/callback">Request a callback</button>`)
+    const callback = form.querySelector<HTMLButtonElement>('button[formaction]')!
+
+    form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, submitter: callback }))
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
+
+    expect(new URL(String(fetchSpy.mock.calls[0]![0])).pathname).toBe('/api/callback')
+  })
+
+  it('posts to the form’s action attribute even with a field named `action`', async () => {
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { form, status } = mountWithControl('<input type="hidden" name="action" value="subscribe" />')
+
+    form.dispatchEvent(new Event('submit', { cancelable: true }))
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
+
+    expect(new URL(String(fetchSpy.mock.calls[0]![0])).pathname).toBe('/api/contact')
+    expect((fetchSpy.mock.calls[0]![1]?.body as FormData).get('action')).toBe('subscribe')
+  })
+
+  it('posts to the document when the form has no action', async () => {
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { form, status } = mountWithControl('<button>Send</button>')
+    form.removeAttribute('action')
+
+    form.dispatchEvent(new Event('submit', { cancelable: true }))
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
+
+    expect(fetchSpy.mock.calls[0]![0]).toBe(document.URL)
+  })
+
+  it('resets the form after success even with a control named `reset`', async () => {
+    stubFetch(async () => jsonResponse({ ok: true }))
+    const { form, status } = mountWithControl('<input type="hidden" name="reset" value="1" />')
+    const input = form.querySelector<HTMLInputElement>('input[name="name"]')!
+    input.value = 'Grace'
+
+    form.dispatchEvent(new Event('submit', { cancelable: true }))
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
+
+    expect(input.value).toBe('Ada')
+  })
+
   it('disables the triggering control while pending and re-enables it afterwards', async () => {
     let resolveResponse: (response: Response) => void
     stubFetch(() => new Promise<Response>((resolve) => (resolveResponse = resolve)))

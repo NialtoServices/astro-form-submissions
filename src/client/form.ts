@@ -358,6 +358,18 @@ function resolveSubmitTimeout(formElement: HTMLFormElement): number {
 }
 
 /**
+ * The URL a native submission would go to: the submitter's `formaction` when it has one, else the form's
+ * `action` attribute, else the document. Read from the attribute because a control named `action`
+ * shadows `formElement.action`.
+ */
+function resolveSubmissionURL(formElement: HTMLFormElement, submitter: HTMLButtonElement | HTMLInputElement | null) {
+  if (submitter?.hasAttribute('formaction')) return submitter.formAction
+
+  const action = formElement.getAttribute('action')
+  return action ? new URL(action, document.baseURI).href : document.URL
+}
+
+/**
  * POST the form data and read the JSON body. Resolves `null` when the request never completes (network
  * failure or timeout abort) — the caller's network-error signal; otherwise `{ response, result }` to check
  * against the `{ ok: true }` contract. Only acquisition is caught, so a later presentation failure is never
@@ -422,7 +434,9 @@ function showSuccess(binding: FormBinding): void {
     } else {
       statusElement.textContent = messages.success ?? ''
       statusElement.dataset.astroFormState = 'success'
-      formElement.reset()
+
+      // Called through the prototype because a control named `reset` shadows `formElement.reset`.
+      HTMLFormElement.prototype.reset.call(formElement)
       resetTurnstileWidget(formElement)
     }
   } catch {
@@ -493,6 +507,7 @@ async function postForm(binding: FormBinding, url: string, formData: FormData): 
 async function submitWithUploads(
   binding: FormBinding,
   uploadAction: string,
+  submissionURL: string,
   formData: FormData,
   files: File[]
 ): Promise<PostOutcome & { formData?: FormData }> {
@@ -555,7 +570,7 @@ async function submitWithUploads(
   const receiptField = formElement.dataset.astroFormUploadReceiptField || DEFAULT_RECEIPT_FIELD
   for (const upload of granted) finalData.append(receiptField, upload.receipt)
 
-  const outcome = await postForm(binding, formElement.action, finalData)
+  const outcome = await postForm(binding, submissionURL, finalData)
   return outcome.ok ? { ...outcome, formData: finalData } : outcome
 }
 
@@ -596,12 +611,13 @@ async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<voi
   statusElement.textContent = messages.sending ?? ''
   statusElement.dataset.astroFormState = 'pending'
 
+  const submissionURL = resolveSubmissionURL(formElement, submitter)
   let outcome: PostOutcome & { formData?: FormData }
   try {
     outcome =
       uploadAction && files.length > 0
-        ? await submitWithUploads(binding, uploadAction, formData, files)
-        : await postForm(binding, formElement.action, formData)
+        ? await submitWithUploads(binding, uploadAction, submissionURL, formData, files)
+        : await postForm(binding, submissionURL, formData)
   } finally {
     if (submitter) submitter.disabled = false
     delete formElement.dataset.astroFormSubmitting
