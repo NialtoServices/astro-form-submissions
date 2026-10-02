@@ -226,6 +226,38 @@ describe('form script — direct uploads', () => {
     expect(sent).toHaveLength(0)
   })
 
+  it('leaves empty files out of the uploads', async () => {
+    const sent = installFakeXHR()
+    const fetchSpy = stubFetch(async (url) =>
+      String(url).includes('/uploads/')
+        ? jsonResponse({ ok: true, uploads: grants.slice(0, 1) })
+        : jsonResponse({ ok: true })
+    )
+    const { fileInput, status, submit } = mountForm({ turnstile: false })
+    choose(fileInput, [new File([], 'empty.txt', { type: 'text/plain' }), photo])
+
+    submit()
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
+
+    const descriptors = JSON.parse((fetchSpy.mock.calls[0]![1]!.body as FormData).get('uploads') as string)
+    expect(descriptors).toEqual([{ name: 'garden.jpg', size: 1000, type: 'image/jpeg' }])
+    expect(sent).toHaveLength(1)
+  })
+
+  it('submits as before when every chosen file is empty', async () => {
+    const sent = installFakeXHR()
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { fileInput, status, submit } = mountForm({ turnstile: false })
+    choose(fileInput, [new File([], 'empty.txt')])
+
+    submit()
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
+
+    expect(fetchSpy).toHaveBeenCalledOnce()
+    expect(String(fetchSpy.mock.calls[0]![0])).not.toContain('/uploads/')
+    expect(sent).toHaveLength(0)
+  })
+
   it('shows the upload route’s field errors without uploading anything', async () => {
     const sent = installFakeXHR()
     const fetchSpy = stubFetch(async () =>

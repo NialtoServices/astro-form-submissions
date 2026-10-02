@@ -565,9 +565,14 @@ async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<voi
   const submitter =
     event.submitter instanceof HTMLButtonElement || event.submitter instanceof HTMLInputElement ? event.submitter : null
 
-  // Direct-upload inputs never join a submission; their files go up in steps of their own.
+  // Direct-upload inputs never join a submission; their files go up in steps of their own. Empty files
+  // are skipped, as `FileUploads` skips them on the multipart path, since the upload route refuses them.
   const uploadAction = formElement.dataset.astroFormUploadAction
-  const files = uploadAction ? uploadInputs(formElement).flatMap((input) => Array.from(input.files ?? [])) : []
+  const files = uploadAction
+    ? uploadInputs(formElement)
+        .flatMap((input) => Array.from(input.files ?? []))
+        .filter((file) => file.size > 0)
+    : []
 
   // A disabled control is omitted from FormData, so the submitter must still be enabled here.
   const formData = uploadAction
