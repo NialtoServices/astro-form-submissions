@@ -47,14 +47,17 @@ const FILE_SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const
 export function formatFileSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return ''
 
+  const decimalsFor = (unitIndex: number) => (unitIndex >= 2 ? 1 : 0)
+
+  // Steps up on the rounded value, so a size just under a unit boundary (1,048,575 bytes) reads `1 MB`
+  // rather than `1024 KB`.
   let size = bytes
   let unitIndex = 0
-  while (size >= 1024 && unitIndex < FILE_SIZE_UNITS.length - 1) {
+  while (unitIndex < FILE_SIZE_UNITS.length - 1 && Number(size.toFixed(decimalsFor(unitIndex))) >= 1024) {
     size /= 1024
     unitIndex++
   }
 
-  const decimals = unitIndex >= 2 ? 1 : 0
-  const formatted = size.toFixed(decimals).replace(/\.0$/, '')
+  const formatted = size.toFixed(decimalsFor(unitIndex)).replace(/\.0$/, '')
   return `${formatted} ${FILE_SIZE_UNITS[unitIndex]}`
 }
