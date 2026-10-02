@@ -1005,7 +1005,10 @@ needs that origin in `connect-src`. The filename travels percent-encoded in `x-a
 
 - **Receipts, upload grants and download links are separate kinds of token.** All three are signed
   with the secret you pass, but each verifier accepts only its own kind, so none can stand in for
-  another. Receipts last an hour by default (`receiptTTLSeconds`), and upload URLs 15 minutes.
+  another. Receipts and upload URLs both last an hour by default (`receiptTTLSeconds`,
+  `expiresInSeconds`, `ttlSeconds`). The URLs are granted together but the files upload one after
+  another, so on a slow connection the last file starts long after the first: keep the URL lifetime no
+  shorter than the receipt's.
 - **A presigned URL stores exactly one object of exactly the admitted size.** Its `Content-Length` is
   signed, so R2 refuses any other size, and it carries `If-None-Match: *`, so a stored object can't be
   replaced. Through `WorkerUploadTarget`, a sender can replace their own upload with another of the same

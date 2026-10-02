@@ -2,8 +2,13 @@ import { assertPositiveNumberOption } from '#numeric-options.js'
 import { presignURL } from '#uploads/sigv4.js'
 import type { PendingUpload, UploadInstruction, UploadTarget } from '#uploads/upload-target.js'
 
-/** Default presigned URL lifetime — 15 minutes, long enough to start a large upload on a slow uplink. */
-const DEFAULT_EXPIRES_IN_SECONDS = 15 * 60
+/**
+ * Default presigned URL lifetime — one hour, matching the upload route's default receipt lifetime. Every
+ * URL is granted at once but the files upload one after another, so on a slow uplink the last one starts
+ * long after the first; a URL shorter-lived than the receipt would expire first. The URL is bound to one
+ * size and one write, so the longer window grants nothing more.
+ */
+const DEFAULT_EXPIRES_IN_SECONDS = 60 * 60
 
 /** Options for constructing an {@link R2PresignedUploadTarget}. */
 export interface R2PresignedUploadTargetOptions {
@@ -25,7 +30,7 @@ export interface R2PresignedUploadTargetOptions {
    */
   prefix?: string
 
-  /** Presigned URL lifetime in seconds. Default 15 minutes. */
+  /** Presigned URL lifetime in seconds. Default one hour; keep it no shorter than the receipt lifetime. */
   expiresInSeconds?: number
 
   /**

@@ -3,8 +3,11 @@ import { assertValidSigningSecret, tokenToPathSegment } from '#tokens.js'
 import { signUploadClaims } from '#uploads/upload-claims.js'
 import type { PendingUpload, UploadInstruction, UploadTarget } from '#uploads/upload-target.js'
 
-/** Default upload grant lifetime — 15 minutes, matching {@link R2PresignedUploadTarget}. */
-const DEFAULT_TTL_SECONDS = 15 * 60
+/**
+ * Default upload grant lifetime — one hour, matching {@link R2PresignedUploadTarget} and the upload
+ * route's receipt lifetime, since files granted together upload one after another.
+ */
+const DEFAULT_TTL_SECONDS = 60 * 60
 
 /** Options for constructing a {@link WorkerUploadTarget}. */
 export interface WorkerUploadTargetOptions {
@@ -17,7 +20,7 @@ export interface WorkerUploadTargetOptions {
    */
   basePath: string
 
-  /** Grant lifetime in seconds. Default 15 minutes. */
+  /** Grant lifetime in seconds. Default one hour; keep it no shorter than the receipt lifetime. */
   ttlSeconds?: number
 }
 

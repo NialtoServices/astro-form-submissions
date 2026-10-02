@@ -109,7 +109,7 @@ describe('createUploadPutRoute', () => {
     )
 
     vi.useFakeTimers()
-    vi.setSystemTime(Date.now() + 16 * 60 * 1000)
+    vi.setSystemTime(Date.now() + 61 * 60 * 1000)
     const expired = await put(route, token)
     vi.useRealTimers()
 
@@ -140,6 +140,19 @@ describe('createUploadPutRoute', () => {
     expect(larger.status).toBe(413)
     expect(smaller.status).toBe(400)
     expect(bucket.objects.size).toBe(0)
+  })
+
+  it('still accepts a grant 50 minutes on, for the last of several files on a slow uplink', async () => {
+    const { bucket, target, route } = setup()
+    const token = tokenOf((await target.prepare(upload)).url)
+
+    vi.useFakeTimers()
+    vi.setSystemTime(Date.now() + 50 * 60 * 1000)
+    const late = await put(route, token)
+    vi.useRealTimers()
+
+    expect(late.status).toBe(200)
+    expect(bucket.objects.size).toBe(1)
   })
 
   it('refuses a filename header that is missing or not the admitted name', async () => {

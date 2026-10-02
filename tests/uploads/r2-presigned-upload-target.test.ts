@@ -29,7 +29,7 @@ describe('R2PresignedUploadTarget', () => {
     expect(instruction.method).toBe('PUT')
     expect(url.origin).toBe('https://0123456789abcdef.r2.cloudflarestorage.com')
     expect(url.pathname).toBe(`/files-example/uploads/${upload.objectKey}`)
-    expect(url.searchParams.get('X-Amz-Expires')).toBe('900')
+    expect(url.searchParams.get('X-Amz-Expires')).toBe('3600')
     expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe(
       'content-length;content-type;host;if-none-match;x-amz-meta-filename-uri'
     )
@@ -60,7 +60,7 @@ describe('R2PresignedUploadTarget', () => {
 
     const client = new AwsClient({ ...options, region: 'auto', service: 's3' })
     const unsigned = new URL(issued.origin + issued.pathname)
-    unsigned.searchParams.set('X-Amz-Expires', '900')
+    unsigned.searchParams.set('X-Amz-Expires', '3600')
     const headers = { ...instruction.headers, 'Content-Length': String(upload.size) }
     const reference = await client.sign(new Request(unsigned, { method: 'PUT', headers }), {
       aws: { signQuery: true, datetime: '20261002T091500Z', allHeaders: true }
