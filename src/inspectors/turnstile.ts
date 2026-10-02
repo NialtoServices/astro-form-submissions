@@ -235,8 +235,12 @@ export class TurnstileInspector implements Inspector {
 
       if (!response.ok) return { success: false, failure: `siteverify responded with status ${response.status}` }
 
-      // Read the body inside the try so the abort timeout also bounds a response that returns headers then stalls.
-      responseData = await response.json().catch(() => undefined)
+      // The abort timer also covers the body read, so a response that sends headers and then stalls is
+      // reported as a timeout; only a body that isn't JSON counts as an invalid response.
+      responseData = await response.json().catch((error: unknown) => {
+        if (controller.signal.aborted) throw error
+        return undefined
+      })
     } catch {
       return { success: false, failure: 'siteverify was unreachable or timed out' }
     } finally {

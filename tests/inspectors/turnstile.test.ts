@@ -103,6 +103,33 @@ describe('TurnstileInspector', () => {
     }
   })
 
+  it('reports a body that stalls past the timeout as a timeout, not an invalid body', async () => {
+    vi.useFakeTimers()
+    try {
+      // Headers arrive, then the body never does, until the abort signal errors it as the runtime fetch would.
+      stubFetch(
+        (_requestURL, requestInit) =>
+          new Response(
+            new ReadableStream({
+              start: (controller) =>
+                requestInit?.signal?.addEventListener('abort', () =>
+                  controller.error(new DOMException('Aborted', 'AbortError'))
+                )
+            })
+          )
+      )
+      const context = contextFor('token')
+
+      const pending = new TurnstileInspector({ secretKey: 'secret' }).inspect(context)
+      await vi.advanceTimersByTimeAsync(5000)
+
+      expect(await pending).toEqual({ action: 'reject', error: TurnstileInspector.errors.verification })
+      expect(String(context.report.mock.calls[0]?.[0])).toContain('unreachable or timed out')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('sends the secret, token, and client IP to the siteverify endpoint', async () => {
     const fetchSpy = stubFetch(() => new Response(JSON.stringify({ success: true, hostname: 'example.com' })))
     await new TurnstileInspector({ secretKey: 'secret-key-1' }).inspect(contextFor('token-1'))
