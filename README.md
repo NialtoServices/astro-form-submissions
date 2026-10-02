@@ -21,6 +21,7 @@ plumbing around them.
 - [Inspectors](#inspectors)
 - [Dispatchers](#dispatchers)
 - [File uploads](#file-uploads)
+  - [Direct uploads](#direct-uploads)
 - [The form (client enhancement)](#the-form-client-enhancement)
 - [Styling](#styling)
 - [Secrets](#secrets)
@@ -828,6 +829,136 @@ directly from the bucket under the `prefix`.
 A rolled-back or lifecycle-expired object simply 410s. Deletion/erasure of stored uploads is the
 bucket's job; the toolkit never retains the files or the bearer URLs itself.
 
+### Direct uploads
+
+`FileUploads` reads files out of the form's multipart body, so the route has to buffer the whole body
+before any size or anti-bot check. On Cloudflare Workers that body lives in the isolate's 128 MB of
+memory, which every concurrent request shares, and the edge refuses bodies over 100 MB (Free and Pro
+plans) outright. For photos and video, upload the files **directly to storage** instead, and let the
+submission carry a signed receipt per file:
+
+1. **`POST` the upload route** — the form's text fields (no files) plus an `uploads` field holding
+   `[{ name, size, type }]`. `createUploadRoute` admits it exactly as the form route would (guards,
+   schema, inspectors — so field errors arrive before anything uploads, and the Turnstile token is spent
+   here), checks the declared files against the limits, and answers `{ ok: true, uploads }`: per file,
+   where to upload it and a receipt.
+2. **`PUT` each file** where its instruction says, with exactly the instruction's headers.
+3. **`POST` the form route** with a fresh Turnstile token and one `upload` field per receipt. The
+   `UploadedFiles` enricher verifies each receipt, confirms the stored object exists at the admitted size,
+   sniffs its leading bytes against `accept`, and exposes the same `FileLink[]` as `FileUploads`, with
+   the same rollback. A refused submission deletes the files it referenced, so a retry uploads afresh.
+
+The client script runs all three steps for you (see [Direct uploads in the form](#direct-uploads-in-the-form)).
+
+**Where files go is swappable** — an `UploadTarget`:
+
+- **`R2PresignedUploadTarget`** presigns a PUT straight to R2 through its S3-compatible API (AWS
+  Signature Version 4, on Web Crypto). File bytes never touch the Worker, so neither its memory nor the
+  edge's request-size limit applies. It needs an R2 API token (Object Read & Write on the bucket) and a
+  CORS rule on the bucket.
+- **`WorkerUploadTarget`** points the browser back at the site: `createUploadPutRoute` streams each body
+  into the bucket binding without buffering it. Use it for **local development** — Miniflare's bucket
+  has no S3 endpoint to presign against — and in tests. Each file is its own request, so the edge's
+  request-size limit bounds each file.
+
+Pick the target by environment, e.g. presigned when the R2 credentials are set:
+
+```ts
+// src/lib/forms/upload-target.ts
+export function uploadTarget(env: Env): UploadTarget {
+  if (env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY) {
+    return new R2PresignedUploadTarget({
+      accountId: env.R2_ACCOUNT_ID,
+      bucket: env.UPLOADS_BUCKET_NAME,
+      accessKeyId: env.R2_ACCESS_KEY_ID,
+      secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+      prefix: 'uploads/'
+    })
+  }
+
+  return new WorkerUploadTarget({ secret: env.UPLOADS_LINK_SECRET, basePath: '/api/contact/uploads' })
+}
+```
+
+```ts
+// src/pages/api/contact/uploads/index.ts — step 1
+export const POST = defineLazyRoute(async () => {
+  const { env } = await import('cloudflare:workers')
+  return createUploadRoute({
+    guards: [new RateLimitGuard({ limiter: env.CONTACT_LIMITER })],
+    schema, // the form route's own schema
+    inspectors: [
+      new HoneypotInspector({ fieldName: 'website' }),
+      new TurnstileInspector({ secretKey: env.TURNSTILE_SECRET_KEY })
+    ],
+    target: uploadTarget(env),
+    secret: env.UPLOADS_LINK_SECRET, // signs receipts; at least 32 characters
+    maxFiles: 10,
+    maxTotalBytes: 100 * 1024 * 1024,
+    accept: ALL_TYPES
+  })
+})
+
+// src/pages/api/contact/uploads/[token].ts — step 2, for WorkerUploadTarget
+export const PUT = defineLazyRoute(async () => {
+  const { env } = await import('cloudflare:workers')
+  return createUploadPutRoute({
+    storage: new R2Storage({ bucket: env.UPLOADS_BUCKET, prefix: 'uploads/' }),
+    secret: env.UPLOADS_LINK_SECRET
+  })
+})
+
+// src/pages/api/contact.ts — step 3: add the enricher beside FileUploads, attaching to the same key
+enrichers: [
+  new FileUploads<Enquiry>({ storage, link, attachTo: 'files' }), // multipart, for visitors without JavaScript
+  new UploadedFiles<Enquiry>({
+    storage,
+    secret: env.UPLOADS_LINK_SECRET,
+    link,
+    attachTo: 'files',
+    maxFiles: 10,
+    maxTotalBytes: 100 * 1024 * 1024,
+    accept: ALL_TYPES
+  })
+]
+```
+
+Keep the limits and `accept` identical on the upload route and the enricher; the enricher re-checks
+them against the receipts. A declared type among `accept`'s content-types is stored as declared, and
+anything else as `application/octet-stream`; the enricher refuses bytes that match nothing accepted, or
+that contradict the type they were stored with.
+
+**Setting up R2 for presigned uploads.** Create an R2 API token with Object Read & Write on the bucket,
+and give the bucket a CORS rule for the site's origins:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://example.com"],
+    "AllowedMethods": ["PUT"],
+    "AllowedHeaders": ["Content-Type", "x-amz-meta-filename-uri"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+The browser uploads to `https://<account-id>.r2.cloudflarestorage.com`, so a Content Security Policy
+needs that origin in `connect-src`. The filename travels percent-encoded in `x-amz-meta-filename-uri`
+(S3 metadata must be ASCII); `R2Storage` decodes it for the download's `Content-Disposition`.
+
+**Things to know.**
+
+- **Receipts, upload grants and download links are separate kinds of token.** All three are signed
+  with the secret you pass, but each verifier accepts only its own kind, so none can stand in for
+  another. Receipts last an hour by default (`receiptTtlSeconds`), and upload URLs 15 minutes.
+- **A sender can replace their own upload until its URL expires.** The type check happens when the form
+  is submitted, so a file overwritten afterwards isn't re-checked. Downloads are always served as
+  attachments with `nosniff`, as for `FileUploads`.
+- **Abandoned uploads** — files uploaded for a form that was never submitted, or behind a receipt that
+  failed verification — are left to the bucket's lifecycle rule, which is already required (see above).
+- **A dropped or quarantined request is granted nothing**, silently: the upload route answers
+  `{ ok: true, uploads: [] }`, and the form route meets the same verdict on the final submission.
+
 ## The form (client enhancement)
 
 The package ships **no markup** — you write the `<form>` and its fields, mark it with the
@@ -885,6 +1016,10 @@ Each hook is an attribute you add to your own markup:
 | `data-astro-form-field-error-for="<name>"`                              | an element beside a field       | Optional co-located error slot (see [Presenting errors](#presenting-errors)).                                            |
 | `data-astro-form-field-error-summary`                                   | an element inside the form      | Optional central error list (see [Presenting errors](#presenting-errors)).                                               |
 | `data-astro-form-submit-timeout`                                        | the `<form>`                    | Optional per-form request timeout, in ms (default 30000).                                                                |
+| `data-astro-form-upload-action`                                         | the `<form>`                    | Optional — the upload route, opting into [direct uploads](#direct-uploads-in-the-form).                                  |
+| `data-astro-form-upload`                                                | a file input                    | Its files upload directly and never join a submission (with `data-astro-form-upload-action`).                            |
+| `data-astro-form-upload-receipt-field`                                  | the `<form>`                    | Optional field the receipts post under (default `upload`).                                                               |
+| `data-astro-form-message-uploading`                                     | the status element              | Optional copy while files upload, with `{current}`, `{total}` and `{percent}` filled in.                                 |
 
 The `data-astro-form-message-*` copy is a **different layer** from the server's `FormError` copy:
 these are client transport states the server never sees — sending (in-flight), success (delivery
@@ -896,6 +1031,31 @@ attributes. Don't conflate the two.
 The `initializeForms` module is plain client TypeScript imported from
 `@nialto-services/astro-form-submissions/form`; your Astro build bundles it into the page's client JS
 like any other `<script>`.
+
+### Direct uploads in the form
+
+Point the form at the upload route and mark the file inputs whose files should upload directly:
+
+```html
+<form
+  data-astro-form
+  data-astro-form-upload-action="/api/contact/uploads/"
+  action="/api/contact/"
+  method="POST"
+  enctype="multipart/form-data">
+  <input type="file" name="file" multiple data-astro-form-upload />
+  …
+  <p data-astro-form-status data-astro-form-message-uploading="Uploading file {current} of {total} ({percent}%)…" …></p>
+</form>
+```
+
+When a marked input holds files, a submit runs [the three steps](#direct-uploads): it asks the upload
+route where each file goes (showing its field errors, if any, before anything uploads), uploads them
+one by one with `XMLHttpRequest` so it can report progress, resets the form's Turnstile widget and waits
+(up to 30 seconds) for a fresh token, then posts the form with the receipts. Progress also arrives as an
+`astro-form:upload-progress` event (`{ current, total, loaded, size, percent }`). With no files chosen, the
+form submits exactly as before, minus the marked inputs. Without JavaScript the browser posts the files
+as multipart, which `FileUploads` handles — so keep that path's limits small.
 
 ### Extras: honeypot and Turnstile
 

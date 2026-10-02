@@ -100,27 +100,27 @@ edge refuses bodies over 100 MB on the Free and Pro plans regardless.
 
 ## Tasks
 
-- [ ] **1. Purpose-bound tokens.** Extract the HS256 signer from `files/signing.ts` into `#tokens.js`
+- [x] **1. Purpose-bound tokens.** Extract the HS256 signer from `files/signing.ts` into `#tokens.js`
       (`signClaims`, `verifyClaims` with expiry). Download tokens reject any `use`. Tests: a receipt or put
       token is refused by `verifyFileToken`, and vice versa.
-- [ ] **2. SigV4 presigning.** `uploads/sigv4.ts` (`presignURL`). Tests: AWS's published query-string
+- [x] **2. SigV4 presigning.** `uploads/sigv4.ts` (`presignURL`). Tests: AWS's published query-string
       example (GET `examplebucket/test.txt`), and a PUT with extra signed headers cross-checked against
       `aws4fetch` (dev dependency only).
-- [ ] **3. `UploadTarget`, `R2PresignedUploadTarget`.** Tests: URL host, path, query parameters, signed
+- [x] **3. `UploadTarget`, `R2PresignedUploadTarget`.** Tests: URL host, path, query parameters, signed
       headers, returned headers, filename encoding, prefix.
-- [ ] **4. Storage `putStream` and `peek`; `R2Storage` filename decoding.** Tests through an in-memory
+- [x] **4. Storage `putStream` and `peek`; `R2Storage` filename decoding.** Tests through an in-memory
       bucket double that honours ranges.
-- [ ] **5. `WorkerUploadTarget` and `createUploadPutRoute`.** Tests: round trip into storage, bad token,
+- [x] **5. `WorkerUploadTarget` and `createUploadPutRoute`.** Tests: round trip into storage, bad token,
       expired token, wrong purpose, missing/oversized/mismatched length.
-- [ ] **6. Shared admission; `createUploadRoute`.** Move the admission stages; the existing route suite
+- [x] **6. Shared admission; `createUploadRoute`.** Move the admission stages; the existing route suite
       must pass unchanged. Tests for the upload route: response shape, schema errors, inspector reject,
       drop and quarantine, every limit, malformed `uploads` JSON, content-type selection.
-- [ ] **7. `UploadedFiles`.** Tests: happy path links, tampered/expired receipt, duplicate receipts, limits,
+- [x] **7. `UploadedFiles`.** Tests: happy path links, tampered/expired receipt, duplicate receipts, limits,
       missing object, size mismatch, sniff failure, type mismatch, deletion on refusal, rollback after a
       failed exposing delivery.
-- [ ] **8. Client flow.** happy-dom tests with a stubbed `fetch` and `XMLHttpRequest`: the three requests
+- [x] **8. Client flow.** happy-dom tests with a stubbed `fetch` and `XMLHttpRequest`: the three requests
       in order with the right bodies, progress copy and events, Turnstile refresh wait, failure at each step,
       no files falls back to the plain submit, marked inputs never sent.
-- [ ] **9. End-to-end integration test.** Upload route → Worker PUT route → form route → email link →
+- [x] **9. End-to-end integration test.** Upload route → Worker PUT route → form route → email link →
       download route returns the bytes, all through one in-memory bucket.
-- [ ] **10. README, exports, release 0.3.0.**
+- [x] **10. README, exports, release 0.3.0.**
