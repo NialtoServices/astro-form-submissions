@@ -6,12 +6,12 @@ export {
   EmailRecipientError,
   renderEmail,
   type AddressInput,
-  type OptionalAddressInput,
   type EmailContent,
-  type EmailMessage,
   type EmailDispatcherOptions,
+  type EmailMessage,
   type EmailTemplates,
-  type EmailTransport
+  type EmailTransport,
+  type OptionalAddressInput
 } from '#dispatchers/email.js'
 
 export {
@@ -42,10 +42,10 @@ export { PostmarkDeliveryError, PostmarkTransport, type PostmarkTransportOptions
 export {
   DiscordDeliveryError,
   DiscordDispatcher,
+  type DiscordDispatcherOptions,
+  type DiscordDispatcherSettings,
   type DiscordField,
   type DiscordFieldInput,
   type DiscordFieldSpec,
-  type DiscordDispatcherOptions,
-  type DiscordDispatcherSettings,
   type DiscordWebhook
 } from '#dispatchers/discord.js'
