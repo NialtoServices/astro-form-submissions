@@ -96,11 +96,11 @@ function readFieldErrors(result: unknown): Record<string, string> {
 const DESCRIBED_MARKER = 'astroFormDescribed'
 
 /** Drop the `aria-describedby` the script added to an input (leaving any author-set value intact). */
-function clearDescribedBy(input: HTMLElement): void {
-  if (input.dataset[DESCRIBED_MARKER] === undefined) return
+function clearDescribedBy(inputElement: HTMLElement): void {
+  if (inputElement.dataset[DESCRIBED_MARKER] === undefined) return
 
-  input.removeAttribute('aria-describedby')
-  delete input.dataset[DESCRIBED_MARKER]
+  inputElement.removeAttribute('aria-describedby')
+  delete inputElement.dataset[DESCRIBED_MARKER]
 }
 
 /**
@@ -109,25 +109,27 @@ function clearDescribedBy(input: HTMLElement): void {
  * not a live region — the summary already announces). Returns the first invalid input, for focus.
  */
 function applyFieldErrors(formElement: HTMLFormElement, fieldErrors: Record<string, string>): HTMLElement | null {
-  let firstInvalid: HTMLElement | null = null
+  let firstInvalidElement: HTMLElement | null = null
   for (const [name, message] of Object.entries(fieldErrors)) {
-    const input = formElement.querySelector<HTMLElement>(`[name="${CSS.escape(name)}"]`)
-    if (!input) continue
+    const inputElement = formElement.querySelector<HTMLElement>(`[name="${CSS.escape(name)}"]`)
+    if (!inputElement) continue
 
-    input.setAttribute('aria-invalid', 'true')
-    firstInvalid ??= input
+    inputElement.setAttribute('aria-invalid', 'true')
+    firstInvalidElement ??= inputElement
 
-    const slot = formElement.querySelector<HTMLElement>(`[data-astro-form-field-error-for="${CSS.escape(name)}"]`)
-    if (!slot) continue
+    const slotElement = formElement.querySelector<HTMLElement>(
+      `[data-astro-form-field-error-for="${CSS.escape(name)}"]`
+    )
+    if (!slotElement) continue
 
-    slot.textContent = message
-    slot.hidden = false
-    if (slot.id && !input.getAttribute('aria-describedby')) {
-      input.setAttribute('aria-describedby', slot.id)
-      input.dataset[DESCRIBED_MARKER] = ''
+    slotElement.textContent = message
+    slotElement.hidden = false
+    if (slotElement.id && !inputElement.getAttribute('aria-describedby')) {
+      inputElement.setAttribute('aria-describedby', slotElement.id)
+      inputElement.dataset[DESCRIBED_MARKER] = ''
     }
   }
-  return firstInvalid
+  return firstInvalidElement
 }
 
 /**
@@ -138,60 +140,60 @@ function renderFieldErrorSummary(
   formElement: HTMLFormElement,
   fieldErrors: Record<string, string>
 ): HTMLElement | null {
-  const summary = formElement.querySelector<HTMLElement>('[data-astro-form-field-error-summary]')
-  if (!summary) return null
+  const summaryElement = formElement.querySelector<HTMLElement>('[data-astro-form-field-error-summary]')
+  if (!summaryElement) return null
 
-  summary.textContent = ''
+  summaryElement.textContent = ''
   const entries = Object.entries(fieldErrors)
   if (entries.length === 0) {
-    summary.hidden = true
+    summaryElement.hidden = true
     return null
   }
 
-  const list = document.createElement('ul')
+  const listElement = document.createElement('ul')
   for (const [name, message] of entries) {
-    const item = document.createElement('li')
+    const itemElement = document.createElement('li')
 
     // Tag the item with its field so progressive recovery can remove exactly this entry on input.
-    item.dataset.astroFormSummaryItem = name
-    const input = formElement.querySelector<HTMLElement>(`[name="${CSS.escape(name)}"]`)
-    if (input) {
-      const link = document.createElement('a')
-      if (input.id) link.href = `#${input.id}`
-      link.textContent = message
-      link.addEventListener('click', (event) => {
+    itemElement.dataset.astroFormSummaryItem = name
+    const inputElement = formElement.querySelector<HTMLElement>(`[name="${CSS.escape(name)}"]`)
+    if (inputElement) {
+      const linkElement = document.createElement('a')
+      if (inputElement.id) linkElement.href = `#${inputElement.id}`
+      linkElement.textContent = message
+      linkElement.addEventListener('click', (event) => {
         event.preventDefault()
-        input.focus()
+        inputElement.focus()
       })
-      item.append(link)
+      itemElement.append(linkElement)
     } else {
-      item.textContent = message
+      itemElement.textContent = message
     }
-    list.append(item)
+    listElement.append(itemElement)
   }
-  summary.append(list)
-  summary.hidden = false
+  summaryElement.append(listElement)
+  summaryElement.hidden = false
 
   // A non-interactive container needs a tabindex to receive the programmatic focus below; a
   // site-supplied one is left alone so a real tabstop isn't clobbered.
-  if (!summary.hasAttribute('tabindex')) summary.setAttribute('tabindex', '-1')
-  return summary
+  if (!summaryElement.hasAttribute('tabindex')) summaryElement.setAttribute('tabindex', '-1')
+  return summaryElement
 }
 
 /** Clear every field's invalid state, empty its slot, and empty the summary list — on resubmit. */
 function clearFieldErrors(formElement: HTMLFormElement): void {
-  for (const input of formElement.querySelectorAll<HTMLElement>('[aria-invalid="true"]')) {
-    input.removeAttribute('aria-invalid')
-    clearDescribedBy(input)
+  for (const inputElement of formElement.querySelectorAll<HTMLElement>('[aria-invalid="true"]')) {
+    inputElement.removeAttribute('aria-invalid')
+    clearDescribedBy(inputElement)
   }
-  for (const slot of formElement.querySelectorAll<HTMLElement>('[data-astro-form-field-error-for]')) {
-    slot.textContent = ''
-    slot.hidden = true
+  for (const slotElement of formElement.querySelectorAll<HTMLElement>('[data-astro-form-field-error-for]')) {
+    slotElement.textContent = ''
+    slotElement.hidden = true
   }
-  const summary = formElement.querySelector<HTMLElement>('[data-astro-form-field-error-summary]')
-  if (summary) {
-    summary.textContent = ''
-    summary.hidden = true
+  const summaryElement = formElement.querySelector<HTMLElement>('[data-astro-form-field-error-summary]')
+  if (summaryElement) {
+    summaryElement.textContent = ''
+    summaryElement.hidden = true
   }
 }
 
@@ -204,9 +206,9 @@ function clearFieldErrors(formElement: HTMLFormElement): void {
  */
 function resetTurnstileWidget(formElement: HTMLFormElement): void {
   try {
-    const turnstile = (window as { turnstile?: { reset(widget?: string | Element | null): void } }).turnstile
-    const widget = formElement.querySelector('.cf-turnstile')
-    if (widget) turnstile?.reset(widget)
+    const turnstile = (window as { turnstile?: { reset(widgetElement?: string | Element | null): void } }).turnstile
+    const widgetElement = formElement.querySelector('.cf-turnstile')
+    if (widgetElement) turnstile?.reset(widgetElement)
   } catch {
     /* optional integration — see above */
   }
@@ -228,8 +230,9 @@ function waitForTurnstileToken(formElement: HTMLFormElement): Promise<void> {
   const deadline = Date.now() + TURNSTILE_TOKEN_TIMEOUT_MS
   return new Promise((resolve) => {
     const poll = () => {
-      const tokenInputs = turnstileTokenInputs(formElement)
-      const issued = tokenInputs.length > 0 && tokenInputs.every((tokenInput) => tokenInput.value !== '')
+      const tokenInputElements = turnstileTokenInputs(formElement)
+      const issued =
+        tokenInputElements.length > 0 && tokenInputElements.every((tokenInputElement) => tokenInputElement.value !== '')
       if (issued || Date.now() >= deadline) {
         resolve()
         return
@@ -277,8 +280,8 @@ function uploadInputs(formElement: HTMLFormElement): HTMLInputElement[] {
 /** The form's data without any directly-uploaded file input. */
 function formDataWithoutUploads(formElement: HTMLFormElement, submitter: HTMLElement | null): FormData {
   const formData = submitter ? new FormData(formElement, submitter) : new FormData(formElement)
-  for (const input of uploadInputs(formElement)) {
-    if (input.name) formData.delete(input.name)
+  for (const inputElement of uploadInputs(formElement)) {
+    if (inputElement.name) formData.delete(inputElement.name)
   }
   return formData
 }
@@ -404,12 +407,12 @@ function showError(binding: FormBinding, error: string, fieldErrors: Record<stri
   const { formElement, statusElement } = binding
   statusElement.textContent = error
   statusElement.dataset.astroFormState = 'error'
-  const firstInvalid = applyFieldErrors(formElement, fieldErrors)
-  const summary = renderFieldErrorSummary(formElement, fieldErrors)
+  const firstInvalidElement = applyFieldErrors(formElement, fieldErrors)
+  const summaryElement = renderFieldErrorSummary(formElement, fieldErrors)
 
   // Prefer the summary list for the multi-error overview; otherwise land the user on the first
   // field to fix.
-  ;(summary ?? firstInvalid)?.focus()
+  ;(summaryElement ?? firstInvalidElement)?.focus()
 
   // The server consumes the Turnstile token before dispatching, so the widget must refresh
   // after any attempt — otherwise a retry resubmits a spent token, rejected as a duplicate.
@@ -450,26 +453,28 @@ function showSuccess(binding: FormBinding): void {
  */
 function bindProgressiveRecovery(formElement: HTMLFormElement): void {
   formElement.addEventListener('input', (event) => {
-    const target = event.target instanceof HTMLElement ? event.target : null
-    const name = target?.getAttribute('name')
-    if (!name || target?.getAttribute('aria-invalid') !== 'true') return
+    const targetElement = event.target instanceof HTMLElement ? event.target : null
+    const name = targetElement?.getAttribute('name')
+    if (!name || targetElement?.getAttribute('aria-invalid') !== 'true') return
 
-    target.removeAttribute('aria-invalid')
-    clearDescribedBy(target)
-    const slot = formElement.querySelector<HTMLElement>(`[data-astro-form-field-error-for="${CSS.escape(name)}"]`)
-    if (slot) {
-      slot.textContent = ''
-      slot.hidden = true
+    targetElement.removeAttribute('aria-invalid')
+    clearDescribedBy(targetElement)
+    const slotElement = formElement.querySelector<HTMLElement>(
+      `[data-astro-form-field-error-for="${CSS.escape(name)}"]`
+    )
+    if (slotElement) {
+      slotElement.textContent = ''
+      slotElement.hidden = true
     }
 
     // Drop this field's entry from the central summary too, and hide the summary once its last entry
     // goes — otherwise a corrected field keeps claiming it's invalid in the overview and to AT.
-    const summary = formElement.querySelector<HTMLElement>('[data-astro-form-field-error-summary]')
-    if (summary) {
-      summary.querySelector(`[data-astro-form-summary-item="${CSS.escape(name)}"]`)?.remove()
-      if (!summary.querySelector('[data-astro-form-summary-item]')) {
-        summary.textContent = ''
-        summary.hidden = true
+    const summaryElement = formElement.querySelector<HTMLElement>('[data-astro-form-field-error-summary]')
+    if (summaryElement) {
+      summaryElement.querySelector(`[data-astro-form-summary-item="${CSS.escape(name)}"]`)?.remove()
+      if (!summaryElement.querySelector('[data-astro-form-summary-item]')) {
+        summaryElement.textContent = ''
+        summaryElement.hidden = true
       }
     }
   })
@@ -565,8 +570,8 @@ async function submitWithUploads(
 
   const finalData = new FormData()
   for (const [name, value] of formData) finalData.append(name, value)
-  for (const tokenInput of turnstileTokenInputs(formElement)) {
-    if (tokenInput.name) finalData.set(tokenInput.name, tokenInput.value)
+  for (const tokenInputElement of turnstileTokenInputs(formElement)) {
+    if (tokenInputElement.name) finalData.set(tokenInputElement.name, tokenInputElement.value)
   }
 
   const receiptField = formElement.dataset.astroFormUploadReceiptField || DEFAULT_RECEIPT_FIELD
@@ -594,7 +599,7 @@ async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<voi
   const uploadAction = formElement.dataset.astroFormUploadAction
   const files = uploadAction
     ? uploadInputs(formElement)
-        .flatMap((input) => Array.from(input.files ?? []))
+        .flatMap((inputElement) => Array.from(inputElement.files ?? []))
         .filter((file) => file.size > 0)
     : []
 
@@ -648,9 +653,11 @@ function enhanceForm(formElement: HTMLFormElement): void {
 
   // An element carrying `data-astro-form-success` immediately after the form is the (hidden) panel a
   // successful submission swaps the whole <form> out for.
-  const sibling = formElement.nextElementSibling
+  const siblingElement = formElement.nextElementSibling
   const successElement =
-    sibling instanceof HTMLElement && sibling.hasAttribute('data-astro-form-success') ? sibling : null
+    siblingElement instanceof HTMLElement && siblingElement.hasAttribute('data-astro-form-success')
+      ? siblingElement
+      : null
 
   // Announce status changes to assistive tech even if the site markup omits the attributes.
   if (!statusElement.hasAttribute('role')) statusElement.setAttribute('role', 'status')
