@@ -29,6 +29,7 @@ jobs:
             exit 1
           fi
       - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --prod
       - run: pnpm exec prettier --check .
       - run: pnpm lint
       - run: pnpm check
