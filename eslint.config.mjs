@@ -37,27 +37,16 @@ export default tseslint.config(
             {
               // Every server module resolves through the package `#*` subpath map, so denying the whole
               // `#` namespace keeps the browser bundle server-free without a hand-synced list — a new
-              // server module is off-limits by default. Relative specifiers are blocked below too, since
-              // they bypass the map. The hash is escaped because these patterns are matched with
+              // server module is off-limits by default. Parent-relative specifiers are blocked below too,
+              // since they bypass the map. The hash is escaped because these patterns are matched with
               // gitignore semantics, where a leading `#` would otherwise mark the line a comment.
               group: ['\\#*', '\\#*/**'],
               message: 'Client code must not import server modules — keep the browser bundle free of server code.'
             },
             {
-              group: [
-                '../route',
-                '../dispatchers/*',
-                '../guards/*',
-                '../inspectors/*',
-                '../enrichers/*',
-                '../storage/*',
-                '../files/*',
-                '../schema',
-                '../pipeline',
-                '../responses',
-                '../errors',
-                '../index'
-              ],
+              // src/client/ holds only browser code, and every parent-relative specifier leaves it, so all
+              // of them are denied rather than listing server modules that would need keeping in sync.
+              group: ['..', '../*', '../**'],
               message: 'Client code must not import server modules — keep the browser bundle free of server code.'
             }
           ]
