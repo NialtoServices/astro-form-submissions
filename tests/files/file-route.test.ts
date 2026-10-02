@@ -52,6 +52,7 @@ describe('createFileRoute', () => {
     )
     expect(response.headers.get('Cache-Control')).toBe('private, no-store')
     expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
+    expect(response.headers.get('Content-Security-Policy')).toBe("sandbox; default-src 'none'")
   })
 
   it('forces an attachment even when a custom store serves an HTML content-type (API-002)', async () => {

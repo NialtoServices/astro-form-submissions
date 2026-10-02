@@ -846,8 +846,8 @@ export const GET = defineLazyRoute(async () => {
 ```
 
 `createFileRoute` verifies the token (404 on a bad or **expired** one, 410 once the object is gone)
-and streams the file with an `attachment` disposition and `nosniff`, so an allowed-but-hostile file
-can never execute in the browser. The signing secret is a per-site secret (e.g. a `wrangler secret`,
+and streams the file with an `attachment` disposition, `nosniff` and a `sandbox` Content Security
+Policy, so an allowed-but-hostile file can never execute in the browser. The signing secret is a per-site secret (e.g. a `wrangler secret`,
 or your host's secret store) of **at least 32 characters** — `signedLink` and `createFileRoute` reject
 a shorter one at construction, since HS256's safety rests entirely on it; rotating it invalidates every
 issued link.

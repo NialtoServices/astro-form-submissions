@@ -51,11 +51,14 @@ export function createFileRoute(config: CreateFileRouteConfig): APIRoute {
     // The token is opaque (object key + expiry), so filename and content-type come from the metadata the
     // store persisted at upload, never re-derived from client input. The disposition is always rebuilt
     // here as `attachment`; an adapter-supplied disposition is never trusted, so a store can't serve `inline`.
+    // The sandbox policy is a second line behind it: a browser that renders the bytes anyway (an HTML or
+    // SVG type from a custom matcher, say) runs no script and treats them as a unique origin.
     return new Response(object.body, {
       status: 200,
       headers: {
         'Content-Type': object.contentType ?? FALLBACK_CONTENT_TYPE,
         'Content-Disposition': attachmentDisposition(object.filename ?? FALLBACK_FILENAME),
+        'Content-Security-Policy': "sandbox; default-src 'none'",
         'Cache-Control': 'private, no-store',
         'X-Content-Type-Options': 'nosniff'
       }
