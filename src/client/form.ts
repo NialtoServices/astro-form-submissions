@@ -306,8 +306,8 @@ function uploadInputs(formElement: HTMLFormElement): HTMLInputElement[] {
 }
 
 /** The form's data without any directly-uploaded file input. */
-function formDataWithoutUploads(formElement: HTMLFormElement, submitter: HTMLElement | null): FormData {
-  const formData = submitter ? new FormData(formElement, submitter) : new FormData(formElement)
+function formDataWithoutUploads(formElement: HTMLFormElement, submitterElement: HTMLElement | null): FormData {
+  const formData = submitterElement ? new FormData(formElement, submitterElement) : new FormData(formElement)
   for (const inputElement of uploadInputs(formElement)) {
     if (inputElement.name) formData.delete(inputElement.name)
   }
@@ -393,8 +393,11 @@ function resolveSubmitTimeout(formElement: HTMLFormElement): number {
  * `action` attribute, else the document. Read from the attribute because a control named `action`
  * shadows `formElement.action`.
  */
-function resolveSubmissionURL(formElement: HTMLFormElement, submitter: HTMLButtonElement | HTMLInputElement | null) {
-  if (submitter?.hasAttribute('formaction')) return submitter.formAction
+function resolveSubmissionURL(
+  formElement: HTMLFormElement,
+  submitterElement: HTMLButtonElement | HTMLInputElement | null
+) {
+  if (submitterElement?.hasAttribute('formaction')) return submitterElement.formAction
 
   const action = formElement.getAttribute('action')
   return action ? new URL(action, document.baseURI).href : document.URL
@@ -627,7 +630,7 @@ async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<voi
 
   // The control that actually triggered submission (click, Enter, `requestSubmit(control)`).
   // Standard HTML semantics: its name/value joins the payload and it is the one disabled.
-  const submitter =
+  const submitterElement =
     event.submitter instanceof HTMLButtonElement || event.submitter instanceof HTMLInputElement ? event.submitter : null
 
   // Direct-upload inputs never join a submission; their files go up in steps of their own. Empty files
@@ -641,13 +644,13 @@ async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<voi
 
   // A disabled control is omitted from FormData, so the submitter must still be enabled here.
   const formData = uploadAction
-    ? formDataWithoutUploads(formElement, submitter)
-    : submitter
-      ? new FormData(formElement, submitter)
+    ? formDataWithoutUploads(formElement, submitterElement)
+    : submitterElement
+      ? new FormData(formElement, submitterElement)
       : new FormData(formElement)
 
   formElement.dataset.astroFormSubmitting = 'true'
-  if (submitter) submitter.disabled = true
+  if (submitterElement) submitterElement.disabled = true
 
   // Wipe prior field marks so a field fixed since the last submit isn't left flagged.
   clearFieldErrors(formElement)
@@ -656,7 +659,7 @@ async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<voi
 
   let outcome: PostOutcome & { formData?: FormData }
   try {
-    const submissionURL = resolveSubmissionURL(formElement, submitter)
+    const submissionURL = resolveSubmissionURL(formElement, submitterElement)
 
     // An interaction-only or still-loading widget has no token yet; posting now would spend the attempt
     // on a certain verification failure. The submitting guard above keeps a second click out meanwhile.
@@ -673,7 +676,7 @@ async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<voi
     console.warn('[astro-form-submissions] Submission failed unexpectedly', error)
     outcome = { ok: false, error: binding.messages.genericError ?? '' }
   } finally {
-    if (submitter) submitter.disabled = false
+    if (submitterElement) submitterElement.disabled = false
     delete formElement.dataset.astroFormSubmitting
   }
 
