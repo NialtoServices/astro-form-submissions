@@ -26,7 +26,7 @@ export function assertValidSigningSecret(secret: string): void {
 }
 
 /** The claims every token carries: its expiry, as a Unix timestamp in **seconds**. */
-export interface SignedClaims {
+interface SignedClaims {
   exp: number
 }
 

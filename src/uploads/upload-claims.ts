@@ -6,7 +6,7 @@ import type { PendingUpload } from '#uploads/upload-target.js'
  * a file; a `put` grants one upload through {@link createUploadPutRoute}. Each verifier accepts only its
  * own purpose, and download tokens accept neither.
  */
-export type UploadTokenPurpose = 'receipt' | 'put'
+type UploadTokenPurpose = 'receipt' | 'put'
 
 /**
  * What a `put` grant carries: the admitted file, with its filename reduced to a keyed digest. A grant
@@ -14,7 +14,7 @@ export type UploadTokenPurpose = 'receipt' | 'put'
  * itself (often personal, such as "Jane Smith passport.pdf") must not be in it. The digest is keyed with
  * the signing secret: a plain hash would let a log reader confirm a guessed name offline.
  */
-export interface UploadGrant extends Omit<PendingUpload, 'filename'> {
+interface UploadGrant extends Omit<PendingUpload, 'filename'> {
   /** The HMAC-SHA256 of the admitted filename, hex-encoded; the upload's filename header must match it. */
   filenameDigest: string
 }

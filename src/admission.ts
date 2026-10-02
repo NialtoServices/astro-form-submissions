@@ -72,7 +72,7 @@ export function clientAddressLookup(context: APIContext, resolver?: ClientAddres
 }
 
 /** What admission reads about the request, and the route's reporters. */
-export interface AdmissionRequest {
+interface AdmissionRequest {
   route: AdmittingRoute
   request: Request
   url: URL
@@ -91,7 +91,7 @@ export interface AdmissionRequest {
  * Admission's outcome: a response to return as-is (a refusal), a silent `drop`, or an admitted
  * submission, possibly quarantined.
  */
-export type Admission<S extends SchemaInput> =
+type Admission<S extends SchemaInput> =
   | { outcome: 'respond'; response: Response }
   | { outcome: 'drop' }
   | {

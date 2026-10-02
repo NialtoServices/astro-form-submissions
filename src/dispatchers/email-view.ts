@@ -44,7 +44,7 @@ export interface EmailTemplateCopy {
 export const DEFAULT_ATTACHMENTS_LABEL = 'Attachments'
 
 /** One rendered attachment link in a built-in email view; `name`, `url`, and `size` render HTML-escaped. */
-export interface AttachmentView {
+interface AttachmentView {
   /** The attachment's display name. */
   name: string
 

@@ -6,7 +6,7 @@
 const encoder = new TextEncoder()
 
 /** Options for {@link presignURL}. */
-export interface PresignURLOptions {
+interface PresignURLOptions {
   /** The HTTP method the URL authorises (e.g. `PUT`). */
   method: string
 
