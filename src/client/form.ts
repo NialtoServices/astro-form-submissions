@@ -212,9 +212,15 @@ function resetTurnstileWidget(formElement: HTMLFormElement): void {
   }
 }
 
+/** The hidden response inputs this form's Turnstile widgets render, whatever their `data-response-field-name`. */
+function turnstileTokenInputs(formElement: HTMLFormElement): HTMLInputElement[] {
+  return Array.from(formElement.querySelectorAll<HTMLInputElement>('.cf-turnstile input[type="hidden"]'))
+}
+
 /**
- * Resolves once this form's Turnstile widget holds a token, or after {@link TURNSTILE_TOKEN_TIMEOUT_MS}.
- * Resolves at once for a form without a widget. Reads the hidden response input the widget renders.
+ * Resolves once every Turnstile widget in this form holds a token, or after
+ * {@link TURNSTILE_TOKEN_TIMEOUT_MS}. Resolves at once for a form without a widget. Reads the hidden
+ * response inputs the widgets render.
  */
 function waitForTurnstileToken(formElement: HTMLFormElement): Promise<void> {
   if (!formElement.querySelector('.cf-turnstile')) return Promise.resolve()
@@ -222,8 +228,9 @@ function waitForTurnstileToken(formElement: HTMLFormElement): Promise<void> {
   const deadline = Date.now() + TURNSTILE_TOKEN_TIMEOUT_MS
   return new Promise((resolve) => {
     const poll = () => {
-      const tokenInput = formElement.querySelector<HTMLInputElement>('[name="cf-turnstile-response"]')
-      if ((tokenInput && tokenInput.value !== '') || Date.now() >= deadline) {
+      const tokenInputs = turnstileTokenInputs(formElement)
+      const issued = tokenInputs.length > 0 && tokenInputs.every((tokenInput) => tokenInput.value !== '')
+      if (issued || Date.now() >= deadline) {
         resolve()
         return
       }
@@ -541,7 +548,7 @@ async function submitWithUploads(
 
   const finalData = new FormData()
   for (const [name, value] of formData) finalData.append(name, value)
-  for (const tokenInput of formElement.querySelectorAll<HTMLInputElement>('.cf-turnstile input[type="hidden"]')) {
+  for (const tokenInput of turnstileTokenInputs(formElement)) {
     if (tokenInput.name) finalData.set(tokenInput.name, tokenInput.value)
   }
 

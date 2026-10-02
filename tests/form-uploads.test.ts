@@ -377,6 +377,26 @@ describe('form script — direct uploads', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2)
   })
 
+  it('waits for a fresh token under a custom response field name', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    installFakeXHR()
+    const fetchSpy = stubFetch(async (url) =>
+      String(url).includes('/uploads/')
+        ? jsonResponse({ ok: true, uploads: grants.slice(0, 1) })
+        : jsonResponse({ ok: true })
+    )
+    const { fileInput, status, submit } = mountForm()
+    document.querySelector('.cf-turnstile input')!.setAttribute('name', 'turnstile-token')
+    choose(fileInput, [photo])
+
+    submit()
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledOnce())
+    await vi.advanceTimersByTimeAsync(1_000)
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
+
+    expect((fetchSpy.mock.calls[1]![1]!.body as FormData).get('turnstile-token')).toBe('fresh-token')
+  })
+
   it('needs no Turnstile widget at all', async () => {
     installFakeXHR()
     const fetchSpy = stubFetch(async (url) =>
