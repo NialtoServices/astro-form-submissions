@@ -64,7 +64,10 @@ export class WorkerUploadTarget implements UploadTarget {
     return {
       url: `${this.basePath}/${tokenToPathSegment(token)}/`,
       method: 'PUT',
-      headers: { 'Content-Type': upload.contentType }
+      headers: {
+        'Content-Type': upload.contentType,
+        'x-amz-meta-filename-uri': encodeURIComponent(upload.filename)
+      }
     }
   }
 }

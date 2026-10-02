@@ -26,7 +26,11 @@ const put = (route: APIRoute, token: string, init: { body?: BodyInit; headers?: 
   const request = new Request(`https://example.com${BASE_PATH}/${token}/`, {
     method: 'PUT',
     body: init.body ?? bytes,
-    headers: init.headers ?? { 'Content-Length': String(bytes.length), 'Content-Type': 'application/pdf' }
+    headers: init.headers ?? {
+      'Content-Length': String(bytes.length),
+      'Content-Type': 'application/pdf',
+      'x-amz-meta-filename-uri': encodeURIComponent(upload.filename)
+    }
   })
   return route({ params: { token }, request } as unknown as Parameters<APIRoute>[0])
 }
@@ -49,7 +53,21 @@ describe('WorkerUploadTarget', () => {
 
     expect(instruction.method).toBe('PUT')
     expect(instruction.url).toMatch(new RegExp(`^${BASE_PATH}/[^/.]+/$`))
-    expect(instruction.headers).toEqual({ 'Content-Type': 'application/pdf' })
+    expect(instruction.headers).toEqual({
+      'Content-Type': 'application/pdf',
+      'x-amz-meta-filename-uri': 'Quote%20%E2%80%93%20March.pdf'
+    })
+  })
+
+  it('keeps the filename out of the grant in the URL', async () => {
+    const instruction = await new WorkerUploadTarget({ secret: SECRET, basePath: BASE_PATH }).prepare(upload)
+    const body = tokenOf(instruction.url).split('~')[1] ?? ''
+    const claims = new TextDecoder().decode(
+      Uint8Array.from(atob(body.replace(/-/g, '+').replace(/_/g, '/')), (character) => character.charCodeAt(0))
+    )
+
+    expect(claims).toContain('filenameDigest')
+    expect(claims).not.toContain('Quote')
   })
 
   it('refuses a short secret or a base path that is not root-relative', () => {
@@ -114,6 +132,21 @@ describe('createUploadPutRoute', () => {
     expect(missing.status).toBe(411)
     expect(larger.status).toBe(413)
     expect(smaller.status).toBe(400)
+    expect(bucket.objects.size).toBe(0)
+  })
+
+  it('refuses a filename header that is missing or not the admitted name', async () => {
+    const { bucket, target, route } = setup()
+    const token = tokenOf((await target.prepare(upload)).url)
+    const headers = { 'Content-Length': String(bytes.length), 'Content-Type': 'application/pdf' }
+
+    const missing = await put(route, token, { headers })
+    const renamed = await put(route, token, {
+      headers: { ...headers, 'x-amz-meta-filename-uri': encodeURIComponent('Invoice.pdf') }
+    })
+    const malformed = await put(route, token, { headers: { ...headers, 'x-amz-meta-filename-uri': '%E2%80' } })
+
+    expect([missing.status, renamed.status, malformed.status]).toEqual([400, 400, 400])
     expect(bucket.objects.size).toBe(0)
   })
 

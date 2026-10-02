@@ -877,7 +877,9 @@ The client script runs all three steps for you (see [Direct uploads in the form]
 - **`WorkerUploadTarget`** points the browser back at the site: `createUploadPutRoute` streams each body
   into the bucket binding without buffering it. Use it for **local development** — Miniflare's bucket
   has no S3 endpoint to presign against — and in tests. Each file is its own request, so the edge's
-  request-size limit bounds each file.
+  request-size limit bounds each file. As on the presigned path, the filename travels in the
+  `x-amz-meta-filename-uri` header; the grant in the URL carries only a digest of it, so request logs
+  never record the name.
 
 Pick the target by environment, e.g. presigned when the R2 credentials are set:
 
