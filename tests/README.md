@@ -24,7 +24,7 @@ refactor that preserves behaviour breaks a spec, the spec was wrong.
 
 - Spying on constructors or asserting constructor arguments (wiring, not behaviour).
 - Asserting how options are stored (e.g. function-identity inspectors on a stored callback).
-- Testing private helpers directly — `strings.ts` has no spec on purpose; `clamp`/`humanise` are
+- Testing private helpers directly — `strings.ts` has no spec on purpose; `clamp`/`humanize` are
   observed through `resolveField` labels and Discord's embed limits.
 - Mocking a module when the wire is observable.
 - Snapshot tests and assertions on internal iteration/merge mechanics.

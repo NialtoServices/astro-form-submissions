@@ -1,6 +1,6 @@
 import type { DispatchContext } from '#dispatchers/dispatcher.js'
 import type { FormSubmission } from '#pipeline.js'
-import { humanise } from '#strings.js'
+import { humanize } from '#strings.js'
 
 /**
  * Declarative description of one presentational field: read a value with `key`, or compute one with
@@ -48,7 +48,7 @@ export function resolveField<E extends FormSubmission>(
   const value = spec.value ? spec.value(submission, context) : spec.key ? submission[spec.key] : undefined
   if (value === undefined || value === null || value === '') return null
 
-  const label = spec.label ?? (spec.key ? humanise(spec.key) : '')
+  const label = spec.label ?? (spec.key ? humanize(spec.key) : '')
   if (!label) return null
 
   return { label, value: String(value) }

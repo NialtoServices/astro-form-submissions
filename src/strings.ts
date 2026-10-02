@@ -24,7 +24,7 @@ export function clamp(value: string, maximum: number): string {
  * @param key - The field key to humanise.
  * @returns The humanised label.
  */
-export function humanise(key: string): string {
+export function humanize(key: string): string {
   return key
     .replace(/[_-]+/g, ' ')
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
