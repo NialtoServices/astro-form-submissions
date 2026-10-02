@@ -497,7 +497,7 @@ describe('form script field errors', () => {
     expect(links[0]!.getAttribute('href')).toBe('#contact-email')
   })
 
-  it('removes only the edited field’s summary entry on input, hiding the summary when empty (COR-001)', async () => {
+  it('removes only the edited field’s summary entry on input, hiding the summary when empty', async () => {
     stubFetch(async () => validationResponse())
     const { email, message, submit } = mountFieldsForm({ summary: true })
     const summary = document.querySelector<HTMLElement>('[data-astro-form-field-error-summary]')!

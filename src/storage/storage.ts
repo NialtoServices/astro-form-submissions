@@ -16,7 +16,11 @@ export interface StoredObject {
 
 /** Metadata attached when storing a file, so the download route can echo it back. */
 export interface PutOptions {
-  /** The sniffed content-type (never the client-supplied MIME). */
+  /**
+   * The content-type to store: sniffed from the bytes for a multipart upload; for a streamed upload, the
+   * type the upload route admitted, which `UploadedFiles` checks against the bytes on submission. Never
+   * the client-supplied MIME unchecked.
+   */
   contentType: string
 
   /** The original filename, for the download's `Content-Disposition`. */

@@ -9,7 +9,7 @@ const submission = {
   message: 'Hello there'
 }
 
-// The display host now comes from the dispatch context (siteURL ?? requestURL), not the submission.
+// The display host comes from the dispatch context (siteURL ?? requestURL).
 const CTX = dispatchContext()
 
 describe('submissionAcknowledgementTemplates', () => {

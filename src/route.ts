@@ -33,8 +33,6 @@ export const DEFAULT_ERROR_COPY: Record<ToolkitErrorKey, string> = {
   uploadMissing: UploadedFiles.errors.uploadMissing.message
 }
 
-// MARK: - Config
-
 // MARK: - Resource inference
 
 /** Distributes a union into an intersection — used to merge each enricher's provided resource. */
@@ -58,6 +56,8 @@ export type MergedProvided<Es extends readonly unknown[]> = [Es] extends [readon
   ? object
   : UnionToIntersection<ProvidedOf<Es[number]>>
 
+// MARK: - Config
+
 /**
  * Dispatchers that deliver concurrently. Groups in {@link FormRouteConfig.dispatchers} run one after another,
  * and a failed `required` delivery ends the sequence, so a later group can depend on an earlier one having
@@ -69,7 +69,7 @@ export interface FormRouteConfig<
   S extends SchemaInput,
   Es extends readonly Enricher<Submission<S>, unknown>[] = readonly Enricher<Submission<S>, unknown>[]
 > {
-  /** Cheap gates run before the body is parsed (e.g. body-size cap, rate limit). Each may pass, reject, or drop. */
+  /** Cheap gates run before the body is parsed (e.g. a declared-length fast path, rate limit). Each may accept, quarantine, reject, or drop. */
   guards?: Guard[]
 
   /**

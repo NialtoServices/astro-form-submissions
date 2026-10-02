@@ -75,7 +75,7 @@ export class InMemoryRateLimiter implements RateLimiter {
     const now = Date.now()
     const existing = this.windows.get(key)
 
-    // Start a fresh window on the first hit for a key or once the previous one has elapsed.
+    // Only a new window can grow the map, so this is the one place that needs to reclaim space.
     if (!existing || now >= existing.resetAt) {
       this.reclaim(now)
       this.windows.set(key, { count: 1, resetAt: now + this.options.windowSeconds * 1000 })

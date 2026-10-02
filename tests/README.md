@@ -13,8 +13,8 @@ refactor that preserves behaviour breaks a spec, the spec was wrong.
 
 ## Sanctioned seams
 
-- The wire: `global.fetch` stubs for code that calls `fetch` directly, or **msw** interception for
-  code whose HTTP client is buried in an SDK (`PostmarkTransport`).
+- The wire: **msw** interception, or a `global.fetch` stub where a test must see the exact `fetch` call
+  a transport makes (`PostmarkTransport`'s request options, which Cloudflare Workers restricts).
 - Stub implementations of **public interfaces**: `Inspector`, `Dispatcher`, `EmailTransport`.
 - Hand-built `InspectionContext` objects.
 - Public readonly interface properties (`dispatcher.required`) — they are declared contract the route
@@ -29,5 +29,5 @@ refactor that preserves behaviour breaks a spec, the spec was wrong.
 - Mocking a module when the wire is observable.
 - Snapshot tests and assertions on internal iteration/merge mechanics.
 
-msw-based files start their own `setupServer`; files that stub `global.fetch` don't mix with msw —
-vitest's per-file isolation keeps the two approaches from colliding.
+msw-based files start their own `setupServer`. A file that also stubs `global.fetch` restores the
+msw-intercepted `fetch` after each such test, so the two approaches never overlap within a test.

@@ -4,7 +4,8 @@ import type { FileStorage } from '#storage/storage.js'
 import { assertValidSigningSecret, tokenFromPathSegment } from '#tokens.js'
 import type { APIRoute } from 'astro'
 
-// Used only when a custom store returns no stored metadata; the bundled storage adapter always echoes the real values.
+// Used when a store returns no metadata for an object: a custom store, or an R2 object whose filename metadata is
+// missing or malformed.
 const FALLBACK_CONTENT_TYPE = 'application/octet-stream'
 const FALLBACK_FILENAME = 'download'
 

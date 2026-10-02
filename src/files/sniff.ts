@@ -1,6 +1,6 @@
-// Magic-byte sniffing for the upload allow-list. The client-supplied MIME type is never trusted (a file can be renamed);
-// the content-type returned here is stored on the object and echoed back by the download route. Returns null for anything
-// off the allow-list.
+// Magic-byte sniffing for the upload allow-list. The client-supplied MIME type is never trusted (a file can be renamed).
+// On the multipart path the content-type returned here is stored on the object and echoed back by the download route; on
+// the direct path it is compared with the type the object was stored with. Returns null for anything off the allow-list.
 //
 // A passing matcher means "the leading bytes are well-formed for this type", not "this file is safe": the download route
 // still needs `X-Content-Type-Options: nosniff`, and inline PDFs on the app origin need `Content-Disposition: attachment`
