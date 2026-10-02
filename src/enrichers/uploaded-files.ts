@@ -9,6 +9,7 @@ import {
 import { formError, type FormError } from '#errors.js'
 import { type FilePayload } from '#files/signing.js'
 import { ALL_TYPES, HEADER_BYTES, sniffBytes, type FileMatcher } from '#files/sniff.js'
+import { assertFileLimitOptions } from '#numeric-options.js'
 import { type FormSubmission } from '#pipeline.js'
 import { type FileStorage, type PeekedObject } from '#storage/storage.js'
 import { assertValidSigningSecret } from '#tokens.js'
@@ -81,6 +82,7 @@ export class UploadedFiles<
    */
   constructor(private readonly options: UploadedFilesOptions<E, K>) {
     assertValidSigningSecret(options.secret)
+    assertFileLimitOptions('UploadedFiles', options)
 
     if (typeof options.storage.peek !== 'function') {
       throw new Error('UploadedFiles needs a storage that implements `peek` (R2Storage does).')

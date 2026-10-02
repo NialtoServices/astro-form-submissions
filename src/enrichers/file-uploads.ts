@@ -2,6 +2,7 @@ import { type Enricher, type EnrichmentContext, type EnrichmentResult } from '#e
 import { formError } from '#errors.js'
 import { type FilePayload } from '#files/signing.js'
 import { ALL_TYPES, sniffType, type FileMatcher } from '#files/sniff.js'
+import { assertFileLimitOptions } from '#numeric-options.js'
 import { type FormSubmission } from '#pipeline.js'
 import { type FileStorage } from '#storage/storage.js'
 
@@ -93,7 +94,9 @@ export class FileUploads<
    *
    * @param options - Storage, field, limits, accepted types, and the link resolver / attach key.
    */
-  constructor(private readonly options: FileUploadsOptions<E, K>) {}
+  constructor(private readonly options: FileUploadsOptions<E, K>) {
+    assertFileLimitOptions('FileUploads', options)
+  }
 
   // MARK: - Enricher API
 

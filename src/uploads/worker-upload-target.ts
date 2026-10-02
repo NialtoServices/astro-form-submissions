@@ -1,3 +1,4 @@
+import { assertPositiveNumberOption } from '#numeric-options.js'
 import { assertValidSigningSecret, tokenToPathSegment } from '#tokens.js'
 import { signUploadClaims } from '#uploads/upload-claims.js'
 import { type PendingUpload, type UploadInstruction, type UploadTarget } from '#uploads/upload-target.js'
@@ -41,6 +42,7 @@ export class WorkerUploadTarget implements UploadTarget {
    */
   constructor(private readonly options: WorkerUploadTargetOptions) {
     assertValidSigningSecret(options.secret)
+    assertPositiveNumberOption('WorkerUploadTarget `ttlSeconds`', options.ttlSeconds)
 
     if (!options.basePath.startsWith('/')) {
       throw new Error('WorkerUploadTarget `basePath` must be root-relative, starting with "/".')

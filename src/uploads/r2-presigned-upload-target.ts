@@ -1,3 +1,4 @@
+import { assertPositiveNumberOption } from '#numeric-options.js'
 import { presignURL } from '#uploads/sigv4.js'
 import { type PendingUpload, type UploadInstruction, type UploadTarget } from '#uploads/upload-target.js'
 
@@ -60,6 +61,11 @@ export class R2PresignedUploadTarget implements UploadTarget {
         throw new Error(`R2PresignedUploadTarget needs a non-empty \`${key}\`.`)
       }
     }
+
+    assertPositiveNumberOption('R2PresignedUploadTarget `expiresInSeconds`', options.expiresInSeconds, {
+      integer: true,
+      maximum: 604_800
+    })
 
     this.endpoint = new URL(options.endpoint ?? `https://${options.accountId}.r2.cloudflarestorage.com`)
   }

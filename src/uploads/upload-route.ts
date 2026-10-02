@@ -6,6 +6,7 @@ import {
   FileUploads
 } from '#enrichers/file-uploads.js'
 import { ALL_TYPES, type FileMatcher } from '#files/sniff.js'
+import { assertFileLimitOptions, assertPositiveNumberOption } from '#numeric-options.js'
 import { containedReporter, type ErrorReporter, type FormErrorStage } from '#reporting.js'
 import { jsonFormError, jsonOk } from '#responses.js'
 import { type SchemaInput } from '#schema.js'
@@ -113,6 +114,8 @@ function readDescriptors(value: FormDataEntryValue | null): FileDescriptor[] | n
  */
 export function createUploadRoute<const S extends SchemaInput>(config: UploadRouteConfig<S>): APIRoute {
   assertValidSigningSecret(config.secret)
+  assertFileLimitOptions('createUploadRoute', config)
+  assertPositiveNumberOption('createUploadRoute `receiptTtlSeconds`', config.receiptTtlSeconds)
 
   const report = containedReporter(config.onError)
   const field = config.field ?? 'uploads'
