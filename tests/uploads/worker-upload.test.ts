@@ -68,6 +68,13 @@ describe('WorkerUploadTarget', () => {
 
     expect(claims).toContain('filenameDigest')
     expect(claims).not.toContain('Quote')
+
+    // Keyed with the secret, so a log reader can't confirm a guessed filename with a plain hash.
+    const plainHash = Array.from(
+      new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(upload.filename))),
+      (byte) => byte.toString(16).padStart(2, '0')
+    ).join('')
+    expect(claims).not.toContain(plainHash)
   })
 
   it('refuses a short secret or a base path that is not root-relative', () => {

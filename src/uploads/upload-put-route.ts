@@ -73,7 +73,7 @@ export function createUploadPutRoute(config: CreateUploadPutRouteConfig): APIRou
     if (length !== upload.size) return plain('This file is not the size that was declared.', 400)
 
     const filename = headerFilename(request)
-    if (filename === undefined || (await filenameDigest(filename)) !== upload.filenameDigest) {
+    if (filename === undefined || (await filenameDigest(filename, config.secret)) !== upload.filenameDigest) {
       return plain('This file is not the one that was declared.', 400)
     }
 
