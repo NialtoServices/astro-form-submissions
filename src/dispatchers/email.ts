@@ -132,6 +132,21 @@ export interface EmailDispatcherOptions<E extends FormSubmission = FormSubmissio
 }
 
 /**
+ * A recipient resolved from a submission named more than one address. A `to` function reads
+ * sender-typed data, so a list there would let one submission email many people from the site's sender;
+ * a fixed `to` string may still list several of the site's own inboxes. Never carries the address itself,
+ * which is submission data.
+ */
+export class EmailRecipientError extends Error {
+  // MARK: - Object Lifecycle
+
+  constructor() {
+    super('A `to` resolver must return a single address, but returned one containing "," or ";".')
+    this.name = 'EmailRecipientError'
+  }
+}
+
+/**
  * Emails each submission using site-owned templates and a pluggable provider transport.
  *
  * Owns everything email-generic — rendering, addressing, delivery policy — and delegates only the
@@ -175,19 +190,22 @@ export class EmailDispatcher<E extends FormSubmission = FormSubmission, A = obje
    *
    * @param submission - The submission to email.
    * @param context - The dispatch context, threaded into the templates so computed field values can be resolved.
+   * @throws {EmailRecipientError} When a `to` function returns more than one address.
    */
   async dispatch(submission: E, context: DispatchContext<A>): Promise<void> {
-    const content = renderEmail(this.options.templates, submission, context)
-    const resolveAddress = (address: OptionalAddressInput<E>): string | undefined =>
-      typeof address === 'function' ? address(submission) : address
+    const { from, to, replyTo } = this.options
+    const recipient = typeof to === 'function' ? to(submission) : to
+    if (typeof to === 'function' && /[,;]/.test(recipient)) throw new EmailRecipientError()
 
-    const replyTo = this.options.replyTo === undefined ? undefined : resolveAddress(this.options.replyTo)
+    const content = renderEmail(this.options.templates, submission, context)
+    const resolvedReplyTo = typeof replyTo === 'function' ? replyTo(submission) : replyTo
     await this.options.transport.deliver({
       ...content,
-      from: resolveAddress(this.options.from)!,
-      to: resolveAddress(this.options.to)!,
+      from: typeof from === 'function' ? from(submission) : from,
+      to: recipient,
+
       // Omit the header entirely when the reply-to resolves empty, rather than sending a blank one.
-      ...(replyTo ? { replyTo } : {})
+      ...(resolvedReplyTo ? { replyTo: resolvedReplyTo } : {})
     })
   }
 }

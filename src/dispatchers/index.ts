@@ -2,6 +2,7 @@ export type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
 
 export {
   EmailDispatcher,
+  EmailRecipientError,
   renderEmail,
   type AddressInput,
   type OptionalAddressInput,

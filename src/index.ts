@@ -81,6 +81,7 @@ export {
 export {
   DiscordDispatcher,
   EmailDispatcher,
+  EmailRecipientError,
   submissionAcknowledgementTemplates,
   submissionNotificationTemplates,
   mustacheTemplates,

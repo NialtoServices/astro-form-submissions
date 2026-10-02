@@ -672,15 +672,30 @@ and other edge runtimes, where compiling engines (Handlebars, EJS) can't.
 
 To email the person who submitted — a "thanks, we got it" confirmation — add a **second**
 `EmailDispatcher` addressed to them. `submissionAcknowledgementTemplates` is the ready-made
-counterpart to `submissionNotificationTemplates`: a warm confirmation with a copy of what they sent.
+counterpart to `submissionNotificationTemplates`: a warm confirmation, optionally with a copy of what
+they sent.
+
+> **The address is whatever the sender typed.** Nothing verifies it, so an acknowledgement goes wherever
+> an attacker points it, from your verified sender. Keep it inert:
+>
+> - **Protect the route first** with [Turnstile](#extras-honeypot-and-turnstile) and a
+>   [rate-limit guard](#guards). Without them, the form is a free relay.
+> - **Don't copy back free text.** A `message` field, or the sender's name in the `greeting`, lets an
+>   attacker write the email; HTML is escaped, but mail clients still link bare URLs. Copy back only
+>   fields your schema constrains (a choice, a date), or none.
+> - **Leave `attachments` unset.** It would send links to files the poster uploaded, served from your
+>   domain.
+>
+> A `to` function must return a single address: `EmailDispatcher` refuses one containing `,` or `;`
+> (an `EmailRecipientError`), so one submission can't fan out to many recipients.
 
 ```ts
 new EmailDispatcher({
   transport: new PostmarkTransport({ token: process.env.POSTMARK_TOKEN! }),
   templates: submissionAcknowledgementTemplates<ContactEnquiry>({
-    fields: ['name', 'email', 'message'], // optional — omit for a plain "thanks" with no copied fields
+    // fields: omitted, so nothing the sender typed is copied back (see the warning above)
     formName: 'Contact form',
-    greeting: (submission) => `Hi ${submission.name},`, // optional; field names are yours, so no default
+    greeting: () => 'Hello,', // optional; avoid interpolating free text such as the sender's name
     message: "Thanks — we'll reply within one working day.", // optional; overrides the default line
     contact: { email: 'support@acme.com', address: '1 High St, London' } // optional in-card contact details
   }),

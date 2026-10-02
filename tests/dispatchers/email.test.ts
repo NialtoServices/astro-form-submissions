@@ -1,4 +1,4 @@
-import { EmailDispatcher, type EmailTemplates } from '#dispatchers/email.js'
+import { EmailDispatcher, EmailRecipientError, type EmailTemplates } from '#dispatchers/email.js'
 import { submissionNotificationTemplates } from '#dispatchers/submission-notification.js'
 import { describe, expect, it, vi } from 'vitest'
 import { dispatchContext } from '../dispatch-context.js'
@@ -109,6 +109,40 @@ describe('EmailDispatcher', () => {
   it('is required by default', () => {
     expect(dispatcherWith().required).toBe(true)
     expect(dispatcherWith(vi.fn(), { required: false }).required).toBe(false)
+  })
+
+  it.each(['ada@example.com, eve@example.com', 'ada@example.com;eve@example.com'])(
+    'refuses a `to` function that resolves to several addresses (%s)',
+    async (address) => {
+      const deliver = vi.fn()
+      const dispatcher = new EmailDispatcher({
+        transport: { deliver },
+        templates,
+        from: 'noreply@acme.test',
+        to: (submission) => submission.email as string
+      })
+
+      await expect(dispatcher.dispatch({ email: address }, dispatchContext())).rejects.toBeInstanceOf(
+        EmailRecipientError
+      )
+      expect(deliver).not.toHaveBeenCalled()
+    }
+  )
+
+  it('keeps the address out of the recipient error', () => {
+    expect(new EmailRecipientError().message).not.toContain('@')
+  })
+
+  it('lets a fixed `to` string list several of the site’s own inboxes', async () => {
+    const deliver = vi.fn()
+    await new EmailDispatcher({
+      transport: { deliver },
+      templates,
+      from: 'noreply@acme.test',
+      to: 'owner@acme.test, office@acme.test'
+    }).dispatch({ name: 'Ada' }, dispatchContext())
+
+    expect(deliveredMessage(deliver).to).toBe('owner@acme.test, office@acme.test')
   })
 
   it('propagates a transport failure', async () => {

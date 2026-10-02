@@ -111,6 +111,11 @@ export interface SubmissionAcknowledgementTemplatesOptions<
  * failed courtesy email never fails the submission. For the email to your own inbox, see
  * {@link submissionNotificationTemplates}.
  *
+ * That address is whatever the sender typed, so this email goes wherever an attacker points it. Keep it
+ * inert: run Turnstile and a rate-limit guard on the route, copy back only fields the schema constrains
+ * (never free text such as a message, nor a name in the `greeting`), and leave `attachments` unset, which
+ * would otherwise send links to files the poster uploaded.
+ *
  * The footer links the site URL (the dispatch context's `siteURL`, else its `requestURL`).
  */
 export function submissionAcknowledgementTemplates<
