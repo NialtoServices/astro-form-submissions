@@ -35,10 +35,12 @@ export {
 export {
   R2Storage,
   type FileStorage,
+  type PeekedObject,
   type PutOptions,
   type R2BucketLike,
   type R2StorageOptions,
-  type StoredObject
+  type StoredObject,
+  type StreamPutOptions
 } from '#storage/index.js'
 
 export {
@@ -59,11 +61,15 @@ export {
 } from '#files/index.js'
 
 export {
+  createUploadPutRoute,
   R2PresignedUploadTarget,
+  WorkerUploadTarget,
+  type CreateUploadPutRouteConfig,
   type PendingUpload,
   type R2PresignedUploadTargetOptions,
   type UploadInstruction,
-  type UploadTarget
+  type UploadTarget,
+  type WorkerUploadTargetOptions
 } from '#uploads/index.js'
 
 export {

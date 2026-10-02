@@ -23,6 +23,24 @@ export interface PutOptions {
   filename: string
 }
 
+/** Metadata for a streamed upload, whose bytes arrive with a size already checked by the caller. */
+export interface StreamPutOptions extends PutOptions {
+  /** The body's exact length in bytes. */
+  size: number
+}
+
+/** The leading bytes of a stored object, with its total size and stored type, for verifying an upload. */
+export interface PeekedObject {
+  /** The object's total size in bytes. */
+  size: number
+
+  /** The content-type the object was stored with, if any. */
+  contentType?: string
+
+  /** Up to the requested number of the object's first bytes. */
+  header: Uint8Array
+}
+
 /**
  * A pluggable object store for uploaded files: pure put/get/delete, no signing or validation.
  * Implement this to back uploads with a provider (R2, S3, …) — {@link FileUploads} and
@@ -53,4 +71,25 @@ export interface FileStorage {
    * @param key - The logical object key.
    */
   delete(key: string): Promise<void>
+
+  /**
+   * Stores a byte stream of known length under a key, without buffering it. Needed by
+   * {@link createUploadPutRoute}.
+   *
+   * @param key - The logical object key.
+   * @param body - The bytes to store.
+   * @param options - The content-type, filename and exact size to persist with the object.
+   * @throws On storage failure, or when the stream's length differs from `options.size`.
+   */
+  putStream?(key: string, body: ReadableStream, options: StreamPutOptions): Promise<void>
+
+  /**
+   * Reads an object's total size, stored type and first `length` bytes, without fetching the rest.
+   * Needed by {@link UploadedFiles} to verify a direct upload.
+   *
+   * @param key - The logical object key.
+   * @param length - How many leading bytes to read.
+   * @returns The peeked object, or `null` when it does not exist.
+   */
+  peek?(key: string, length: number): Promise<PeekedObject | null>
 }
