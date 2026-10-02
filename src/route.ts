@@ -355,7 +355,7 @@ export interface LazyRouteOptions {
    * your reporter; the signature matches the route's, so one reporter can serve both. Awaited and contained:
    * a reporter that throws cannot replace the build's error.
    */
-  onError?: (error: unknown, context: { stage: FormErrorStage }) => void | Promise<void>
+  onError?: ErrorReporter
 }
 
 /**

@@ -81,6 +81,7 @@ export {
 
 export {
   DestinationUnreachableError,
+  DiscordDeliveryError,
   DiscordDispatcher,
   EmailDispatcher,
   EmailRecipientError,
@@ -127,6 +128,8 @@ export {
   type LazyRouteOptions,
   type MergedProvided
 } from '#route.js'
+
+export { defaultErrorReporter, type ErrorReporter } from '#reporting.js'
 
 export { MissingEnvError, requireEnv } from '#env.js'
 
