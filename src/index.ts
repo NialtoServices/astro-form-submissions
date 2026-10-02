@@ -20,7 +20,7 @@ export {
   type TurnstileInspectorOptions
 } from '#inspectors/index.js'
 
-export type { Verdict } from '#pipeline.js'
+export type { FormSubmission, Verdict } from '#pipeline.js'
 
 export {
   DEFAULT_MAX_FILE_BYTES,
@@ -161,5 +161,3 @@ export {
 export { jsonError, jsonFormError, jsonOk, jsonValidationError } from '#responses.js'
 
 export { getField } from '#form-data.js'
-
-export type { FormSubmission } from '#pipeline.js'
