@@ -18,7 +18,7 @@ const readTemplate = (name) => readFileSync(join(rootDir, 'templates', name), 'u
 const templates = ['submission-notification', 'submission-acknowledgement']
 
 for (const name of templates) {
-  const module_ = `// Generated from templates/${name}.{html,txt}.mustache by scripts/generate-email-template-sources.mjs — do not edit.
+  const generatedSource = `// Generated from templates/${name}.{html,txt}.mustache by scripts/generate-email-template-sources.mjs — do not edit.
 
 /** The ${name} email's HTML document source (templates/${name}.html.mustache). */
 export const htmlSource = ${JSON.stringify(readTemplate(`${name}.html.mustache`))}
@@ -26,5 +26,5 @@ export const htmlSource = ${JSON.stringify(readTemplate(`${name}.html.mustache`)
 /** The ${name} email's plain-text source (templates/${name}.txt.mustache). */
 export const textSource = ${JSON.stringify(readTemplate(`${name}.txt.mustache`))}
 `
-  writeFileSync(join(rootDir, `src/dispatchers/${name}-sources.ts`), module_)
+  writeFileSync(join(rootDir, `src/dispatchers/${name}-sources.ts`), generatedSource)
 }

@@ -12,14 +12,14 @@ const submission = {
 }
 
 // The display host comes from the dispatch context (siteURL ?? requestURL), not the submission.
-const CTX = dispatchContext()
+const DEFAULT_CONTEXT = dispatchContext()
 
 describe('submissionNotificationTemplates', () => {
   it('renders declared fields with humanised labels and drops empty ones', () => {
     const templates = submissionNotificationTemplates<typeof submission>({
       fields: ['name', 'email', 'phone', 'preferredTime']
     })
-    const text = templates.text(submission, CTX)
+    const text = templates.text(submission, DEFAULT_CONTEXT)
 
     expect(text).toContain('Name:\nAda Lovelace')
     expect(text).toContain('Email:\nada@example.com')
@@ -31,28 +31,28 @@ describe('submissionNotificationTemplates', () => {
     const templates = submissionNotificationTemplates<typeof submission>({
       fields: [{ label: 'Contact', value: (enquiry) => `${enquiry.name} <${enquiry.email}>` }]
     })
-    expect(templates.text(submission, CTX)).toContain('Contact:\nAda Lovelace <ada@example.com>')
+    expect(templates.text(submission, DEFAULT_CONTEXT)).toContain('Contact:\nAda Lovelace <ada@example.com>')
   })
 
   it('renders a free-text field like any other, with line breaks preserved', () => {
     const multiline = { name: 'Ada', message: 'First line.\n\nSecond paragraph.' }
     const templates = submissionNotificationTemplates<typeof multiline>({ fields: ['name', 'message'] })
 
-    expect(templates.text(multiline, CTX)).toContain('Message:\nFirst line.\n\nSecond paragraph.')
-    expect(templates.html(multiline, CTX)).toContain('First line.\n\nSecond paragraph.')
+    expect(templates.text(multiline, DEFAULT_CONTEXT)).toContain('Message:\nFirst line.\n\nSecond paragraph.')
+    expect(templates.html(multiline, DEFAULT_CONTEXT)).toContain('First line.\n\nSecond paragraph.')
   })
 
   it('drops an empty free-text field, like any other empty field', () => {
     const templates = submissionNotificationTemplates<typeof submission>({ fields: ['name', 'message'] })
-    expect(templates.text({ ...submission, message: '' }, CTX)).not.toContain('Message:')
+    expect(templates.text({ ...submission, message: '' }, DEFAULT_CONTEXT)).not.toContain('Message:')
   })
 
   it('mentions the site host in the subject and header, and links the site URL in the footer', () => {
     const templates = submissionNotificationTemplates<typeof submission>({ fields: ['name'] })
-    expect(templates.subject(submission, CTX)).toBe('New form submission via example.com')
-    expect(templates.text(submission, CTX)).toContain('via example.com')
-    expect(templates.text(submission, CTX)).toContain('https://example.com/')
-    expect(templates.html(submission, CTX)).toContain('href="https://example.com/"')
+    expect(templates.subject(submission, DEFAULT_CONTEXT)).toBe('New form submission via example.com')
+    expect(templates.text(submission, DEFAULT_CONTEXT)).toContain('via example.com')
+    expect(templates.text(submission, DEFAULT_CONTEXT)).toContain('https://example.com/')
+    expect(templates.html(submission, DEFAULT_CONTEXT)).toContain('href="https://example.com/"')
   })
 
   it('falls back to the request origin when no Astro site is configured', () => {
@@ -67,16 +67,16 @@ describe('submissionNotificationTemplates', () => {
       fields: ['name'],
       subject: 'New enquiry from {{name}} via {{siteHost}}'
     })
-    expect(templates.subject(submission, CTX)).toBe('New enquiry from Ada Lovelace via example.com')
+    expect(templates.subject(submission, DEFAULT_CONTEXT)).toBe('New enquiry from Ada Lovelace via example.com')
   })
 
   it('escapes field values in the html body only', () => {
     const hostile = { ...submission, name: 'Ada & <Co>', message: 'a < b' }
     const templates = submissionNotificationTemplates<typeof hostile>({ fields: ['name', 'message'] })
 
-    expect(templates.html(hostile, CTX)).toContain('Ada &amp; &lt;Co&gt;')
-    expect(templates.html(hostile, CTX)).toContain('a &lt; b')
-    expect(templates.text(hostile, CTX)).toContain('Name:\nAda & <Co>')
+    expect(templates.html(hostile, DEFAULT_CONTEXT)).toContain('Ada &amp; &lt;Co&gt;')
+    expect(templates.html(hostile, DEFAULT_CONTEXT)).toContain('a &lt; b')
+    expect(templates.text(hostile, DEFAULT_CONTEXT)).toContain('Name:\nAda & <Co>')
   })
 
   it('passes the context to computed fields (parity with Discord)', () => {
@@ -93,15 +93,15 @@ describe('submissionNotificationTemplates presentation options', () => {
   it('shows the form name in the subject, title, and text header', () => {
     const templates = submissionNotificationTemplates<typeof submission>({ fields: ['name'], formName: 'Contact form' })
 
-    expect(templates.subject(submission, CTX)).toBe('New form submission: Contact form via example.com')
-    expect(templates.text(submission, CTX)).toContain('Contact form')
-    expect(templates.html(submission, CTX)).toContain('Contact form')
+    expect(templates.subject(submission, DEFAULT_CONTEXT)).toBe('New form submission: Contact form via example.com')
+    expect(templates.text(submission, DEFAULT_CONTEXT)).toContain('Contact form')
+    expect(templates.html(submission, DEFAULT_CONTEXT)).toContain('Contact form')
   })
 
   it('falls back to a generic heading when no form name is given', () => {
     const templates = submissionNotificationTemplates<typeof submission>({ fields: ['name'] })
-    expect(templates.text(submission, CTX)).toContain('New form submission')
-    expect(templates.html(submission, CTX)).toContain('<title>New form submission</title>')
+    expect(templates.text(submission, DEFAULT_CONTEXT)).toContain('New form submission')
+    expect(templates.html(submission, DEFAULT_CONTEXT)).toContain('<title>New form submission</title>')
   })
 
   it('overrides the fixed UI copy for translation, keeping the same HTML shell', () => {
@@ -115,14 +115,14 @@ describe('submissionNotificationTemplates presentation options', () => {
         footerText: 'Ceci est une notification automatique.'
       }
     })
-    const ctx = dispatchContext({ resources: { files: [{ name: 'devis.pdf', url: 'https://example.com/f/a/' }] } })
-    const html = templates.html(submission, ctx)
+    const context = dispatchContext({ resources: { files: [{ name: 'devis.pdf', url: 'https://example.com/f/a/' }] } })
+    const html = templates.html(submission, context)
 
     expect(html).toContain('Nouvelle soumission')
     expect(html).toContain('<title>Nouveau message</title>')
     expect(html).toContain('Pièces jointes')
     expect(html).toContain('Ceci est une notification automatique.')
-    expect(templates.text(submission, ctx)).toContain('Nouveau message')
+    expect(templates.text(submission, context)).toContain('Nouveau message')
   })
 
   it('shows the brand wordmark only when configured', () => {
@@ -130,18 +130,18 @@ describe('submissionNotificationTemplates presentation options', () => {
       fields: ['name'],
       brandName: 'Nialto Services'
     })
-    expect(branded.html(submission, CTX)).toContain('Nialto Services')
+    expect(branded.html(submission, DEFAULT_CONTEXT)).toContain('Nialto Services')
 
     const plain = submissionNotificationTemplates<typeof submission>({ fields: ['name'] })
-    expect(plain.html(submission, CTX)).not.toContain('email__wordmark</span>')
+    expect(plain.html(submission, DEFAULT_CONTEXT)).not.toContain('email__wordmark</span>')
   })
 
   it('formats the shared arrival instant from the context in UTC by default', () => {
     const templates = submissionNotificationTemplates<typeof submission>({ fields: ['name'] })
-    expect(templates.text(submission, CTX)).toMatch(/· \d{1,2} \w{3,4} \d{4}, \d{2}:\d{2} UTC/)
+    expect(templates.text(submission, DEFAULT_CONTEXT)).toMatch(/· \d{1,2} \w{3,4} \d{4}, \d{2}:\d{2} UTC/)
 
     // dispatchContext defaults submittedAt to 2026-01-02T03:04:05Z.
-    expect(templates.text(submission, CTX)).toContain('· 2 Jan 2026, 03:04 UTC')
+    expect(templates.text(submission, DEFAULT_CONTEXT)).toContain('· 2 Jan 2026, 03:04 UTC')
   })
 
   it('honours a custom submittedAt producer, including omission', () => {
@@ -149,24 +149,24 @@ describe('submissionNotificationTemplates presentation options', () => {
       fields: ['name'],
       submittedAt: () => 'yesterday, probably'
     })
-    expect(stamped.text(submission, CTX)).toContain('· yesterday, probably')
+    expect(stamped.text(submission, DEFAULT_CONTEXT)).toContain('· yesterday, probably')
 
     const unstamped = submissionNotificationTemplates<typeof submission>({
       fields: ['name'],
       submittedAt: () => undefined
     })
-    expect(unstamped.text(submission, CTX)).not.toContain('·')
+    expect(unstamped.text(submission, DEFAULT_CONTEXT)).not.toContain('·')
   })
 
   it('passes the dispatch context to a custom submittedAt producer', () => {
-    const submittedAt = vi.fn((_submission: typeof submission, context: typeof CTX) =>
+    const submittedAt = vi.fn((_submission: typeof submission, context: typeof DEFAULT_CONTEXT) =>
       context.submittedAt.toISOString()
     )
     const templates = submissionNotificationTemplates<typeof submission>({ fields: ['name'], submittedAt })
 
     // The override reads the shared instant off the context, so its return value proves it received it.
-    expect(templates.text(submission, CTX)).toContain(CTX.submittedAt.toISOString())
-    expect(submittedAt).toHaveBeenCalledWith(submission, CTX)
+    expect(templates.text(submission, DEFAULT_CONTEXT)).toContain(DEFAULT_CONTEXT.submittedAt.toISOString())
+    expect(submittedAt).toHaveBeenCalledWith(submission, DEFAULT_CONTEXT)
   })
 
   it('renders the identical timestamp in the notification and acknowledgement for one submission', () => {
@@ -174,8 +174,8 @@ describe('submissionNotificationTemplates presentation options', () => {
     const acknowledgement = submissionAcknowledgementTemplates<typeof submission>({ fields: ['name'] })
 
     // Both templates read `context.submittedAt`, so one shared instant renders one string in both emails.
-    expect(notification.text(submission, CTX)).toContain('2 Jan 2026, 03:04 UTC')
-    expect(acknowledgement.text(submission, CTX)).toContain('2 Jan 2026, 03:04 UTC')
+    expect(notification.text(submission, DEFAULT_CONTEXT)).toContain('2 Jan 2026, 03:04 UTC')
+    expect(acknowledgement.text(submission, DEFAULT_CONTEXT)).toContain('2 Jan 2026, 03:04 UTC')
   })
 })
 

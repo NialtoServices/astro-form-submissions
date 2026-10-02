@@ -19,9 +19,9 @@ function stubStorage(putBehaviour?: (key: string) => void) {
     putBehaviour?.(key)
   )
   const deleted: string[] = []
-  const del = vi.fn(async (key: string) => void deleted.push(key))
-  const storage: FileStorage = { put, get: vi.fn(async () => null), delete: del }
-  return { storage, put, del, deleted }
+  const deleteObject = vi.fn(async (key: string) => void deleted.push(key))
+  const storage: FileStorage = { put, get: vi.fn(async () => null), delete: deleteObject }
+  return { storage, put, deleteObject, deleted }
 }
 
 // The submission is only the validated input; uploaded-file links are exposed on `context.resources`.
@@ -73,7 +73,7 @@ describe('FileUploads', () => {
 
   it('rejects when more than maxFiles are attached', async () => {
     const { storage } = stubStorage()
-    const files = [1, 2, 3].map((n) => upload(`f${n}.pdf`, PDF_HEADER))
+    const files = [1, 2, 3].map((fileNumber) => upload(`f${fileNumber}.pdf`, PDF_HEADER))
     const result = await uploader(storage, { maxFiles: 2 }).enrich({ name: 'Ada' }, contextWith(files))
 
     expect(result).toEqual({ reject: FileUploads.errors.tooManyFiles })
@@ -172,8 +172,8 @@ describe('FileUploads', () => {
   })
 
   it('reports the keys it could not delete during rollback', async () => {
-    const del = vi.fn().mockRejectedValue(new Error('R2 unavailable'))
-    const storage: FileStorage = { put: vi.fn(async () => {}), get: vi.fn(async () => null), delete: del }
+    const deleteObject = vi.fn().mockRejectedValue(new Error('R2 unavailable'))
+    const storage: FileStorage = { put: vi.fn(async () => {}), get: vi.fn(async () => null), delete: deleteObject }
     const context = contextWith([upload('a.pdf', PDF_HEADER)])
     const result = await uploader(storage).enrich({ name: 'Ada' }, context)
 
@@ -185,14 +185,14 @@ describe('FileUploads', () => {
   })
 
   it('returns a rollback that deletes every stored object and swallows delete errors', async () => {
-    const del = vi.fn().mockRejectedValueOnce(new Error('transient')).mockResolvedValue(undefined)
-    const storage: FileStorage = { put: vi.fn(async () => {}), get: vi.fn(async () => null), delete: del }
+    const deleteObject = vi.fn().mockRejectedValueOnce(new Error('transient')).mockResolvedValue(undefined)
+    const storage: FileStorage = { put: vi.fn(async () => {}), get: vi.fn(async () => null), delete: deleteObject }
     const files = [upload('a.pdf', PDF_HEADER), upload('b.pdf', PDF_HEADER)]
     const result = await uploader(storage).enrich({ name: 'Ada' }, contextWith(files))
 
     if (!('rollback' in result) || !result.rollback) throw new Error('expected a rollback')
     await expect(result.rollback()).resolves.toBeUndefined()
-    expect(del).toHaveBeenCalledTimes(2)
+    expect(deleteObject).toHaveBeenCalledTimes(2)
   })
 
   it('reads files from a custom field name', async () => {

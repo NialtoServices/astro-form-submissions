@@ -10,7 +10,7 @@ const submission = {
 }
 
 // The display host comes from the dispatch context (siteURL ?? requestURL).
-const CTX = dispatchContext()
+const DEFAULT_CONTEXT = dispatchContext()
 
 describe('submissionAcknowledgementTemplates', () => {
   it('titles the email with the confirmation heading, not the form name', () => {
@@ -19,11 +19,11 @@ describe('submissionAcknowledgementTemplates', () => {
       formName: 'Contact form'
     })
 
-    expect(templates.text(submission, CTX)).toContain("We've received your submission")
-    expect(templates.html(submission, CTX)).toContain('Thank you')
+    expect(templates.text(submission, DEFAULT_CONTEXT)).toContain("We've received your submission")
+    expect(templates.html(submission, DEFAULT_CONTEXT)).toContain('Thank you')
 
     // The form name appears in the meta line, not as the title.
-    expect(templates.text(submission, CTX)).toContain('Contact form')
+    expect(templates.text(submission, DEFAULT_CONTEXT)).toContain('Contact form')
   })
 
   it('defaults the subject to a received-confirmation', () => {
@@ -31,24 +31,24 @@ describe('submissionAcknowledgementTemplates', () => {
       fields: ['name'],
       formName: 'Contact form'
     })
-    expect(templates.subject(submission, CTX)).toBe("We've received your submission")
+    expect(templates.subject(submission, DEFAULT_CONTEXT)).toBe("We've received your submission")
   })
 
   it('shows a default confirmation message, overridable by string or function', () => {
     const defaulted = submissionAcknowledgementTemplates<typeof submission>({ fields: ['name'] })
-    expect(defaulted.text(submission, CTX)).toContain('received your submission and will be in touch')
+    expect(defaulted.text(submission, DEFAULT_CONTEXT)).toContain('received your submission and will be in touch')
 
     const custom = submissionAcknowledgementTemplates<typeof submission>({
       fields: ['name'],
       message: 'Your quote request is in the queue.'
     })
-    expect(custom.text(submission, CTX)).toContain('Your quote request is in the queue.')
+    expect(custom.text(submission, DEFAULT_CONTEXT)).toContain('Your quote request is in the queue.')
 
     const computed = submissionAcknowledgementTemplates<typeof submission>({
       fields: ['name'],
       message: (enquiry) => `Thanks ${enquiry.name.split(' ')[0]}!`
     })
-    expect(computed.text(submission, CTX)).toContain('Thanks Ada!')
+    expect(computed.text(submission, DEFAULT_CONTEXT)).toContain('Thanks Ada!')
   })
 
   it('renders a greeting only when one is provided', () => {
@@ -56,15 +56,15 @@ describe('submissionAcknowledgementTemplates', () => {
       fields: ['name'],
       greeting: (enquiry) => `Hi ${enquiry.name},`
     })
-    expect(greeted.text(submission, CTX)).toContain('Hi Ada Lovelace,')
+    expect(greeted.text(submission, DEFAULT_CONTEXT)).toContain('Hi Ada Lovelace,')
 
     const plain = submissionAcknowledgementTemplates<typeof submission>({ fields: ['name'] })
-    expect(plain.text({ ...submission, name: 'Ada' }, CTX)).not.toContain('Hi Ada,')
+    expect(plain.text({ ...submission, name: 'Ada' }, DEFAULT_CONTEXT)).not.toContain('Hi Ada,')
   })
 
   it('echoes the declared submission fields back to the sender', () => {
     const templates = submissionAcknowledgementTemplates<typeof submission>({ fields: ['name', 'phone', 'message'] })
-    const text = templates.text(submission, CTX)
+    const text = templates.text(submission, DEFAULT_CONTEXT)
 
     expect(text).toContain('Name:\nAda Lovelace')
     expect(text).toContain('Message:\nHello there')
@@ -73,9 +73,11 @@ describe('submissionAcknowledgementTemplates', () => {
 
   it('uses acknowledgement footer copy and links the site URL from the context', () => {
     const templates = submissionAcknowledgementTemplates<typeof submission>({ fields: ['name'] })
-    expect(templates.text(submission, CTX)).toContain("This is an automated acknowledgement; you don't need to reply.")
-    expect(templates.text(submission, CTX)).toContain('https://example.com/')
-    expect(templates.html(submission, CTX)).toContain('href="https://example.com/"')
+    expect(templates.text(submission, DEFAULT_CONTEXT)).toContain(
+      "This is an automated acknowledgement; you don't need to reply."
+    )
+    expect(templates.text(submission, DEFAULT_CONTEXT)).toContain('https://example.com/')
+    expect(templates.html(submission, DEFAULT_CONTEXT)).toContain('href="https://example.com/"')
 
     // Falls back to the request origin when no Astro site is configured.
     const context = dispatchContext({ host: 'forms.example.org', siteURL: null })
@@ -86,8 +88,8 @@ describe('submissionAcknowledgementTemplates', () => {
     const hostile = { ...submission, name: 'Ada & <Co>' }
     const templates = submissionAcknowledgementTemplates<typeof hostile>({ fields: ['name'] })
 
-    expect(templates.html(hostile, CTX)).toContain('Ada &amp; &lt;Co&gt;')
-    expect(templates.text(hostile, CTX)).toContain('Name:\nAda & <Co>')
+    expect(templates.html(hostile, DEFAULT_CONTEXT)).toContain('Ada &amp; &lt;Co&gt;')
+    expect(templates.text(hostile, DEFAULT_CONTEXT)).toContain('Name:\nAda & <Co>')
   })
 
   it('stamps the render time in UTC by default', () => {
@@ -95,7 +97,7 @@ describe('submissionAcknowledgementTemplates', () => {
       fields: ['name'],
       formName: 'Contact form'
     })
-    expect(templates.text(submission, CTX)).toMatch(/\d{1,2} \w{3,4} \d{4}, \d{2}:\d{2} UTC/)
+    expect(templates.text(submission, DEFAULT_CONTEXT)).toMatch(/\d{1,2} \w{3,4} \d{4}, \d{2}:\d{2} UTC/)
   })
 
   it('overrides the fixed UI copy for translation, keeping the same HTML shell', () => {
@@ -108,42 +110,42 @@ describe('submissionAcknowledgementTemplates', () => {
         footerText: 'Ceci est un accusé de réception automatique.'
       }
     })
-    const html = templates.html(submission, CTX)
+    const html = templates.html(submission, DEFAULT_CONTEXT)
 
     expect(html).toContain('Merci')
     expect(html).toContain('<title>Nous avons bien reçu votre message</title>')
     expect(html).toContain('Merci de votre message.')
     expect(html).toContain('Ceci est un accusé de réception automatique.')
-    expect(templates.text(submission, CTX)).toContain('Nous avons bien reçu votre message')
+    expect(templates.text(submission, DEFAULT_CONTEXT)).toContain('Nous avons bien reçu votre message')
   })
 
   it('sends a plain acknowledgement with no fields — no copied-submission block or divider', () => {
     const templates = submissionAcknowledgementTemplates({ message: 'Thanks — we got your message.' })
-    const sub = { name: 'Ada', email: 'ada@example.com' }
+    const minimalSubmission = { name: 'Ada', email: 'ada@example.com' }
 
-    expect(templates.text(sub, CTX)).toContain('Thanks — we got your message.')
-    expect(templates.text(sub, CTX)).not.toContain('==========')
-    expect(templates.text(sub, CTX)).not.toContain('Name:')
-    expect(templates.html(sub, CTX)).not.toContain('class="email__rule"')
+    expect(templates.text(minimalSubmission, DEFAULT_CONTEXT)).toContain('Thanks — we got your message.')
+    expect(templates.text(minimalSubmission, DEFAULT_CONTEXT)).not.toContain('==========')
+    expect(templates.text(minimalSubmission, DEFAULT_CONTEXT)).not.toContain('Name:')
+    expect(templates.html(minimalSubmission, DEFAULT_CONTEXT)).not.toContain('class="email__rule"')
   })
 
   it('renders in-card contact details when provided, omitting them by default', () => {
-    const sub = { name: 'Ada' }
+    const minimalSubmission = { name: 'Ada' }
     const withContact = submissionAcknowledgementTemplates({
       message: 'Thanks!',
       contact: { email: 'support@acme.test', phone: '+44 20 1234 5678', address: '1 High St, London' }
     })
-    const html = withContact.html(sub, CTX)
+    const html = withContact.html(minimalSubmission, DEFAULT_CONTEXT)
 
     expect(html).toContain('mailto:support@acme.test')
     expect(html).toContain('href="tel:+442012345678"')
     expect(html).toContain('+44 20 1234 5678')
     expect(html).toContain('1 High St, London')
-    expect(withContact.text(sub, CTX)).toContain('support@acme.test')
-    expect(withContact.text(sub, CTX)).toContain('1 High St, London')
+    expect(withContact.text(minimalSubmission, DEFAULT_CONTEXT)).toContain('support@acme.test')
+    expect(withContact.text(minimalSubmission, DEFAULT_CONTEXT)).toContain('1 High St, London')
 
     const withoutContact = submissionAcknowledgementTemplates({ message: 'Thanks!' })
-    expect(withoutContact.html(sub, CTX)).not.toContain('mailto:')
+    expect(withoutContact.html(minimalSubmission, DEFAULT_CONTEXT)).not.toContain('mailto:')
   })
 
   it('renders attachment links, dropping unsafe schemes', () => {
@@ -151,7 +153,7 @@ describe('submissionAcknowledgementTemplates', () => {
       fields: ['name'],
       attachments: 'files'
     })
-    const ctx = dispatchContext({
+    const context = dispatchContext({
       resources: {
         files: [
           { name: 'quote.pdf', url: 'https://example.com/files/aaa~bbb/' },
@@ -159,7 +161,7 @@ describe('submissionAcknowledgementTemplates', () => {
         ]
       }
     })
-    const html = templates.html({ name: 'Ada' }, ctx)
+    const html = templates.html({ name: 'Ada' }, context)
 
     expect(html).toContain('quote.pdf</a>')
     expect(html).not.toContain('javascript:')
