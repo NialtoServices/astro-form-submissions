@@ -65,7 +65,7 @@ async function hmac(key: ArrayBuffer | Uint8Array<ArrayBuffer>, value: string): 
 /**
  * Presigns a request as a URL carrying its own authentication. The payload is unsigned
  * (`UNSIGNED-PAYLOAD`), so the URL authorises any body; constrain what may be stored through the signed
- * headers and by checking the stored object afterwards.
+ * headers (`content-length` bounds its size) and by checking the stored object afterwards.
  *
  * @param options - The request to authorise and the credential to sign it with.
  * @returns The presigned URL.

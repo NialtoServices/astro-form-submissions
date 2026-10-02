@@ -30,7 +30,9 @@ describe('R2PresignedUploadTarget', () => {
     expect(url.origin).toBe('https://0123456789abcdef.r2.cloudflarestorage.com')
     expect(url.pathname).toBe(`/files-example/uploads/${upload.objectKey}`)
     expect(url.searchParams.get('X-Amz-Expires')).toBe('900')
-    expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('content-type;host;x-amz-meta-filename-uri')
+    expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe(
+      'content-length;content-type;host;if-none-match;x-amz-meta-filename-uri'
+    )
   })
 
   it('returns the headers the upload must carry, with the filename percent-encoded', async () => {
@@ -38,8 +40,16 @@ describe('R2PresignedUploadTarget', () => {
 
     expect(instruction.headers).toEqual({
       'Content-Type': 'video/quicktime',
+      'If-None-Match': '*',
       'x-amz-meta-filename-uri': 'Garden%20%E2%80%93%20before.mov'
     })
+  })
+
+  it('signs the admitted size without asking the browser to send it', async () => {
+    const instruction = await new R2PresignedUploadTarget(options).prepare(upload)
+
+    expect(new URL(instruction.url).searchParams.get('X-Amz-SignedHeaders')).toContain('content-length')
+    expect(Object.keys(instruction.headers).map((name) => name.toLowerCase())).not.toContain('content-length')
   })
 
   it('produces a signature an independent SigV4 implementation agrees with', async () => {
@@ -51,11 +61,24 @@ describe('R2PresignedUploadTarget', () => {
     const client = new AwsClient({ ...options, region: 'auto', service: 's3' })
     const unsigned = new URL(issued.origin + issued.pathname)
     unsigned.searchParams.set('X-Amz-Expires', '900')
-    const reference = await client.sign(new Request(unsigned, { method: 'PUT', headers: instruction.headers }), {
+    const headers = { ...instruction.headers, 'Content-Length': String(upload.size) }
+    const reference = await client.sign(new Request(unsigned, { method: 'PUT', headers }), {
       aws: { signQuery: true, datetime: '20261002T091500Z', allHeaders: true }
     })
+    const referenceURL = new URL(reference.url)
 
-    expect(issued.searchParams.get('X-Amz-Signature')).toBe(new URL(reference.url).searchParams.get('X-Amz-Signature'))
+    expect(referenceURL.searchParams.get('X-Amz-SignedHeaders')).toBe(issued.searchParams.get('X-Amz-SignedHeaders'))
+    expect(issued.searchParams.get('X-Amz-Signature')).toBe(referenceURL.searchParams.get('X-Amz-Signature'))
+  })
+
+  it('produces a different signature for a different admitted size', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-02T09:15:00Z'))
+    const target = new R2PresignedUploadTarget(options)
+    const admitted = new URL((await target.prepare(upload)).url)
+    const larger = new URL((await target.prepare({ ...upload, size: upload.size + 1 })).url)
+
+    expect(larger.searchParams.get('X-Amz-Signature')).not.toBe(admitted.searchParams.get('X-Amz-Signature'))
   })
 
   it('honours a custom lifetime and a jurisdiction endpoint', async () => {

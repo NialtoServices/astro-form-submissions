@@ -37,11 +37,12 @@ export interface R2PresignedUploadTargetOptions {
 /**
  * An {@link UploadTarget} that presigns a PUT straight to an R2 bucket through its S3-compatible API,
  * so file bytes never pass through the Worker. The URL is bound to the object key and expires; its
- * content-type and filename metadata headers are signed, so the upload must carry exactly the values the
- * route admitted.
+ * content-type, content-length and filename metadata headers are signed, so the upload must carry exactly
+ * the type, size and name the route admitted. It is also single-write (`If-None-Match: *`), so an object
+ * can't be replaced once stored.
  *
  * The browser uploads cross-origin, so the bucket needs a CORS rule allowing `PUT` from the site's
- * origins with the `Content-Type` and `x-amz-meta-filename-uri` headers.
+ * origins with the `Content-Type`, `If-None-Match` and `x-amz-meta-filename-uri` headers.
  */
 export class R2PresignedUploadTarget implements UploadTarget {
   private readonly endpoint: URL
@@ -70,15 +71,19 @@ export class R2PresignedUploadTarget implements UploadTarget {
     objectURL.pathname = `/${this.options.bucket}/${this.options.prefix ?? ''}${upload.objectKey}`
 
     // Header values must be ASCII, so the filename travels percent-encoded; R2Storage decodes it on download.
+    // `If-None-Match: *` makes the URL single-write, so an object can't be replaced after it was verified.
     const headers = {
       'Content-Type': upload.contentType,
+      'If-None-Match': '*',
       'x-amz-meta-filename-uri': encodeURIComponent(upload.filename)
     }
 
+    // The browser sets Content-Length itself and refuses a script-set one, so it is signed but not
+    // returned: R2 then refuses any body whose length differs from the admitted size.
     const url = await presignURL({
       method: 'PUT',
       url: objectURL,
-      headers,
+      headers: { ...headers, 'Content-Length': String(upload.size) },
       accessKeyId: this.options.accessKeyId,
       secretAccessKey: this.options.secretAccessKey,
       region: 'auto',

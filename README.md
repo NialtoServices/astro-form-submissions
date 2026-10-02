@@ -936,7 +936,7 @@ and give the bucket a CORS rule for the site's origins:
   {
     "AllowedOrigins": ["https://example.com"],
     "AllowedMethods": ["PUT"],
-    "AllowedHeaders": ["Content-Type", "x-amz-meta-filename-uri"],
+    "AllowedHeaders": ["Content-Type", "If-None-Match", "x-amz-meta-filename-uri"],
     "MaxAgeSeconds": 3600
   }
 ]
@@ -951,9 +951,11 @@ needs that origin in `connect-src`. The filename travels percent-encoded in `x-a
 - **Receipts, upload grants and download links are separate kinds of token.** All three are signed
   with the secret you pass, but each verifier accepts only its own kind, so none can stand in for
   another. Receipts last an hour by default (`receiptTtlSeconds`), and upload URLs 15 minutes.
-- **A sender can replace their own upload until its URL expires.** The type check happens when the form
-  is submitted, so a file overwritten afterwards isn't re-checked. Downloads are always served as
-  attachments with `nosniff`, as for `FileUploads`.
+- **A presigned URL stores exactly one object of exactly the admitted size.** Its `Content-Length` is
+  signed, so R2 refuses any other size, and it carries `If-None-Match: *`, so a stored object can't be
+  replaced. Through `WorkerUploadTarget`, a sender can replace their own upload with another of the same
+  size until the grant expires; the type check happens when the form is submitted, so such a file isn't
+  re-checked. Downloads are always served as attachments with `nosniff`, as for `FileUploads`.
 - **Abandoned uploads** — files uploaded for a form that was never submitted, or behind a receipt that
   failed verification — are left to the bucket's lifecycle rule, which is already required (see above).
 - **A dropped or quarantined request is granted nothing**, silently: the upload route answers
