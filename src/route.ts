@@ -337,6 +337,7 @@ export function createFormRoute<
       return jsonOk()
     } catch (error) {
       await report(error, 'unexpected')
+
       // An unexpected throw after enrichment acquired resources that no exposing delivery kept must not
       // strand them. The per-enricher paths handle their own; `runRollbacks` drains, so this is a no-op
       // once they have already run.

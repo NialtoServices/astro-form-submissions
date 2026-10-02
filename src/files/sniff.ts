@@ -118,17 +118,20 @@ function ftypBrandsIncludeAny(brands: string[], allowed: string[]): boolean {
 export const IMAGE_TYPES: FileMatcher[] = [
   {
     contentType: 'image/avif',
+
     // A conformant AVIF must declare 'avif' (still) or 'avis' (sequence), so their absence is decisive. The registered
     // `image/avif` covers sequences too, hence no separate matcher for 'avis'.
     test: (bytes) => ftypBrandsIncludeAny(ftypBrands(bytes), ['avif', 'avis'])
   },
   {
     contentType: 'image/gif',
+
     // Those are the only two versions ever published, so matching the full signature costs nothing over 'GIF8'.
     test: (bytes) => hasSignature(bytes, 'GIF87a') || hasSignature(bytes, 'GIF89a')
   },
   {
     contentType: 'image/heic',
+
     // Per IANA's `image/heic` registration, the subtype applies only to files declaring 'heic', 'heix', 'heim' or
     // 'heis'. Excluded on purpose: 'mif1'/'msf1' are HEIF's structural (container, not codec) brands that every
     // conformant AVIF also declares, so a file carrying only those is `image/heif`, whose codec the header doesn't
@@ -140,18 +143,21 @@ export const IMAGE_TYPES: FileMatcher[] = [
   },
   {
     contentType: 'image/jpeg',
+
     // \xff\xd8 is the SOI marker; the trailing \xff is the lead byte of whichever marker follows, and rules out a bare
     // two-byte SOI with nothing after it.
     test: (bytes) => hasSignature(bytes, '\xff\xd8\xff')
   },
   {
     contentType: 'image/png',
+
     // The bytes around 'PNG' are a deliberate corruption trap: the high bit catches 7-bit-stripping transports, and the
     // \r\n / \n pair catches CRLF translation.
     test: (bytes) => hasSignature(bytes, '\x89PNG\r\n\x1a\n')
   },
   {
     contentType: 'image/webp',
+
     // Bytes 4–7 are the RIFF chunk size, hence the gap.
     test: (bytes) => hasSignature(bytes, 'RIFF') && hasSignature(bytes, 'WEBP', 8)
   }
@@ -161,6 +167,7 @@ export const IMAGE_TYPES: FileMatcher[] = [
 export const DOCUMENT_TYPES: FileMatcher[] = [
   {
     contentType: 'application/pdf',
+
     // Readers tolerate junk before the header; the allow-list deliberately does not.
     test: (bytes) => hasSignature(bytes, '%PDF-')
   }

@@ -41,6 +41,7 @@ const server = setupServer(
     if (!body.get('secret') || !body.get('response')) {
       return HttpResponse.json({ success: false, 'error-codes': ['missing-input-secret'] }, { status: 400 })
     }
+
     return HttpResponse.json(siteverifyResponse)
   }),
   http.post(POSTMARK_URL, async ({ request }) => {

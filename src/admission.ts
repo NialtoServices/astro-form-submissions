@@ -163,6 +163,7 @@ export async function admit<S extends SchemaInput>(
     await report(new Error('Schema output must be an object'), 'unexpected')
     return fail(ERRORS.unavailable, formData)
   }
+
   const submission = value as Submission<S>
 
   const inspectionContext: InspectionContext<Submission<S>> = {

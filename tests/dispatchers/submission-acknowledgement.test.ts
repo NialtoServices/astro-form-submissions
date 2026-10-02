@@ -21,6 +21,7 @@ describe('submissionAcknowledgementTemplates', () => {
 
     expect(templates.text(submission, CTX)).toContain("We've received your submission")
     expect(templates.html(submission, CTX)).toContain('Thank you')
+
     // The form name appears in the meta line, not as the title.
     expect(templates.text(submission, CTX)).toContain('Contact form')
   })

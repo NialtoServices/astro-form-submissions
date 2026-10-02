@@ -44,6 +44,7 @@ const contactSchema = standardSchema<ContactSubmission>((value) => {
     issues.push({ message: 'Please enter a valid email address.', path: ['email'] })
   }
   if (issues.length > 0) return { issues }
+
   return { value: { name: value.name, email: value.email, message: value.message } as ContactSubmission }
 })
 
@@ -525,6 +526,7 @@ describe('createFormRoute enrichers', () => {
       enrich: vi.fn(async () => {
         if (options.throws) throw new Error('enricher blew up')
         if (options.reject) return { reject: options.reject }
+
         return { provide: options.provide, rollback: async () => void rolledBack.push(label) }
       })
     }
