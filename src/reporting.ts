@@ -12,18 +12,25 @@ export type ErrorReporter = (error: unknown, context: { stage: FormErrorStage })
 // (one set `code = 'recipient=ada@example.com'`), so anything outside this is dropped.
 const SAFE_ERROR_CODE = /^[A-Za-z0-9_.:-]{1,64}$/
 
+/** Whether a value can be logged as a machine identifier: a number, or a string of {@link SAFE_ERROR_CODE} shape. */
+function isSafeIdentifier(value: unknown): value is number | string {
+  return typeof value === 'number' || (typeof value === 'string' && SAFE_ERROR_CODE.test(value))
+}
+
 /**
  * A PII-safe one-line description of a thrown value for the default reporter: its class, a numeric
- * `status`, and a `code` only when it matches a bounded machine-identifier — never its message or body,
- * and never a free-text code, since those can quote submission data.
+ * `status`, a `code` and `destination` only when they match a bounded machine-identifier, and the class
+ * of its `cause` — never a message or body, and never free text, since those can quote submission data.
  */
 function summarizeError(error: unknown): string {
   if (!(error instanceof Error)) return `non-error ${typeof error}`
 
   const parts = [error.name]
-  const { code, status } = error as { code?: unknown; status?: unknown }
-  if (typeof code === 'number' || (typeof code === 'string' && SAFE_ERROR_CODE.test(code))) parts.push(`code=${code}`)
+  const { code, status, destination } = error as { code?: unknown; status?: unknown; destination?: unknown }
+  if (isSafeIdentifier(destination)) parts.push(`destination=${destination}`)
+  if (isSafeIdentifier(code)) parts.push(`code=${code}`)
   if (typeof status === 'number') parts.push(`status=${status}`)
+  if (error.cause instanceof Error) parts.push(`cause=${error.cause.name}`)
   return parts.join(' ')
 }
 

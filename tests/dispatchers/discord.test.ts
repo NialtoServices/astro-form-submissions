@@ -1,3 +1,4 @@
+import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 import { DiscordDispatcher, type DiscordFieldInput } from '#dispatchers/discord.js'
 import type { FormSubmission } from '#pipeline.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -169,5 +170,19 @@ describe('DiscordDispatcher dispatcher contract', () => {
     // The status is a property (so the PII-safe reporter can log it), and the URL never appears.
     expect((error as { status?: unknown }).status).toBe(429)
     expect(String(error)).not.toContain('discord.test')
+  })
+})
+
+describe('DiscordDispatcher when the webhook cannot be reached', () => {
+  it('names Discord as the destination and keeps the failure as the cause', async () => {
+    const networkFailure = new TypeError('fetch failed')
+    stubFetch(() => Promise.reject(networkFailure))
+    const dispatcher = new DiscordDispatcher({ webhookUrl: 'https://discord.test/hook', fields: [] })
+
+    const failure = await dispatcher.dispatch({}, dispatchContext()).catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(DestinationUnreachableError)
+    expect(failure).toMatchObject({ destination: 'Discord', cause: networkFailure })
+    expect(String(failure)).not.toContain('discord.test')
   })
 })

@@ -80,6 +80,7 @@ export {
 } from '#uploads/index.js'
 
 export {
+  DestinationUnreachableError,
   DiscordDispatcher,
   EmailDispatcher,
   EmailRecipientError,

@@ -1,4 +1,5 @@
 export type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
+export { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 
 export {
   EmailDispatcher,

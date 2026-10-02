@@ -1,3 +1,4 @@
+import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 import type { EmailMessage } from '#dispatchers/email.js'
 import { PostmarkDeliveryError, PostmarkTransport } from '#dispatchers/postmark.js'
 import { delay, http, HttpResponse } from 'msw'
@@ -82,7 +83,24 @@ describe('PostmarkTransport', () => {
         return HttpResponse.json({ ErrorCode: 0, Message: 'OK' })
       })
     )
-    await expect(new PostmarkTransport({ token: 'tok', timeoutSeconds: 0.05 }).deliver(message)).rejects.toThrow()
+    const failure = await new PostmarkTransport({ token: 'tok', timeoutSeconds: 0.05 })
+      .deliver(message)
+      .catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(DestinationUnreachableError)
+    expect(failure).toMatchObject({ destination: 'Postmark', cause: { name: 'AbortError' } })
+  })
+
+  it("exposes Postmark's refusal code as `code`", async () => {
+    server.use(
+      http.post(POSTMARK_URL, () =>
+        HttpResponse.json({ ErrorCode: 406, Message: 'Inactive recipient' }, { status: 422 })
+      )
+    )
+    const failure = await new PostmarkTransport({ token: 'tok' }).deliver(message).catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(PostmarkDeliveryError)
+    expect(failure).toMatchObject({ code: 406, status: 422 })
   })
 })
 

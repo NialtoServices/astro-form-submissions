@@ -1,3 +1,4 @@
+import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 import type { EmailMessage, EmailTransport } from '#dispatchers/email.js'
 
 /** Postmark's single-message send endpoint. */
@@ -33,6 +34,17 @@ export class PostmarkDeliveryError extends Error {
     super(`Postmark refused the message (${detail})${postmarkMessage ? `: ${postmarkMessage}` : ''}`)
     this.name = 'PostmarkDeliveryError'
   }
+
+  // MARK: - Reporting
+
+  /**
+   * Postmark's refusal code under the conventional `code` name, which the default reporter logs. Postmark
+   * answers 422 for nearly every refusal, so the status alone can't tell an inactive recipient from a bad
+   * sender signature.
+   */
+  get code(): number | undefined {
+    return this.errorCode
+  }
 }
 
 /**
@@ -60,6 +72,7 @@ export class PostmarkTransport implements EmailTransport {
    *
    * @param message - The complete email message to deliver.
    * @throws {PostmarkDeliveryError} When Postmark refuses the message.
+   * @throws {DestinationUnreachableError} When Postmark can't be reached or doesn't answer in time.
    */
   async deliver(message: EmailMessage): Promise<void> {
     const controller = new AbortController()
@@ -85,6 +98,8 @@ export class PostmarkTransport implements EmailTransport {
         }),
         signal: controller.signal
       })
+    } catch (error) {
+      throw new DestinationUnreachableError('Postmark', { cause: error })
     } finally {
       clearTimeout(timeout)
     }

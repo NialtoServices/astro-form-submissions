@@ -1,3 +1,4 @@
+import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
 import { resolveField, type FieldSpec } from '#dispatchers/fields.js'
 import type { FormSubmission } from '#pipeline.js'
@@ -191,6 +192,8 @@ export class DiscordDispatcher<E extends FormSubmission = FormSubmission> implem
         body: JSON.stringify({ embeds: [embed] }),
         signal: controller.signal
       })
+    } catch (error) {
+      throw new DestinationUnreachableError('Discord', { cause: error })
     } finally {
       clearTimeout(timeout)
     }
