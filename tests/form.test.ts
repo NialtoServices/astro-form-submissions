@@ -547,22 +547,35 @@ describe('form script field errors', () => {
     resolveSecond!(jsonResponse({ ok: true }))
   })
 
-  it('removes an aria-describedby it added once the field recovers, but keeps an author-set one', async () => {
+  it('links the error slot after an author-set aria-describedby, and removes only its own id on recovery', async () => {
     stubFetch(async () => validationResponse())
     const { email, message, submit } = mountFieldsForm({ slots: true })
     message.setAttribute('aria-describedby', 'author-hint')
 
     submit()
     await vi.waitFor(() => expect(email.getAttribute('aria-describedby')).toBe('contact-email-error'))
-    // The author's describedby is never overwritten by the slot wiring.
-    expect(message.getAttribute('aria-describedby')).toBe('author-hint')
+
+    // The hint is kept and the error is read after it, so a screen reader hears both.
+    expect(message.getAttribute('aria-describedby')).toBe('author-hint contact-message-error')
 
     email.dispatchEvent(new Event('input', { bubbles: true }))
     message.dispatchEvent(new Event('input', { bubbles: true }))
 
-    // The script removes only what it added; the author-authored value survives.
     expect(email.getAttribute('aria-describedby')).toBeNull()
     expect(message.getAttribute('aria-describedby')).toBe('author-hint')
+  })
+
+  it('does not duplicate a slot id the author already listed, nor remove it on recovery', async () => {
+    stubFetch(async () => validationResponse())
+    const { email, submit } = mountFieldsForm({ slots: true })
+    email.setAttribute('aria-describedby', 'contact-email-error')
+
+    submit()
+    await vi.waitFor(() => expect(email.getAttribute('aria-invalid')).toBe('true'))
+    expect(email.getAttribute('aria-describedby')).toBe('contact-email-error')
+
+    email.dispatchEvent(new Event('input', { bubbles: true }))
+    expect(email.getAttribute('aria-describedby')).toBe('contact-email-error')
   })
 })
 

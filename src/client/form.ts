@@ -91,15 +91,36 @@ function readFieldErrors(result: unknown): Record<string, string> {
 
 // MARK: - Field-error presentation
 
-// Marks an input whose `aria-describedby` the script itself added, so it can remove exactly that on
-// clear without disturbing an author-authored value.
+// Holds the slot id the script added to an input's `aria-describedby`, so clearing removes exactly that
+// token and leaves any author-set ones (a hint, say) in place.
 const DESCRIBED_MARKER = 'astroFormDescribed'
 
-/** Drop the `aria-describedby` the script added to an input (leaving any author-set value intact). */
-function clearDescribedBy(inputElement: HTMLElement): void {
-  if (inputElement.dataset[DESCRIBED_MARKER] === undefined) return
+/** The ids in an input's `aria-describedby`. */
+function describedByTokens(inputElement: HTMLElement): string[] {
+  return (inputElement.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean)
+}
 
-  inputElement.removeAttribute('aria-describedby')
+/** Add an error slot's id to an input's `aria-describedby`, after any ids the author set. */
+function addDescribedBy(inputElement: HTMLElement, slotId: string): void {
+  const tokens = describedByTokens(inputElement)
+  if (tokens.includes(slotId)) return
+
+  inputElement.setAttribute('aria-describedby', [...tokens, slotId].join(' '))
+  inputElement.dataset[DESCRIBED_MARKER] = slotId
+}
+
+/** Drop the slot id the script added to an input's `aria-describedby`, leaving any author-set ids intact. */
+function clearDescribedBy(inputElement: HTMLElement): void {
+  const slotId = inputElement.dataset[DESCRIBED_MARKER]
+  if (slotId === undefined) return
+
+  const tokens = describedByTokens(inputElement).filter((token) => token !== slotId)
+  if (tokens.length > 0) {
+    inputElement.setAttribute('aria-describedby', tokens.join(' '))
+  } else {
+    inputElement.removeAttribute('aria-describedby')
+  }
+
   delete inputElement.dataset[DESCRIBED_MARKER]
 }
 
@@ -124,10 +145,7 @@ function applyFieldErrors(formElement: HTMLFormElement, fieldErrors: Record<stri
 
     slotElement.textContent = message
     slotElement.hidden = false
-    if (slotElement.id && !inputElement.getAttribute('aria-describedby')) {
-      inputElement.setAttribute('aria-describedby', slotElement.id)
-      inputElement.dataset[DESCRIBED_MARKER] = ''
-    }
+    if (slotElement.id) addDescribedBy(inputElement, slotElement.id)
   }
   return firstInvalidElement
 }

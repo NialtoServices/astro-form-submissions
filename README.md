@@ -1185,9 +1185,9 @@ client fills it with a list of every field's message, each linking to its field,
 ```
 
 Mix freely — inline, central list, both, or neither. Field marks (and both surfaces) clear on the
-next submit and per-field as the user edits a flagged field (progressive recovery); an
-`aria-describedby` the client added is removed on recovery, while an author-authored one is left
-intact.
+next submit and per-field as the user edits a flagged field (progressive recovery). The client adds
+the slot's id after any ids already in the field's `aria-describedby` (a hint, say), so a screen reader
+reads both, and removes only that id on recovery.
 
 A site wanting something fully bespoke can skip all three and build its own UI from the
 `astro-form:error` event (`detail.error`, `detail.fieldErrors`).
