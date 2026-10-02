@@ -1,6 +1,7 @@
 import { attachmentDisposition } from '#content-disposition.js'
-import { assertValidSigningSecret, verifyFileToken } from '#files/signing.js'
+import { verifyFileToken } from '#files/signing.js'
 import { type FileStorage } from '#storage/storage.js'
+import { assertValidSigningSecret, tokenFromPathSegment } from '#tokens.js'
 import { type APIRoute } from 'astro'
 
 // Used only when a custom store returns no stored metadata; the bundled storage adapter always echoes the real values.
@@ -39,7 +40,7 @@ export function createFileRoute(config: CreateFileRouteConfig): APIRoute {
   return async ({ params }) => {
     // The link swapped the JWT's `.` separators to `~` so the path segment stays dot-free under
     // `trailingSlash: 'always'` (Astro #16140); swap them back to reconstruct the token.
-    const token = (params[tokenParam] ?? '').replaceAll('~', '.')
+    const token = tokenFromPathSegment(params[tokenParam] ?? '')
     const payload = await verifyFileToken(token, config.secret)
     if (!payload) return new Response('Not found', { status: 404 })
 
