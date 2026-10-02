@@ -47,6 +47,12 @@ describe('RateLimitGuard', () => {
     expect(limit).toHaveBeenCalledWith({ key: '9.9.9.9' })
   })
 
+  it('keys an IPv6 client by its /64 by default', async () => {
+    const { limiter, limit } = stubLimiter({ success: true })
+    await new RateLimitGuard({ limiter }).guard(guardContext('2001:db8:1:2:aaaa:bbbb:cccc:dddd'))
+    expect(limit).toHaveBeenCalledWith({ key: '2001:db8:1:2::/64' })
+  })
+
   it('fails open without touching the limiter when there is no address and no custom key', async () => {
     const { limiter, limit } = stubLimiter({ success: true })
     const report = vi.fn()

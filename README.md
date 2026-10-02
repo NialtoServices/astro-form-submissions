@@ -357,7 +357,10 @@ One ships with the package:
   option — a fixed-window counter that needs no external service, but is **per-isolate and
   non-durable**, so it is correct only for local dev or a single long-lived instance (multi-instance/serverless deployments
   need a shared store — a Cloudflare rate-limit binding, Redis, Upstash, or a Durable Object — since
-  each isolate otherwise keeps its own counts). It keys by client address by default. **Fails open**: a
+  each isolate otherwise keeps its own counts). It keys by client address by default, grouping an IPv6
+  address by its /64 network (a host can send from any address in its /64, so a per-address key would
+  never throttle it) and an IPv4-mapped IPv6 address by its IPv4 address. A custom `key` can keep that
+  grouping with the exported `rateLimitKeyForAddress(address)`. **Fails open**: a
   limiter outage never blocks a submission (and a Cloudflare binding is simply a no-op under `wrangler
 dev`, where `InMemoryRateLimiter` still throttles). With the default key and no resolvable client
   address it also fails open (rather than throttle every address-less caller against one shared bucket)

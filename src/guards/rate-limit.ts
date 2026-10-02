@@ -1,5 +1,6 @@
 import { formError } from '#errors.js'
 import type { Guard, GuardContext } from '#guards/guard.js'
+import { rateLimitKeyForAddress } from '#guards/rate-limit-key.js'
 import type { Verdict } from '#pipeline.js'
 
 /**
@@ -25,8 +26,9 @@ export interface RateLimitGuardOptions {
   limiter: RateLimiter
 
   /**
-   * The throttle key for a request. Default: the client address; with no custom key and no resolvable
-   * address, the guard fails open rather than share one bucket across address-less callers.
+   * The throttle key for a request. Default: the client address, with an IPv6 address grouped by its
+   * /64 network (see {@link rateLimitKeyForAddress}); with no custom key and no resolvable address, the
+   * guard fails open rather than share one bucket across address-less callers.
    */
   key?: (context: GuardContext) => string
 }
@@ -58,7 +60,12 @@ export class RateLimitGuard implements Guard {
   // MARK: - Guard API
 
   async guard(context: GuardContext): Promise<Verdict> {
-    const key = this.options.key ? this.options.key(context) : context.clientAddress
+    const { clientAddress } = context
+    const key = this.options.key
+      ? this.options.key(context)
+      : clientAddress === undefined
+        ? undefined
+        : rateLimitKeyForAddress(clientAddress)
 
     // No per-client key (no custom `key`, no resolvable address) → fail open rather than throttle every
     // such caller against one shared bucket, which would let a single one exhaust everyone's quota.

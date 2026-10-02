@@ -1,6 +1,7 @@
 export {
   InMemoryRateLimiter,
   RateLimitGuard,
+  rateLimitKeyForAddress,
   type Guard,
   type GuardContext,
   type InMemoryRateLimiterOptions,
