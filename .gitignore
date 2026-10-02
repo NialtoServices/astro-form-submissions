@@ -17,11 +17,15 @@ dist/
 # Claude Code session state
 .claude/
 
-# Codebase-audit output
+# Codebase-audit output, and audit reports from other tools
 audit/
+AUDIT-*.md
 
 # Generated from the .mustache sources at build time
 src/dispatchers/*-sources.ts
 
 # Agent implementation plans, kept local
 docs/superpowers/
+
+# Local agent scratch, never part of the package
+.superpowers/

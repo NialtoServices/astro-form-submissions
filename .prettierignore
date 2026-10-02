@@ -1,13 +1,2 @@
-node_modules/
-dist/
+# Prettier already skips everything in .gitignore; this lists only tracked files it mustn't touch.
 pnpm-lock.yaml
-
-# Generated audit artifacts and external model reports
-audit/
-AUDIT-*.md
-
-# Generated from the .mustache sources at build time
-src/dispatchers/*-sources.ts
-
-# Local agent scratch (git-ignored), never part of the package
-.superpowers/
