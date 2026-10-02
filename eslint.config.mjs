@@ -22,6 +22,13 @@ export default tseslint.config(
     }
   },
   {
+    // Library code narrows with guards; tests may assert on values they have just set up.
+    files: ['src/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-non-null-assertion': 'error'
+    }
+  },
+  {
     // Client/server boundary: src/client/** ships in the browser bundle, so it must never pull in
     // Node builtins or reach back into the server modules that live above it in src/.
     files: ['src/client/**/*.ts'],

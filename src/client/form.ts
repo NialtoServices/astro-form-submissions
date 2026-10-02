@@ -533,7 +533,9 @@ async function submitWithUploads(
   const totalBytes = files.reduce((sum, file) => sum + file.size, 0)
   let bytesBefore = 0
   for (const [index, upload] of granted.entries()) {
-    const file = files[index]!
+    const file = files[index]
+    if (!file) break
+
     const onProgress = (loaded: number) => {
       const percent = totalBytes > 0 ? Math.min(100, Math.floor(((bytesBefore + loaded) * 100) / totalBytes)) : 100
       if (messages.uploading) {

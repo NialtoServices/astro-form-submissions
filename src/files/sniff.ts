@@ -58,7 +58,7 @@ function hasSignature(bytes: Uint8Array, signature: string, offset = 0): boolean
 function fourCCAt(bytes: Uint8Array, offset: number): string | null {
   if (offset + 4 > bytes.length) return null
 
-  return String.fromCharCode(bytes[offset]!, bytes[offset + 1]!, bytes[offset + 2]!, bytes[offset + 3]!)
+  return String.fromCharCode(...bytes.subarray(offset, offset + 4))
 }
 
 /**
@@ -78,7 +78,7 @@ function ftypBrands(bytes: Uint8Array): string[] {
   if (!hasSignature(bytes, 'ftyp', 4)) return []
 
   // Indices 0–3 are present: the check above passed, and a Uint8Array is contiguous.
-  const size = ((bytes[0]! << 24) >>> 0) + (bytes[1]! << 16) + (bytes[2]! << 8) + bytes[3]!
+  const size = new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0)
 
   // size === 1 means a 64-bit largesize occupies offsets 8–15 and shifts the brands; size === 0 means "box runs to EOF".
   // Neither is legal for `ftyp`, and misparsing one would read brands from the wrong offsets, so decline to guess.
