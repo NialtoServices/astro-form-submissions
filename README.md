@@ -277,7 +277,7 @@ Derived and renamed fields are the schema's `.transform()` (e.g. a single `name`
 `last_name`); a validation issue's path still points at the original form field, so per-field errors
 attribute correctly even after a transform reshapes the payload.
 
-For per-request needs like localized copy, pass a **factory** instead of a value — it receives the
+For per-request needs like localised copy, pass a **factory** instead of a value — it receives the
 form data and returns the validator:
 
 ```ts
@@ -306,7 +306,7 @@ failure of one field or many; the detail lives in `fieldErrors`. Override its co
 
 The site's `errors` option overrides copy **by key** for the toolkit-owned errors above — one hook
 for tone and i18n, whichever component raised the error. It is either a static map, or a **resolver**
-for localization that reads the request:
+for localisation that reads the request:
 
 ```ts
 // Static: substitute copy per key.
@@ -319,7 +319,7 @@ errors: (key, _default, { data }) => strings(data?.get('lang')).errors[key]
 ```
 
 The resolver applies uniformly to every toolkit-owned error (route / Turnstile / uploads /
-`validationFailed`) — **not** to your schema's own field messages (localize those inside the schema,
+`validationFailed`) — **not** to your schema's own field messages (localise those inside the schema,
 via a factory). One caveat: pre-body guard errors (rate-limit) reject before the body is
 read, so the resolver receives no `data` and falls back to default-locale copy.
 
@@ -630,7 +630,7 @@ a starting point for writing your own; the published package carries them compil
 
 **Translating the copy.** Both built-in templates (this one and the acknowledgement below) take a
 `copy` option that overrides their fixed UI text — the eyebrow, title (`heading`), footer note, and
-the `Attachments` label — so a localized site reuses the **same HTML shell** in another
+the `Attachments` label — so a localised site reuses the **same HTML shell** in another
 language. The footer links the site URL (`https://example.com/`) on its own line beneath the note, with
 no label to translate. The dynamic content (fields, subject, and the acknowledgement's `greeting`/`message`) is
 already yours; `copy` covers the chrome:
