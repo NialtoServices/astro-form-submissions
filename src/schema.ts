@@ -1,6 +1,5 @@
 import { type StandardSchemaV1 } from '@standard-schema/spec'
 import { formError, resolveCopy, type FormError, type FormErrors, type ValidationFailure } from '#errors.js'
-import { getField } from '#form-data.js'
 import { type FormSubmission } from '#pipeline.js'
 
 // A form field literally named `__proto__` (etc.) must not reach the validated object's prototype;
@@ -94,12 +93,20 @@ export function resolveValidator(schema: SchemaInput, context: SchemaContext): S
  */
 export function formDataToObject(data: FormData): Record<string, string> {
   const object: Record<string, string> = Object.create(null)
-  for (const key of new Set(data.keys())) {
-    if (DANGEROUS_KEYS.has(key)) continue
 
-    const value = getField(data, key)
-    if (value !== undefined) object[key] = value
+  // One pass over the entries: `data.get(key)` scans every entry, so calling it per distinct name is
+  // quadratic, and this runs on unauthenticated bodies before any inspector.
+  const seen = new Set<string>()
+  for (const [key, value] of data) {
+    if (seen.has(key)) continue
+
+    seen.add(key)
+    if (DANGEROUS_KEYS.has(key) || typeof value !== 'string') continue
+
+    const trimmed = value.trim()
+    if (trimmed !== '') object[key] = trimmed
   }
+
   return object
 }
 
