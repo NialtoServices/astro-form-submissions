@@ -70,9 +70,9 @@ function isSafeURL(value: string): boolean {
 }
 
 /**
- * Normalises an acquired attachments resource (`context.resources[attachTo]`) to a `{ name, url }[]`,
+ * Normalises an acquired attachments resource (`context.resources[attachTo]`) to an `AttachmentView[]`,
  * or `undefined` when empty/absent. A link with a missing or unsafe (non-http) url is dropped — the
- * templates escape both fields, so a hostile filename or url can neither break the `href` attribute nor
+ * templates escape every field, so a hostile filename or url can neither break the `href` attribute nor
  * smuggle an executable scheme.
  */
 export function resolveAttachments(value: unknown): AttachmentView[] | undefined {

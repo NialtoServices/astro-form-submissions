@@ -370,7 +370,7 @@ describe('createFormRoute', () => {
     }
   })
 
-  it('drops a free-text error code carrying submission data, but keeps a bounded machine code (PRV-001)', async () => {
+  it('drops a free-text error code carrying submission data, but keeps a bounded machine code', async () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       const piiCode = stubDispatcher({
@@ -589,7 +589,7 @@ describe('createFormRoute enrichers', () => {
     expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'enrichment' })
   })
 
-  it('rolls back a prior enricher when a later result throws during interpretation (RES-001)', async () => {
+  it('rolls back a prior enricher when a later result throws during interpretation', async () => {
     const onError = vi.fn()
     const first = stubEnricher({ provide: { files: [] } })
     // A hostile result whose `provide` getter throws while the route reads it — this interpretation runs

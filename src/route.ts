@@ -174,8 +174,8 @@ export function createFormRoute<
     // for a submission render the same time.
     const submittedAt = new Date()
 
-    // `data` reaches a resolver override so it can localise; pre-body guard failures pass none, so
-    // their copy falls back to the default locale (there's no body to read a `lang` field from yet).
+    // `data` reaches a resolver override so it can localise; it is absent only when admission threw before
+    // the body was read, and that copy falls back to the default locale.
     const fail = (error: FormError, data?: FormData) => jsonFormError(error, config.errors, { data })
 
     // Context reporters fire without awaiting; collect their promises and drain them before the

@@ -55,7 +55,7 @@ describe('createFileRoute', () => {
     expect(response.headers.get('Content-Security-Policy')).toBe("sandbox; default-src 'none'")
   })
 
-  it('forces an attachment even when a custom store serves an HTML content-type (API-002)', async () => {
+  it('forces an attachment even when a custom store serves an HTML content-type', async () => {
     // A conforming custom adapter can only supply a filename/content-type, never a disposition string,
     // so it can't undo the download-only guarantee by asking for `inline`.
     const { storage } = stubStorage({ body: new ReadableStream(), contentType: 'text/html', filename: 'evil.html' })

@@ -109,7 +109,7 @@ describe('sniffType', () => {
       expect(await sniffType(fileWithHeader(undersized))).toBeNull()
     })
 
-    it('declines a physically truncated ftyp box that ends right after the major brand (COR-002)', async () => {
+    it('declines a physically truncated ftyp box that ends right after the major brand', async () => {
       // Declares a 16-byte box but only 12 bytes exist (no minor version) — a truncated container.
       const truncatedAvif = [0x00, 0x00, 0x00, 0x10, ...ascii('ftyp'), ...ascii('avif')]
       const truncatedHeic = [0x00, 0x00, 0x00, 0x10, ...ascii('ftyp'), ...ascii('heic')]

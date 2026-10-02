@@ -5,8 +5,8 @@ import { describe, expectTypeOf, it } from 'vitest'
 
 // `Submission<S>` must expose the schema's real key union, not a widened `string | number`, so a
 // `fields` list (or any `keyof E & string` position) rejects typos. These are compile-time assertions:
-// they run as no-ops but `tsc` (npm run check) enforces every `@ts-expect-error`. Regression guard for
-// the `& FormSubmission` intersection, which widened `keyof` and silently accepted non-existent keys.
+// they run as no-ops but `tsc` (`pnpm check`) enforces every `@ts-expect-error`. Intersecting the
+// submission with `FormSubmission` would widen `keyof` and silently accept keys that don't exist.
 
 type Enquiry = { name: string; email: string; message: string }
 type EnquirySchema = StandardSchemaV1<Record<string, unknown>, Enquiry>

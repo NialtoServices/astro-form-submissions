@@ -544,7 +544,8 @@ async function postForm(binding: FormBinding, url: string, formData: FormData): 
 /**
  * The three-step submission for a form with direct uploads: ask the upload route where each file goes,
  * upload them with progress, then post the form with a receipt per file. Every step's failure ends the
- * attempt; a retry starts again from the first step, since the server deletes a refused submission's files.
+ * attempt; a retry starts again from the first step with fresh grants. Files from a failed attempt are deleted
+ * when the enricher refuses them, and otherwise left to the bucket's lifecycle rule.
  */
 async function submitWithUploads(
   binding: FormBinding,

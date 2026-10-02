@@ -107,7 +107,6 @@ export function submissionNotificationTemplates<
         return {
           ...submission,
 
-          // Computed field `value` functions receive the dispatch context (see {@link resolveFields}).
           fields: resolveFields(options.fields, submission, context),
 
           // Wrapped as `{ items }` so the attachments heading renders once above the list.

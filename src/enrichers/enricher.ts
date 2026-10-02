@@ -45,7 +45,7 @@ export interface EnrichmentContext<E extends FormSubmission = FormSubmission> {
  *   `{ files: [...] }`), which the route merges into `context.resources` for the dispatchers — the
  *   submission itself is never mutated, so it stays exactly the schema's validated input. `rollback`
  *   undoes the acquired resource and is invoked, in reverse order across all enrichers, if a later
- *   enricher or the delivery aggregate fails.
+ *   enricher fails or refuses, or if no delivery that exposes resources succeeds.
  * - `{ reject }` — a clean refusal (e.g. a file failed validation); the client sees the keyed error.
  *
  * `A` is the resource this enricher contributes; the route infers it and hands the dispatchers a

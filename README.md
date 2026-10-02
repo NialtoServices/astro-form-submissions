@@ -895,7 +895,9 @@ submission carry a signed receipt per file:
 3. **`POST` the form route** with a fresh Turnstile token and one `upload` field per receipt. The
    `UploadedFiles` enricher verifies each receipt, confirms the stored object exists at the admitted size,
    sniffs its leading bytes against `accept`, and exposes the same `FileLink[]` as `FileUploads`, with
-   the same rollback. A refused submission deletes the files it referenced, so a retry uploads afresh.
+   the same rollback. A submission the enricher refuses deletes the files it referenced, and a retry
+   uploads afresh; files from an attempt refused earlier (by a guard, say) are left to the bucket's
+   lifecycle rule.
 
 The client script runs all three steps for you (see [Direct uploads in the form](#direct-uploads-in-the-form)).
 

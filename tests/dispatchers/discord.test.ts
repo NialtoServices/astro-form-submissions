@@ -161,7 +161,7 @@ describe('DiscordDispatcher dispatcher contract', () => {
     ).toBe(true)
   })
 
-  it('throws a delivery error carrying the HTTP status when Discord responds non-2xx (OBS-001)', async () => {
+  it('throws a delivery error carrying the HTTP status when Discord responds non-2xx', async () => {
     stubFetch(() => new Response('', { status: 429 }))
     const error = await new DiscordDispatcher({ webhookURL: 'https://discord.test/hook', fields: [] })
       .dispatch(base, dispatchContext())

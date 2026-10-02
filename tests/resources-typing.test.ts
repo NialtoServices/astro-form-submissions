@@ -7,8 +7,8 @@ import { createFormRoute } from '#route.js'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 
 // The resource-threading contract is a compile-time guarantee, so these assertions are the test: they
-// run as no-ops but `tsc` (npm run check) enforces every `@ts-expect-error` and typed assignment. They
-// mirror the two type spikes, including the extra inference hop through the email templates object.
+// run as no-ops but `tsc` (`pnpm check`) enforces every `@ts-expect-error` and typed assignment,
+// including the extra inference hop through the email templates object.
 
 type Enquiry = { name: string; email: string }
 
