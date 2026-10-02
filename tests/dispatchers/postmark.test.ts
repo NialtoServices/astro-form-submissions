@@ -91,6 +91,10 @@ describe('PostmarkTransport', () => {
     expect(failure).toMatchObject({ destination: 'Postmark', cause: { name: 'AbortError' } })
   })
 
+  it.each([Number.NaN, 0, -1])('refuses a `timeoutSeconds` of %s', (timeoutSeconds) => {
+    expect(() => new PostmarkTransport({ token: 'tok', timeoutSeconds })).toThrow('PostmarkTransport `timeoutSeconds`')
+  })
+
   it("exposes Postmark's refusal code as `code`", async () => {
     server.use(
       http.post(POSTMARK_URL, () =>
@@ -113,6 +117,28 @@ describe('PostmarkTransport on the runtime fetch', () => {
 
   afterEach(() => {
     globalThis.fetch = interceptedFetch
+  })
+
+  it('gives up on a refusal whose body stalls, once the timeout passes', async () => {
+    // As the runtime fetch does, aborting the signal errors a body still being read.
+    stubFetch(
+      (_requestURL, requestInit) =>
+        new Response(
+          new ReadableStream({
+            start: (controller) =>
+              requestInit?.signal?.addEventListener('abort', () =>
+                controller.error(new DOMException('This operation was aborted', 'AbortError'))
+              )
+          }),
+          { status: 422 }
+        )
+    )
+    const failure = await new PostmarkTransport({ token: 'tok', timeoutSeconds: 0.05 })
+      .deliver(message)
+      .catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(PostmarkDeliveryError)
+    expect(failure).toMatchObject({ status: 422 })
   })
 
   // Cloudflare Workers provides only fetch, so that is the path a deployed site takes. The request is

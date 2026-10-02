@@ -1,5 +1,6 @@
 import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 import type { EmailMessage, EmailTransport } from '#dispatchers/email.js'
+import { assertPositiveNumberOption } from '#numeric-options.js'
 
 /** Postmark's single-message send endpoint. */
 const POSTMARK_EMAIL_URL = 'https://api.postmarkapp.com/email'
@@ -63,7 +64,9 @@ export class PostmarkTransport implements EmailTransport {
    *
    * @param options - The transport options, including the token, message stream, and timeout.
    */
-  constructor(private readonly options: PostmarkTransportOptions) {}
+  constructor(private readonly options: PostmarkTransportOptions) {
+    assertPositiveNumberOption('PostmarkTransport `timeoutSeconds`', options.timeoutSeconds)
+  }
 
   // MARK: - Transport API
 
@@ -78,6 +81,7 @@ export class PostmarkTransport implements EmailTransport {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), (this.options.timeoutSeconds ?? 10) * 1000)
     let response: Response
+    let refusal: PostmarkRefusal | undefined
 
     try {
       response = await fetch(POSTMARK_EMAIL_URL, {
@@ -98,6 +102,9 @@ export class PostmarkTransport implements EmailTransport {
         }),
         signal: controller.signal
       })
+
+      // The timeout also bounds the error body, so a refusal whose body stalls can't hang the delivery.
+      if (!response.ok) refusal = await readRefusal(response)
     } catch (error) {
       throw new DestinationUnreachableError('Postmark', { cause: error })
     } finally {
@@ -106,7 +113,6 @@ export class PostmarkTransport implements EmailTransport {
 
     if (response.ok) return
 
-    const refusal = await readRefusal(response)
     throw new PostmarkDeliveryError(response.status, refusal?.ErrorCode, refusal?.Message)
   }
 }
