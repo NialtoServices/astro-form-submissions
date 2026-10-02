@@ -258,6 +258,21 @@ describe('form script — direct uploads', () => {
     expect(sent).toHaveLength(0)
   })
 
+  it('leaves a disabled file input’s files out, as a form leaves out any disabled control', async () => {
+    const sent = installFakeXHR()
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { fileInput, status, submit } = mountForm({ turnstile: false })
+    choose(fileInput, [photo])
+    fileInput.disabled = true
+
+    submit()
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
+
+    expect(fetchSpy).toHaveBeenCalledOnce()
+    expect(String(fetchSpy.mock.calls[0]![0])).not.toContain('/uploads/')
+    expect(sent).toHaveLength(0)
+  })
+
   it('shows the upload route’s field errors without uploading anything', async () => {
     const sent = installFakeXHR()
     const fetchSpy = stubFetch(async () =>

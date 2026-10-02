@@ -300,9 +300,14 @@ function readGrantedUploads(result: unknown): GrantedUpload[] | null {
   return uploads
 }
 
-/** The file inputs whose files upload directly, rather than joining the submission. */
+/**
+ * The file inputs whose files upload directly, rather than joining the submission. A disabled input is left
+ * out, as a form leaves a disabled control out of its submission.
+ */
 function uploadInputs(formElement: HTMLFormElement): HTMLInputElement[] {
-  return Array.from(formElement.querySelectorAll<HTMLInputElement>('input[type="file"][data-astro-form-upload]'))
+  return Array.from(
+    formElement.querySelectorAll<HTMLInputElement>('input[type="file"][data-astro-form-upload]:not(:disabled)')
+  )
 }
 
 /** The form's data without any directly-uploaded file input. */
