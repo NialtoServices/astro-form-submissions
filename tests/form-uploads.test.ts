@@ -361,6 +361,27 @@ describe('form script — direct uploads', () => {
     expect((fetchSpy.mock.calls[1]![1]!.body as FormData).getAll('upload')).toEqual(['receipt-a'])
   })
 
+  it('posts the file descriptors under a custom field', async () => {
+    installFakeXHR()
+    const fetchSpy = stubFetch(async (url) =>
+      String(url).includes('/uploads/')
+        ? jsonResponse({ ok: true, uploads: grants.slice(0, 1) })
+        : jsonResponse({ ok: true })
+    )
+    const { form, fileInput, status, submit } = mountForm({ turnstile: false })
+    form.dataset.astroFormUploadField = 'files'
+    choose(fileInput, [photo])
+
+    submit()
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
+
+    const descriptors = fetchSpy.mock.calls[0]![1]!.body as FormData
+    expect(descriptors.has('uploads')).toBe(false)
+    expect(JSON.parse(descriptors.get('files') as string)).toEqual([
+      { name: 'garden.jpg', size: 1000, type: 'image/jpeg' }
+    ])
+  })
+
   it('posts receipts under a custom field', async () => {
     installFakeXHR()
     const fetchSpy = stubFetch(async (url) =>

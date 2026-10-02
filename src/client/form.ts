@@ -38,6 +38,8 @@
  *   file inputs marked `data-astro-form-upload` never join a submission; when any of them holds files, a
  *   submit first asks the upload route where to send each one, uploads them with progress, refreshes
  *   Turnstile, then posts the form with one receipt per file.
+ * - `data-astro-form-upload-field` on the `<form>` — the field the file descriptors are posted to the upload
+ *   route under. Default `uploads`, matching `createUploadRoute`'s `field`.
  * - `data-astro-form-upload-receipt-field` on the `<form>` — the field the receipts are posted under.
  *   Default `upload`, matching the `UploadedFiles` enricher.
  * - `data-astro-form-message-uploading` on the status element — the copy shown while files upload, with
@@ -57,6 +59,7 @@ const DEFAULT_SUBMIT_TIMEOUT_MS = 30_000
 const TURNSTILE_TOKEN_TIMEOUT_MS = 30_000
 const TURNSTILE_POLL_INTERVAL_MS = 100
 
+const DEFAULT_DESCRIPTOR_FIELD = 'uploads'
 const DEFAULT_RECEIPT_FIELD = 'upload'
 
 // MARK: - Response parsing
@@ -491,7 +494,7 @@ async function submitWithUploads(
   const uploadRequest = new FormData()
   for (const [name, value] of formData) uploadRequest.append(name, value)
   uploadRequest.set(
-    'uploads',
+    formElement.dataset.astroFormUploadField || DEFAULT_DESCRIPTOR_FIELD,
     JSON.stringify(files.map((file) => ({ name: file.name, size: file.size, type: file.type })))
   )
 

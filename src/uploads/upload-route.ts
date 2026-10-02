@@ -31,7 +31,7 @@ export interface UploadRouteConfig<S extends SchemaInput> extends AdmissionConfi
   /** Receipt lifetime in seconds. Default one hour. */
   receiptTtlSeconds?: number
 
-  /** Form field carrying the JSON file descriptors. Default `uploads`. */
+  /** Form field carrying the JSON file descriptors. Default `uploads`; the form script posts under `data-astro-form-upload-field`. */
   field?: string
 
   /** Maximum number of files per submission. Default {@link DEFAULT_MAX_FILES}. */

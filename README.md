@@ -1037,6 +1037,7 @@ Each hook is an attribute you add to your own markup:
 | `data-astro-form-submit-timeout`                                        | the `<form>`                    | Optional per-form request timeout, in ms (default 30000).                                                                |
 | `data-astro-form-upload-action`                                         | the `<form>`                    | Optional — the upload route, opting into [direct uploads](#direct-uploads-in-the-form).                                  |
 | `data-astro-form-upload`                                                | a file input                    | Its files upload directly and never join a submission (with `data-astro-form-upload-action`).                            |
+| `data-astro-form-upload-field`                                          | the `<form>`                    | Optional field the file descriptors post to the upload route under (default `uploads`); match the route's `field`.       |
 | `data-astro-form-upload-receipt-field`                                  | the `<form>`                    | Optional field the receipts post under (default `upload`).                                                               |
 | `data-astro-form-message-uploading`                                     | the status element              | Optional copy while files upload, with `{current}`, `{total}` and `{percent}` filled in.                                 |
 
