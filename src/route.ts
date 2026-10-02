@@ -1,6 +1,6 @@
 import { admit, ERRORS } from '#admission.js'
 import { type DispatchContext, type Dispatcher } from '#dispatchers/index.js'
-import { FileUploads, type Enricher, type EnrichmentContext } from '#enrichers/index.js'
+import { FileUploads, UploadedFiles, type Enricher, type EnrichmentContext } from '#enrichers/index.js'
 import { type FormError, type FormErrors, type ToolkitErrorKey } from '#errors.js'
 import { RateLimitGuard, type Guard } from '#guards/index.js'
 import { TurnstileInspector, type Inspector } from '#inspectors/index.js'
@@ -29,7 +29,8 @@ export const DEFAULT_ERROR_COPY: Record<ToolkitErrorKey, string> = {
   rateLimited: RateLimitGuard.errors.rateLimited.message,
   tooManyFiles: FileUploads.errors.tooManyFiles.message,
   fileTooLarge: FileUploads.errors.fileTooLarge.message,
-  fileType: FileUploads.errors.fileType.message
+  fileType: FileUploads.errors.fileType.message,
+  uploadMissing: UploadedFiles.errors.uploadMissing.message
 }
 
 // MARK: - Config

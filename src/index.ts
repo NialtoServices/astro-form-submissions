@@ -25,11 +25,13 @@ export {
   DEFAULT_MAX_FILES,
   DEFAULT_MAX_TOTAL_BYTES,
   FileUploads,
+  UploadedFiles,
   type Enricher,
   type EnrichmentContext,
   type EnrichmentResult,
   type FileLink,
-  type FileUploadsOptions
+  type FileUploadsOptions,
+  type UploadedFilesOptions
 } from '#enrichers/index.js'
 
 export {
@@ -51,6 +53,7 @@ export {
   IMAGE_TYPES,
   signedLink,
   signFileToken,
+  sniffBytes,
   sniffType,
   verifyFileToken,
   type CreateFileRouteConfig,

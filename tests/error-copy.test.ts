@@ -1,4 +1,4 @@
-import { FileUploads } from '#enrichers/index.js'
+import { FileUploads, UploadedFiles } from '#enrichers/index.js'
 import { type FormErrors } from '#errors.js'
 import { RateLimitGuard } from '#guards/index.js'
 import { TurnstileInspector } from '#inspectors/index.js'
@@ -23,6 +23,7 @@ describe('DEFAULT_ERROR_COPY', () => {
     expect(DEFAULT_ERROR_COPY.tooManyFiles).toBe(FileUploads.errors.tooManyFiles.message)
     expect(DEFAULT_ERROR_COPY.fileTooLarge).toBe(FileUploads.errors.fileTooLarge.message)
     expect(DEFAULT_ERROR_COPY.fileType).toBe(FileUploads.errors.fileType.message)
+    expect(DEFAULT_ERROR_COPY.uploadMissing).toBe(UploadedFiles.errors.uploadMissing.message)
   })
 })
 

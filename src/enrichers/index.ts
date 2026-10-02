@@ -7,3 +7,4 @@ export {
   type FileLink,
   type FileUploadsOptions
 } from '#enrichers/file-uploads.js'
+export { UploadedFiles, type UploadedFilesOptions } from '#enrichers/uploaded-files.js'

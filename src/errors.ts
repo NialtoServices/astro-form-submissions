@@ -54,6 +54,7 @@ export type ToolkitErrorKey =
   | 'tooManyFiles'
   | 'fileTooLarge'
   | 'fileType'
+  | 'uploadMissing'
 
 /**
  * Per-site copy overrides keyed by {@link FormError.key}: a static map, or a {@link CopyResolver} for

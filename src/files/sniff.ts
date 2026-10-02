@@ -170,20 +170,30 @@ export const DOCUMENT_TYPES: FileMatcher[] = [
 export const ALL_TYPES: FileMatcher[] = [...IMAGE_TYPES, ...DOCUMENT_TYPES]
 
 /**
- * Sniffs a file's content-type from its header bytes against an allow-list.
+ * Matches already-read header bytes against an allow-list.
  *
  * Matchers are tried in order and the first pass wins, so a list containing overlapping matchers should be ordered
  * most-specific first.
+ *
+ * @param header - The file's leading bytes (at most {@link HEADER_BYTES} are needed).
+ * @param matchers - The permitted matchers; defaults to {@link ALL_TYPES}.
+ * @returns The matched content-type, or `null` when the bytes match nothing on the list.
+ */
+export function sniffBytes(header: Uint8Array, matchers: FileMatcher[] = ALL_TYPES): string | null {
+  for (const matcher of matchers) {
+    if (matcher.test(header)) return matcher.contentType
+  }
+
+  return null
+}
+
+/**
+ * Sniffs a file's content-type from its header bytes against an allow-list. See {@link sniffBytes}.
  *
  * @param file - The file to inspect.
  * @param matchers - The permitted matchers; defaults to {@link ALL_TYPES}.
  * @returns The matched content-type, or `null` when the file matches nothing on the list.
  */
 export async function sniffType(file: File, matchers: FileMatcher[] = ALL_TYPES): Promise<string | null> {
-  const header = new Uint8Array(await file.slice(0, HEADER_BYTES).arrayBuffer())
-  for (const matcher of matchers) {
-    if (matcher.test(header)) return matcher.contentType
-  }
-
-  return null
+  return sniffBytes(new Uint8Array(await file.slice(0, HEADER_BYTES).arrayBuffer()), matchers)
 }
