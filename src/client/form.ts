@@ -230,8 +230,8 @@ function resetTurnstileWidget(formElement: HTMLFormElement): void {
     const turnstile = (window as { turnstile?: { reset(widgetElement?: string | Element | null): void } }).turnstile
     const widgetElement = formElement.querySelector('.cf-turnstile')
     if (widgetElement) turnstile?.reset(widgetElement)
-  } catch {
-    /* optional integration — see above */
+  } catch (error) {
+    console.warn('[astro-form-submissions] Failed to reset the Turnstile widget', error)
   }
 }
 
@@ -473,8 +473,8 @@ function showSuccess(binding: FormBinding): void {
       HTMLFormElement.prototype.reset.call(formElement)
       resetTurnstileWidget(formElement)
     }
-  } catch {
-    /* best-effort presentation — see above */
+  } catch (error) {
+    console.warn('[astro-form-submissions] Failed to present the success state', error)
   }
 }
 

@@ -360,6 +360,7 @@ describe('form script failure handling', () => {
         throw new Error('loader mismatch')
       }
     }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     stubFetch(async () => jsonResponse({ ok: true }))
     const { status, submit } = mountForm()
 
@@ -369,6 +370,10 @@ describe('form script failure handling', () => {
     submit()
     await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
     expect(errorEmitted).toBe(false)
+    expect(warn).toHaveBeenCalledWith(
+      '[astro-form-submissions] Failed to reset the Turnstile widget',
+      expect.objectContaining({ message: 'loader mismatch' })
+    )
   })
 })
 
