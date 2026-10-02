@@ -127,16 +127,17 @@ function clearDescribedBy(inputElement: HTMLElement): void {
 /**
  * Mark each faulty field `aria-invalid` and, where a co-located `[data-astro-form-field-error-for]` slot
  * sits beside it, fill that slot and link it via `aria-describedby` (read on focus, so it is deliberately
- * not a live region — the summary already announces). Returns the first invalid input, for focus.
+ * not a live region — the summary already announces). Every control sharing the name is marked, so a
+ * radio or checkbox group is flagged as a whole. Returns the first invalid control, for focus.
  */
 function applyFieldErrors(formElement: HTMLFormElement, fieldErrors: Record<string, string>): HTMLElement | null {
   let firstInvalidElement: HTMLElement | null = null
   for (const [name, message] of Object.entries(fieldErrors)) {
-    const inputElement = formElement.querySelector<HTMLElement>(`[name="${CSS.escape(name)}"]`)
-    if (!inputElement) continue
+    const inputElements = Array.from(formElement.querySelectorAll<HTMLElement>(`[name="${CSS.escape(name)}"]`))
+    if (inputElements.length === 0) continue
 
-    inputElement.setAttribute('aria-invalid', 'true')
-    firstInvalidElement ??= inputElement
+    for (const inputElement of inputElements) inputElement.setAttribute('aria-invalid', 'true')
+    firstInvalidElement ??= inputElements[0] ?? null
 
     const slotElement = formElement.querySelector<HTMLElement>(
       `[data-astro-form-field-error-for="${CSS.escape(name)}"]`
@@ -145,7 +146,9 @@ function applyFieldErrors(formElement: HTMLFormElement, fieldErrors: Record<stri
 
     slotElement.textContent = message
     slotElement.hidden = false
-    if (slotElement.id) addDescribedBy(inputElement, slotElement.id)
+
+    const slotId = slotElement.id
+    if (slotId) for (const inputElement of inputElements) addDescribedBy(inputElement, slotId)
   }
   return firstInvalidElement
 }
@@ -473,10 +476,19 @@ function bindProgressiveRecovery(formElement: HTMLFormElement): void {
   formElement.addEventListener('input', (event) => {
     const targetElement = event.target instanceof HTMLElement ? event.target : null
     const name = targetElement?.getAttribute('name')
-    if (!name || targetElement?.getAttribute('aria-invalid') !== 'true') return
+    if (!name) return
 
-    targetElement.removeAttribute('aria-invalid')
-    clearDescribedBy(targetElement)
+    // The whole group recovers together: a radio group's error clears whichever of its options is edited.
+    const invalidElements = formElement.querySelectorAll<HTMLElement>(
+      `[name="${CSS.escape(name)}"][aria-invalid="true"]`
+    )
+    if (invalidElements.length === 0) return
+
+    for (const invalidElement of invalidElements) {
+      invalidElement.removeAttribute('aria-invalid')
+      clearDescribedBy(invalidElement)
+    }
+
     const slotElement = formElement.querySelector<HTMLElement>(
       `[data-astro-form-field-error-for="${CSS.escape(name)}"]`
     )
@@ -636,13 +648,18 @@ async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<voi
   statusElement.textContent = messages.sending ?? ''
   statusElement.dataset.astroFormState = 'pending'
 
-  const submissionURL = resolveSubmissionURL(formElement, submitter)
   let outcome: PostOutcome & { formData?: FormData }
   try {
+    const submissionURL = resolveSubmissionURL(formElement, submitter)
     outcome =
       uploadAction && files.length > 0
         ? await submitWithUploads(binding, uploadAction, submissionURL, formData, files)
         : await postForm(binding, submissionURL, formData)
+  } catch (error) {
+    // Every expected failure resolves to an outcome; anything thrown is a bug or a broken environment
+    // (an unparseable `action`, say), and must still end in the error state rather than leave it pending.
+    console.warn('[astro-form-submissions] Submission failed unexpectedly', error)
+    outcome = { ok: false, error: binding.messages.genericError ?? '' }
   } finally {
     if (submitter) submitter.disabled = false
     delete formElement.dataset.astroFormSubmitting

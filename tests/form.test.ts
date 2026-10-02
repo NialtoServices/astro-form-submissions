@@ -565,6 +565,32 @@ describe('form script field errors', () => {
     expect(message.getAttribute('aria-describedby')).toBe('author-hint')
   })
 
+  it('flags a whole radio group and clears it when any option is chosen', async () => {
+    stubFetch(async () =>
+      jsonResponse({ error: 'Please choose a plan.', fieldErrors: { plan: 'Choose a plan.' } }, 400)
+    )
+    document.body.innerHTML = `
+      <form data-astro-form action="/api/contact" method="POST">
+        <input type="radio" name="plan" value="basic" />
+        <input type="radio" name="plan" value="pro" />
+        <p data-astro-form-field-error-for="plan" id="plan-error" hidden></p>
+        <p data-astro-form-status></p>
+      </form>`
+    initializeForms()
+    const [basic, pro] = Array.from(document.querySelectorAll<HTMLInputElement>('[name="plan"]'))
+    document.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }))
+    await vi.waitFor(() => expect(basic?.getAttribute('aria-invalid')).toBe('true'))
+
+    expect(pro?.getAttribute('aria-invalid')).toBe('true')
+    expect(pro?.getAttribute('aria-describedby')).toBe('plan-error')
+
+    pro?.dispatchEvent(new Event('input', { bubbles: true }))
+
+    expect(basic?.hasAttribute('aria-invalid')).toBe(false)
+    expect(pro?.hasAttribute('aria-invalid')).toBe(false)
+    expect(document.querySelector<HTMLElement>('#plan-error')?.hidden).toBe(true)
+  })
+
   it('does not duplicate a slot id the author already listed, nor remove it on recovery', async () => {
     stubFetch(async () => validationResponse())
     const { email, submit } = mountFieldsForm({ slots: true })
@@ -576,6 +602,23 @@ describe('form script field errors', () => {
 
     email.dispatchEvent(new Event('input', { bubbles: true }))
     expect(email.getAttribute('aria-describedby')).toBe('contact-email-error')
+  })
+})
+
+describe('form script unexpected failures', () => {
+  it('shows the generic error rather than staying pending when the action cannot be resolved', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { form, status, submit } = mountForm()
+    form.setAttribute('action', 'http://[')
+
+    submit()
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('error'))
+
+    expect(status.textContent).toBe('Something went wrong.')
+    expect(form.dataset.astroFormSubmitting).toBeUndefined()
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalled()
   })
 })
 
