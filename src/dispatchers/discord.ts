@@ -193,6 +193,7 @@ export class DiscordDispatcher<E extends FormSubmission = FormSubmission> implem
     for (const field of fields) {
       const length = field.name.length + field.value.length
       if (length > budget) break
+
       bounded.push(field)
       budget -= length
     }
