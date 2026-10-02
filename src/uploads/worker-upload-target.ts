@@ -1,7 +1,7 @@
 import { assertPositiveNumberOption } from '#numeric-options.js'
 import { assertValidSigningSecret, tokenToPathSegment } from '#tokens.js'
 import { signUploadClaims } from '#uploads/upload-claims.js'
-import { type PendingUpload, type UploadInstruction, type UploadTarget } from '#uploads/upload-target.js'
+import type { PendingUpload, UploadInstruction, UploadTarget } from '#uploads/upload-target.js'
 
 /** Default upload grant lifetime — 15 minutes, matching {@link R2PresignedUploadTarget}. */
 const DEFAULT_TTL_SECONDS = 15 * 60

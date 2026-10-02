@@ -1,6 +1,6 @@
 import { formError } from '#errors.js'
-import { type Guard, type GuardContext } from '#guards/guard.js'
-import { type Verdict } from '#pipeline.js'
+import type { Guard, GuardContext } from '#guards/guard.js'
+import type { Verdict } from '#pipeline.js'
 
 /**
  * The rate limiter {@link RateLimitGuard} throttles through: anything implementing

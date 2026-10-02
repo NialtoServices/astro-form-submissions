@@ -1,6 +1,6 @@
-import { type DispatchContext } from '#dispatchers/dispatcher.js'
-import { type EmailTemplates } from '#dispatchers/email.js'
-import { type FormSubmission } from '#pipeline.js'
+import type { DispatchContext } from '#dispatchers/dispatcher.js'
+import type { EmailTemplates } from '#dispatchers/email.js'
+import type { FormSubmission } from '#pipeline.js'
 import Mustache from 'mustache'
 
 /** Options for {@link mustacheTemplates}. */

@@ -1,4 +1,4 @@
-import { type FormSubmission, type Verdict } from '#pipeline.js'
+import type { FormSubmission, Verdict } from '#pipeline.js'
 
 /**
  * Everything an inspector may inspect about a submission-in-progress.

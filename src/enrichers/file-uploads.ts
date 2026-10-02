@@ -1,10 +1,10 @@
-import { type Enricher, type EnrichmentContext, type EnrichmentResult } from '#enrichers/enricher.js'
+import type { Enricher, EnrichmentContext, EnrichmentResult } from '#enrichers/enricher.js'
 import { formError } from '#errors.js'
-import { type FilePayload } from '#files/signing.js'
+import type { FilePayload } from '#files/signing.js'
 import { ALL_TYPES, sniffType, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions } from '#numeric-options.js'
-import { type FormSubmission } from '#pipeline.js'
-import { type FileStorage } from '#storage/storage.js'
+import type { FormSubmission } from '#pipeline.js'
+import type { FileStorage } from '#storage/storage.js'
 
 const MB = 1024 * 1024
 

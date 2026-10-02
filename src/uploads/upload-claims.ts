@@ -1,5 +1,5 @@
 import { signClaims, verifyClaims } from '#tokens.js'
-import { type PendingUpload } from '#uploads/upload-target.js'
+import type { PendingUpload } from '#uploads/upload-target.js'
 
 /**
  * What a signed upload token is for. A `receipt` proves to the form route that the upload route admitted

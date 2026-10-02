@@ -1,6 +1,6 @@
 import { getField } from '#form-data.js'
-import { type InspectionContext, type Inspector } from '#inspectors/inspector.js'
-import { type FormSubmission, type Verdict } from '#pipeline.js'
+import type { InspectionContext, Inspector } from '#inspectors/inspector.js'
+import type { FormSubmission, Verdict } from '#pipeline.js'
 
 /** Options for constructing a {@link HoneypotInspector}. */
 export interface HoneypotInspectorOptions {

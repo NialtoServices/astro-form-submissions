@@ -1,7 +1,7 @@
 import { formError, type FormError, type FormErrors } from '#errors.js'
-import { type Guard, type GuardContext } from '#guards/index.js'
-import { type InspectionContext, type Inspector } from '#inspectors/index.js'
-import { type FormErrorStage } from '#reporting.js'
+import type { Guard, GuardContext } from '#guards/index.js'
+import type { InspectionContext, Inspector } from '#inspectors/index.js'
+import type { FormErrorStage } from '#reporting.js'
 import { jsonFormError, jsonValidationError } from '#responses.js'
 import {
   formDataToObject,

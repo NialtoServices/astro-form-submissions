@@ -1,4 +1,4 @@
-import { type Enricher, type EnrichmentContext, type EnrichmentResult } from '#enrichers/enricher.js'
+import type { Enricher, EnrichmentContext, EnrichmentResult } from '#enrichers/enricher.js'
 import {
   DEFAULT_MAX_FILE_BYTES,
   DEFAULT_MAX_FILES,
@@ -7,14 +7,14 @@ import {
   type FileLink
 } from '#enrichers/file-uploads.js'
 import { formError, type FormError } from '#errors.js'
-import { type FilePayload } from '#files/signing.js'
+import type { FilePayload } from '#files/signing.js'
 import { ALL_TYPES, HEADER_BYTES, sniffBytes, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions } from '#numeric-options.js'
-import { type FormSubmission } from '#pipeline.js'
-import { type FileStorage, type PeekedObject } from '#storage/storage.js'
+import type { FormSubmission } from '#pipeline.js'
+import type { FileStorage, PeekedObject } from '#storage/storage.js'
 import { assertValidSigningSecret } from '#tokens.js'
 import { verifyUploadClaims } from '#uploads/upload-claims.js'
-import { type PendingUpload } from '#uploads/upload-target.js'
+import type { PendingUpload } from '#uploads/upload-target.js'
 
 /** The content-type an upload carries when its declared type wasn't one the form accepts. */
 const OPAQUE_CONTENT_TYPE = 'application/octet-stream'

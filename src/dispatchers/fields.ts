@@ -1,5 +1,5 @@
-import { type DispatchContext } from '#dispatchers/dispatcher.js'
-import { type FormSubmission } from '#pipeline.js'
+import type { DispatchContext } from '#dispatchers/dispatcher.js'
+import type { FormSubmission } from '#pipeline.js'
 import { humanise } from '#strings.js'
 
 /**

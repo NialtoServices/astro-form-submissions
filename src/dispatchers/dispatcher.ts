@@ -1,4 +1,4 @@
-import { type FormSubmission } from '#pipeline.js'
+import type { FormSubmission } from '#pipeline.js'
 
 /**
  * The request/site context every dispatcher (and its content callbacks) receives — the delivery-stage

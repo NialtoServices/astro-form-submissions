@@ -6,8 +6,8 @@
 // Display metadata is read back from storage at download time. `exp` bounds a link's lifetime
 // independently of storage; rotating the secret invalidates every issued link at once.
 
-import { type EnrichmentContext } from '#enrichers/enricher.js'
-import { type FormSubmission } from '#pipeline.js'
+import type { EnrichmentContext } from '#enrichers/enricher.js'
+import type { FormSubmission } from '#pipeline.js'
 import { assertValidSigningSecret, signClaims, tokenToPathSegment, verifyClaims } from '#tokens.js'
 
 /** Default link lifetime — 7 days. */

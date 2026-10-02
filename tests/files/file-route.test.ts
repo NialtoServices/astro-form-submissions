@@ -1,6 +1,6 @@
 import { createFileRoute } from '#files/file-route.js'
 import { signFileToken } from '#files/signing.js'
-import { type FileStorage, type StoredObject } from '#storage/storage.js'
+import type { FileStorage, StoredObject } from '#storage/storage.js'
 import type { APIRoute } from 'astro'
 import { describe, expect, it, vi } from 'vitest'
 

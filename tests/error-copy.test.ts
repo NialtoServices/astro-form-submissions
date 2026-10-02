@@ -1,5 +1,5 @@
 import { FileUploads, UploadedFiles } from '#enrichers/index.js'
-import { type FormErrors } from '#errors.js'
+import type { FormErrors } from '#errors.js'
 import { RateLimitGuard } from '#guards/index.js'
 import { TurnstileInspector } from '#inspectors/index.js'
 import { DEFAULT_ERROR_COPY, ERRORS } from '#route.js'

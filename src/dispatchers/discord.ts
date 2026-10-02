@@ -1,6 +1,6 @@
-import { type DispatchContext, type Dispatcher } from '#dispatchers/dispatcher.js'
+import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
 import { resolveField, type FieldSpec } from '#dispatchers/fields.js'
-import { type FormSubmission } from '#pipeline.js'
+import type { FormSubmission } from '#pipeline.js'
 import { clamp } from '#strings.js'
 
 // Discord's embed limits. Exceeding any one rejects the whole embed with a 400, so every user-controlled component is

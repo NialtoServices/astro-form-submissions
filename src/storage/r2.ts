@@ -1,11 +1,5 @@
 import { attachmentDisposition } from '#content-disposition.js'
-import {
-  type FileStorage,
-  type PeekedObject,
-  type PutOptions,
-  type StoredObject,
-  type StreamPutOptions
-} from '#storage/storage.js'
+import type { FileStorage, PeekedObject, PutOptions, StoredObject, StreamPutOptions } from '#storage/storage.js'
 
 /**
  * The slice of Cloudflare's `R2Bucket` binding {@link R2Storage} uses. Declared structurally so the

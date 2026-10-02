@@ -1,6 +1,6 @@
 import { assertPositiveNumberOption } from '#numeric-options.js'
 import { presignURL } from '#uploads/sigv4.js'
-import { type PendingUpload, type UploadInstruction, type UploadTarget } from '#uploads/upload-target.js'
+import type { PendingUpload, UploadInstruction, UploadTarget } from '#uploads/upload-target.js'
 
 /** Default presigned URL lifetime — 15 minutes, long enough to start a large upload on a slow uplink. */
 const DEFAULT_EXPIRES_IN_SECONDS = 15 * 60

@@ -1,4 +1,4 @@
-import { type EnrichmentContext } from '#enrichers/enricher.js'
+import type { EnrichmentContext } from '#enrichers/enricher.js'
 import { signedLink, signFileToken, verifyFileToken } from '#files/signing.js'
 import { describe, expect, it } from 'vitest'
 

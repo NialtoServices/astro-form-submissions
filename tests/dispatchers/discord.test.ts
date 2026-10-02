@@ -1,5 +1,5 @@
 import { DiscordDispatcher, type DiscordFieldInput } from '#dispatchers/discord.js'
-import { type FormSubmission } from '#pipeline.js'
+import type { FormSubmission } from '#pipeline.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { dispatchContext } from '../dispatch-context.js'
 import { stubFetch } from '../support/harness.js'

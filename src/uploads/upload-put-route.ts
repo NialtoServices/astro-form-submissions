@@ -1,7 +1,7 @@
-import { type FileStorage } from '#storage/storage.js'
+import type { FileStorage } from '#storage/storage.js'
 import { assertValidSigningSecret, tokenFromPathSegment } from '#tokens.js'
 import { verifyUploadClaims } from '#uploads/upload-claims.js'
-import { type APIRoute } from 'astro'
+import type { APIRoute } from 'astro'
 
 /** Configuration for {@link createUploadPutRoute}. */
 export interface CreateUploadPutRouteConfig {

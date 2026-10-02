@@ -1,4 +1,4 @@
-import { type DispatchContext } from '#dispatchers/dispatcher.js'
+import type { DispatchContext } from '#dispatchers/dispatcher.js'
 import { formatFileSize } from '#strings.js'
 import { isRecord } from '#type-guards.js'
 

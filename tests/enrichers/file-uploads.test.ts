@@ -1,6 +1,6 @@
-import { type EnrichmentContext } from '#enrichers/enricher.js'
+import type { EnrichmentContext } from '#enrichers/enricher.js'
 import { FileUploads } from '#enrichers/file-uploads.js'
-import { type FileStorage } from '#storage/storage.js'
+import type { FileStorage } from '#storage/storage.js'
 import { describe, expect, it, vi } from 'vitest'
 
 const PNG_HEADER = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]

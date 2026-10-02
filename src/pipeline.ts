@@ -1,4 +1,4 @@
-import { type FormError } from '#errors.js'
+import type { FormError } from '#errors.js'
 
 /**
  * A validated form submission. The toolkit assumes no fields of its own — each site's shape is inferred

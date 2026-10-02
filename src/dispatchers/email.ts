@@ -1,5 +1,5 @@
-import { type DispatchContext, type Dispatcher } from '#dispatchers/dispatcher.js'
-import { type FormSubmission } from '#pipeline.js'
+import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
+import type { FormSubmission } from '#pipeline.js'
 
 /** The rendered, per-submission parts of an email — subject and bodies, no addressing. */
 export interface EmailContent {

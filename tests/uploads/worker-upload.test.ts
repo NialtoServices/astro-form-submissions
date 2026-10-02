@@ -1,7 +1,7 @@
 import { createFileRoute } from '#files/file-route.js'
 import { signedLink } from '#files/signing.js'
 import { R2Storage } from '#storage/r2.js'
-import { type FileStorage } from '#storage/storage.js'
+import type { FileStorage } from '#storage/storage.js'
 import { createUploadPutRoute } from '#uploads/upload-put-route.js'
 import { WorkerUploadTarget } from '#uploads/worker-upload-target.js'
 import type { APIRoute } from 'astro'

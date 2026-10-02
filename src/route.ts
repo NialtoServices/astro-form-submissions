@@ -1,14 +1,14 @@
 import { admit, ERRORS } from '#admission.js'
-import { type DispatchContext, type Dispatcher } from '#dispatchers/index.js'
+import type { DispatchContext, Dispatcher } from '#dispatchers/index.js'
 import { FileUploads, UploadedFiles, type Enricher, type EnrichmentContext } from '#enrichers/index.js'
-import { type FormError, type FormErrors, type ToolkitErrorKey } from '#errors.js'
+import type { FormError, FormErrors, ToolkitErrorKey } from '#errors.js'
 import { RateLimitGuard, type Guard } from '#guards/index.js'
 import { TurnstileInspector, type Inspector } from '#inspectors/index.js'
-import { type FormSubmission } from '#pipeline.js'
+import type { FormSubmission } from '#pipeline.js'
 import { containedReporter, type ErrorReporter, type FormErrorStage } from '#reporting.js'
 import { jsonFormError, jsonOk } from '#responses.js'
-import { type SchemaInput, type Submission } from '#schema.js'
-import { type APIRoute } from 'astro'
+import type { SchemaInput, Submission } from '#schema.js'
+import type { APIRoute } from 'astro'
 
 export { ERRORS, type FormErrorStage }
 

@@ -1,4 +1,4 @@
-import { type GuardContext } from '#guards/guard.js'
+import type { GuardContext } from '#guards/guard.js'
 import { RateLimitGuard, type RateLimiter } from '#guards/rate-limit.js'
 import { describe, expect, it, vi } from 'vitest'
 

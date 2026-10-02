@@ -1,8 +1,8 @@
 import { attachmentDisposition } from '#content-disposition.js'
 import { verifyFileToken } from '#files/signing.js'
-import { type FileStorage } from '#storage/storage.js'
+import type { FileStorage } from '#storage/storage.js'
 import { assertValidSigningSecret, tokenFromPathSegment } from '#tokens.js'
-import { type APIRoute } from 'astro'
+import type { APIRoute } from 'astro'
 
 // Used only when a custom store returns no stored metadata; the bundled storage adapter always echoes the real values.
 const FALLBACK_CONTENT_TYPE = 'application/octet-stream'

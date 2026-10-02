@@ -1,4 +1,4 @@
-import { type EmailMessage, type EmailTransport } from '#dispatchers/email.js'
+import type { EmailMessage, EmailTransport } from '#dispatchers/email.js'
 
 /** Postmark's single-message send endpoint. */
 const POSTMARK_EMAIL_URL = 'https://api.postmarkapp.com/email'

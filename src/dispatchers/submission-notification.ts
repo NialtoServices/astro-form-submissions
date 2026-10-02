@@ -1,4 +1,4 @@
-import { type DispatchContext } from '#dispatchers/dispatcher.js'
+import type { DispatchContext } from '#dispatchers/dispatcher.js'
 import {
   DEFAULT_ATTACHMENTS_LABEL,
   displayHost,
@@ -7,12 +7,12 @@ import {
   resolveAttachments,
   type EmailTemplateCopy
 } from '#dispatchers/email-view.js'
-import { type EmailTemplates } from '#dispatchers/email.js'
+import type { EmailTemplates } from '#dispatchers/email.js'
 import { resolveFields, type FieldInput } from '#dispatchers/fields.js'
 import { mustacheTemplates } from '#dispatchers/mustache.js'
 import { htmlSource, textSource } from '#dispatchers/submission-notification-sources.js'
-import { type FileLink } from '#enrichers/index.js'
-import { type FormSubmission } from '#pipeline.js'
+import type { FileLink } from '#enrichers/index.js'
+import type { FormSubmission } from '#pipeline.js'
 
 const SUBJECT_SOURCE =
   'New form submission{{#formName}}: {{formName}}{{/formName}}{{#siteHost}} via {{siteHost}}{{/siteHost}}'

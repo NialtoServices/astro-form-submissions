@@ -9,11 +9,11 @@ import { ALL_TYPES, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions, assertPositiveNumberOption } from '#numeric-options.js'
 import { containedReporter, type ErrorReporter, type FormErrorStage } from '#reporting.js'
 import { jsonFormError, jsonOk } from '#responses.js'
-import { type SchemaInput } from '#schema.js'
+import type { SchemaInput } from '#schema.js'
 import { assertValidSigningSecret } from '#tokens.js'
 import { signUploadClaims } from '#uploads/upload-claims.js'
-import { type PendingUpload, type UploadInstruction, type UploadTarget } from '#uploads/upload-target.js'
-import { type APIRoute } from 'astro'
+import type { PendingUpload, UploadInstruction, UploadTarget } from '#uploads/upload-target.js'
+import type { APIRoute } from 'astro'
 
 /** Default receipt lifetime — one hour, enough to finish every upload and submit. */
 const DEFAULT_RECEIPT_TTL_SECONDS = 60 * 60

@@ -1,4 +1,4 @@
-import { type Verdict } from '#pipeline.js'
+import type { Verdict } from '#pipeline.js'
 
 /**
  * Everything a guard may inspect before the request body is read. Guards run first, so they see only

@@ -1,4 +1,4 @@
-import { type RateLimiter } from '#guards/rate-limit.js'
+import type { RateLimiter } from '#guards/rate-limit.js'
 
 /** The default {@link InMemoryRateLimiterOptions.maxKeys} cap when none is supplied. */
 const DEFAULT_MAX_KEYS = 100_000

@@ -1,5 +1,5 @@
-import { type FormError } from '#errors.js'
-import { type FormSubmission } from '#pipeline.js'
+import type { FormError } from '#errors.js'
+import type { FormSubmission } from '#pipeline.js'
 
 /**
  * Everything an enricher may read while acquiring resources for a submission-in-progress. The
