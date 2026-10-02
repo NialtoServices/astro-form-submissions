@@ -1,6 +1,5 @@
 import { FileUploads } from '#enrichers/file-uploads.js'
 import { UploadedFiles } from '#enrichers/uploaded-files.js'
-import { assertPositiveNumberOption } from '#numeric-options.js'
 import { R2Storage } from '#storage/r2.js'
 import { R2PresignedUploadTarget } from '#uploads/r2-presigned-upload-target.js'
 import { createUploadRoute } from '#uploads/upload-route.js'
@@ -19,30 +18,6 @@ const schema = {
     validate: (value: unknown) => ({ value: value as Record<string, unknown> })
   }
 }
-
-describe('assertPositiveNumberOption', () => {
-  it('accepts an absent value, which falls back to its default', () => {
-    expect(() => assertPositiveNumberOption('Thing `limit`', undefined)).not.toThrow()
-  })
-
-  it.each([Number.NaN, 0, -1, Infinity])('refuses %s', (value) => {
-    expect(() => assertPositiveNumberOption('Thing `limit`', value)).toThrow(
-      'Thing `limit` must be a finite positive number.'
-    )
-  })
-
-  it('refuses a fraction where a whole number is required', () => {
-    expect(() => assertPositiveNumberOption('Thing `count`', 1.5, { integer: true })).toThrow(
-      'Thing `count` must be a finite positive integer.'
-    )
-  })
-
-  it('refuses a value above the maximum', () => {
-    expect(() => assertPositiveNumberOption('Thing `ttl`', 11, { maximum: 10 })).toThrow(
-      'Thing `ttl` must be at most 10.'
-    )
-  })
-})
 
 describe('numeric options at construction', () => {
   it.each(['maxFiles', 'maxFileBytes', 'maxTotalBytes'] as const)('FileUploads refuses a NaN `%s`', (option) => {
@@ -63,6 +38,16 @@ describe('numeric options at construction', () => {
       )
     }
   )
+
+  it.each([0, -1, Infinity, 1.5])('refuses a `maxFiles` of %s', (maxFiles) => {
+    expect(() => createUploadRoute({ schema, target, secret: SECRET, maxFiles })).toThrow(
+      'createUploadRoute `maxFiles` must be a finite positive integer.'
+    )
+  })
+
+  it('accepts a fractional byte limit', () => {
+    expect(() => new FileUploads({ storage, link, maxFileBytes: 1.5 * 1024 * 1024 })).not.toThrow()
+  })
 
   it('WorkerUploadTarget refuses a NaN `ttlSeconds`', () => {
     expect(() => new WorkerUploadTarget({ secret: SECRET, basePath: '/api/uploads', ttlSeconds: Number.NaN })).toThrow(

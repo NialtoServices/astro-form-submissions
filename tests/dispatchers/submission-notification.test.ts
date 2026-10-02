@@ -224,6 +224,23 @@ describe('submissionNotificationTemplates attachments', () => {
     expect(templates.text(person, sized)).toContain('photo.png (315 KB): https://example.com/files/ccc~ddd/')
   })
 
+  it('steps a size that rounds to 1024 up to the next unit', () => {
+    const boundary = dispatchContext({
+      resources: {
+        files: [
+          { name: 'a.pdf', url: 'https://example.com/files/a/', size: 1_048_575 },
+          { name: 'b.mov', url: 'https://example.com/files/b/', size: 1_073_699_880 },
+          { name: 'c.mov', url: 'https://example.com/files/c/', size: 1_073_689_395 }
+        ]
+      }
+    })
+    const text = templates.text(person, boundary)
+
+    expect(text).toContain('a.pdf (1 MB)')
+    expect(text).toContain('b.mov (1 GB)')
+    expect(text).toContain('c.mov (1023.9 MB)')
+  })
+
   it('omits the size beside a link when the source has none', () => {
     const text = templates.text(person, withFiles)
 

@@ -57,6 +57,13 @@ const photo = { name: 'garden.jpg', size: 2_000_000, type: 'image/jpeg' }
 const video = { name: 'loft.mov', size: 30_000_000, type: 'video/quicktime' }
 
 describe('createUploadRoute', () => {
+  it('names a file whose name is only stripped characters `upload`, as the multipart path does', async () => {
+    const { route, prepared } = routeWith()
+    await route(request([{ ...photo, name: '"\r\n' }]))
+
+    expect(prepared[0]?.filename).toBe('upload')
+  })
+
   it('localises the failure when the upload target throws', async () => {
     const route = createUploadRoute({
       schema,

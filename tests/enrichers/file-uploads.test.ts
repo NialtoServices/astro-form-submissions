@@ -121,6 +121,13 @@ describe('FileUploads', () => {
     expect(put.mock.calls[1]![2]).toEqual({ contentType: 'image/png', filename: 'photo.png' })
   })
 
+  it('strips CR, LF and quotes from a stored filename', async () => {
+    const { storage, put } = stubStorage()
+    await uploader(storage).enrich({ name: 'Ada' }, contextWith([upload('a"b\r\n.pdf', PDF_HEADER)]))
+
+    expect(put.mock.calls[0]![2]).toEqual({ contentType: 'application/pdf', filename: 'ab.pdf' })
+  })
+
   it('names a file whose name is only stripped characters `upload`', async () => {
     const { storage, put } = stubStorage()
     const result = await uploader(storage).enrich({ name: 'Ada' }, contextWith([upload('"\r\n', PDF_HEADER)]))
