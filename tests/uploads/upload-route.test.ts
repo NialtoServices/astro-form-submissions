@@ -5,6 +5,7 @@ import type { Guard } from '#guards/guard.js'
 import type { Inspector } from '#inspectors/inspector.js'
 import { createUploadRoute, type UploadRouteConfig } from '#uploads/upload-route.js'
 import type { PendingUpload, UploadTarget } from '#uploads/upload-target.js'
+import { WorkerUploadTarget } from '#uploads/worker-upload-target.js'
 import { describe, expect, it, vi } from 'vitest'
 import { makeRouteContext } from '../support/harness.js'
 
@@ -84,6 +85,16 @@ describe('createUploadRoute', () => {
     await route(request([photo]))
 
     expect(seen).toEqual(['192.0.2.10'])
+  })
+
+  it('grants a file whose name carries a lone surrogate, under a well-formed name', async () => {
+    const { route } = routeWith({ target: new WorkerUploadTarget({ secret: SECRET, basePath: '/api/uploads' }) })
+    const response = await route(request([{ ...photo, name: 'scan\ud800.jpg' }]))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      uploads: [{ headers: { 'x-amz-meta-filename-uri': 'scan%EF%BF%BD.jpg' } }]
+    })
   })
 
   it('localises the failure when the upload target throws', async () => {
