@@ -1,7 +1,7 @@
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist/', 'audit/', '**/*.astro'] },
+  { ignores: ['dist/', 'audit/', '.astro/'] },
   ...tseslint.configs.recommended,
   {
     files: ['**/*.ts', '**/*.mts'],
