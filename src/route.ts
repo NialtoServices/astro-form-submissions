@@ -1,36 +1,18 @@
+import { admit, ERRORS } from '#admission.js'
 import { type DispatchContext, type Dispatcher } from '#dispatchers/index.js'
 import { FileUploads, type Enricher, type EnrichmentContext } from '#enrichers/index.js'
-import { formError, type FormError, type FormErrors, type ToolkitErrorKey } from '#errors.js'
-import { RateLimitGuard, type Guard, type GuardContext } from '#guards/index.js'
-import { TurnstileInspector, type InspectionContext, type Inspector } from '#inspectors/index.js'
+import { type FormError, type FormErrors, type ToolkitErrorKey } from '#errors.js'
+import { RateLimitGuard, type Guard } from '#guards/index.js'
+import { TurnstileInspector, type Inspector } from '#inspectors/index.js'
 import { type FormSubmission } from '#pipeline.js'
-import { jsonFormError, jsonOk, jsonValidationError } from '#responses.js'
-import {
-  formDataToObject,
-  mapIssues,
-  resolveValidator,
-  validationFailed,
-  type SchemaContext,
-  type SchemaInput,
-  type Submission
-} from '#schema.js'
+import { containedReporter, type ErrorReporter, type FormErrorStage } from '#reporting.js'
+import { jsonFormError, jsonOk } from '#responses.js'
+import { type SchemaInput, type Submission } from '#schema.js'
 import { type APIRoute } from 'astro'
 
+export { ERRORS, type FormErrorStage }
+
 // MARK: - Errors
-
-/** Errors the route factory itself raises. Override the copy per-site via `errors[key]`. */
-export const ERRORS = {
-  invalidForm: formError('invalidForm', 400, 'Invalid form data.'),
-  send: formError('send', 502, 'Could not send your message right now. Please try again or call us directly.'),
-  unavailable: formError(
-    'unavailable',
-    500,
-    'This form is temporarily unavailable. Please email us directly or call us.'
-  ),
-
-  // Owned by the schema stage (raised from `mapIssues`); surfaced here so the toolkit's built-in keys sit together.
-  validationFailed
-} as const
 
 /**
  * The default copy for every {@link ToolkitErrorKey}, read from the live {@link FormError} each key's
@@ -51,12 +33,6 @@ export const DEFAULT_ERROR_COPY: Record<ToolkitErrorKey, string> = {
 }
 
 // MARK: - Config
-
-/**
- * Which swallowed failure an {@link FormRouteConfig.onError} call describes; `build` is a failed
- * {@link defineLazyRoute} build, reported through {@link LazyRouteOptions.onError}.
- */
-export type FormErrorStage = 'build' | 'guard' | 'inspection' | 'enrichment' | 'delivery' | 'unexpected'
 
 // MARK: - Resource inference
 
@@ -136,27 +112,7 @@ export interface FormRouteConfig<
    * message or object, which can quote submission data. Override it to log the full error where your
    * pipeline can hold that PII.
    */
-  onError?: (error: unknown, context: { stage: FormErrorStage }) => void | Promise<void>
-}
-
-// A bounded machine-identifier shape for `error.code`: short, and free of the spaces/`@`/`=` that
-// free-text or interpolated submission data would carry. Provider `code`s aren't guaranteed PII-free
-// (one set `code = 'recipient=ada@example.com'`), so anything outside this is dropped.
-const SAFE_ERROR_CODE = /^[A-Za-z0-9_.:-]{1,64}$/
-
-/**
- * A PII-safe one-line description of a thrown value for the default reporter: its class, a numeric
- * `status`, and a `code` only when it matches a bounded machine-identifier — never its message or body,
- * and never a free-text code, since those can quote submission data.
- */
-function summarizeError(error: unknown): string {
-  if (!(error instanceof Error)) return `non-error ${typeof error}`
-
-  const parts = [error.name]
-  const { code, status } = error as { code?: unknown; status?: unknown }
-  if (typeof code === 'number' || (typeof code === 'string' && SAFE_ERROR_CODE.test(code))) parts.push(`code=${code}`)
-  if (typeof status === 'number') parts.push(`status=${status}`)
-  return parts.join(' ')
+  onError?: ErrorReporter
 }
 
 /**
@@ -198,22 +154,7 @@ export function createFormRoute<
   const S extends SchemaInput,
   const Es extends readonly Enricher<Submission<S>, unknown>[] = []
 >(config: FormRouteConfig<S, Es>): APIRoute {
-  const onError: NonNullable<FormRouteConfig<S, Es>['onError']> =
-    config.onError ??
-    ((error, { stage }) => console.error(`[astro-form-submissions] ${stage} error: ${summarizeError(error)}`))
-
-  /**
-   * Every `onError` call is funnelled through here: awaited so async hooks can't detach into
-   * unhandled rejections, and caught so a broken reporter can never replace the documented
-   * response. Reporter failures are deliberately not re-reported — there is nowhere left to send them.
-   */
-  const report = async (error: unknown, stage: FormErrorStage): Promise<void> => {
-    try {
-      await onError(error, { stage })
-    } catch {
-      /* see above */
-    }
-  }
+  const report = containedReporter(config.onError)
 
   const dispatchGroups = dispatchGroupsFrom<Dispatcher<Submission<S>, MergedProvided<Es>>>(config.dispatchers ?? [])
 
@@ -263,109 +204,11 @@ export function createFormRoute<
     let resourcesExposed = false
 
     try {
-      // A quarantine verdict from any guard or inspector accumulates here (non-terminal, so later
-      // stages still run) and is applied at dispatch: only dispatchers with `acceptsQuarantined` deliver.
-      let quarantined = false
-      const quarantineReasons: string[] = []
+      const admission = await admit(config, { request, url, site, submittedAt, clientAddress, report, registerReport })
+      if (admission.outcome === 'respond') return admission.response
+      if (admission.outcome === 'drop') return jsonOk()
 
-      const guardContext: GuardContext = {
-        request,
-        requestURL: url,
-        siteURL: site,
-        submittedAt,
-        report: (error) => registerReport(error, 'guard'),
-        get clientAddress(): string | undefined {
-          return clientAddress()
-        }
-      }
-
-      for (const guard of config.guards ?? []) {
-        let result
-        try {
-          result = await guard.guard(guardContext)
-        } catch (error) {
-          // Default fail-open: a broken guard must not block every submission. A guard that opts into
-          // `failClosed` fails the request on its bug instead (there's no meaningful user-facing reason).
-          await report(error, 'guard')
-          if (guard.failClosed) return fail(ERRORS.unavailable)
-          continue
-        }
-
-        if (!result) continue
-        if (result.action === 'reject') return fail(result.error)
-        if (result.action === 'drop') return jsonOk()
-
-        // Non-terminal: record and keep going. A later drop/reject still short-circuits and wins.
-        if (result.action === 'quarantine') {
-          quarantined = true
-          if (result.reason !== undefined) quarantineReasons.push(result.reason)
-        }
-      }
-
-      const formData = await request.formData().catch(() => undefined)
-      if (!formData) return fail(ERRORS.invalidForm)
-
-      const schemaContext: SchemaContext = { data: formData, requestURL: url, siteURL: site, submittedAt }
-      const validator = resolveValidator(config.schema, schemaContext)
-      const validation = await validator['~standard'].validate(formDataToObject(formData))
-
-      // Standard Schema signals failure by the *presence* of `issues` — an empty array is still a
-      // failure, so fail closed on any issues result. `mapIssues([])` yields the generic summary with no fieldErrors.
-      if (validation.issues) return jsonValidationError(mapIssues(validation.issues, config.errors, formData))
-
-      // A conformant success carries `value`; a result with neither issues nor value is non-conformant,
-      // so reject rather than dispatch an empty submission.
-      if (!('value' in validation)) return fail(ERRORS.invalidForm, formData)
-
-      // Every stage indexes/spreads the submission, so enforce the record precondition here: a schema
-      // that transforms to a scalar/array/null is a misconfiguration — report it and fail closed rather
-      // than object-spread it into a garbage submission.
-      const value = validation.value
-      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        await report(new Error('Schema output must be an object'), 'unexpected')
-        return fail(ERRORS.unavailable, formData)
-      }
-      const submission = value as Submission<S>
-
-      const inspectionContext: InspectionContext<Submission<S>> = {
-        submission,
-        data: formData,
-        requestURL: url,
-        siteURL: site,
-        submittedAt,
-
-        // The inspectors' diagnostics channel, drained before the response returns.
-        report: (error) => registerReport(error, 'inspection'),
-        get clientAddress(): string | undefined {
-          return clientAddress()
-        }
-      }
-
-      for (const inspector of config.inspectors ?? []) {
-        let result
-        try {
-          result = await inspector.inspect(inspectionContext)
-        } catch (error) {
-          // Default fail-open: an unexpected throw is the inspector's bug, not the sender's — skip it
-          // rather than reject every submission. An inspector that opts into `failClosed` fails the
-          // request on its bug instead; one that fails closed on its own expected failures returns `{ reject }`.
-          await report(error, 'inspection')
-          if (inspector.failClosed) return fail(ERRORS.unavailable, formData)
-          continue
-        }
-
-        // The type requires an explicit result, but an untyped consumer could still return nothing;
-        // treat that as an accept (fail-open, consistent with how a throwing inspector is handled).
-        if (!result) continue
-        if (result.action === 'reject') return fail(result.error, formData)
-        if (result.action === 'drop') return jsonOk()
-
-        // Non-terminal: record and keep going. A later drop/reject still short-circuits and wins.
-        if (result.action === 'quarantine') {
-          quarantined = true
-          if (result.reason !== undefined) quarantineReasons.push(result.reason)
-        }
-      }
+      const { formData, submission, quarantined, quarantineReasons } = admission
 
       const enrichmentContext: EnrichmentContext<Submission<S>> = {
         submission,
