@@ -174,7 +174,25 @@ describe('createUploadPutRoute', () => {
     const response = await put(route, token)
 
     expect(response.status).toBe(502)
-    expect(onError).toHaveBeenCalledWith(failure)
+    expect(onError).toHaveBeenCalledWith(failure, { stage: 'upload' })
+  })
+
+  it('logs a failed write by default', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const storage: FileStorage = {
+      put: async () => {},
+      get: async () => null,
+      delete: async () => {},
+      putStream: async () => {
+        throw new Error('bucket unavailable')
+      }
+    }
+    const route = createUploadPutRoute({ storage, secret: SECRET })
+    const token = tokenOf((await new WorkerUploadTarget({ secret: SECRET, basePath: BASE_PATH }).prepare(upload)).url)
+
+    expect((await put(route, token)).status).toBe(502)
+    expect(consoleSpy).toHaveBeenCalledWith('[astro-form-submissions] upload error: Error')
+    consoleSpy.mockRestore()
   })
 
   it('refuses to construct over a storage that cannot stream', () => {

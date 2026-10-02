@@ -1,8 +1,9 @@
 /**
  * Which swallowed failure an `onError` call describes; `build` is a failed {@link defineLazyRoute}
- * build, reported through {@link LazyRouteOptions.onError}.
+ * build, reported through {@link LazyRouteOptions.onError}, and `upload` a failed write on
+ * {@link createUploadPutRoute}.
  */
-export type FormErrorStage = 'build' | 'guard' | 'inspection' | 'enrichment' | 'delivery' | 'unexpected'
+export type FormErrorStage = 'build' | 'guard' | 'inspection' | 'enrichment' | 'delivery' | 'upload' | 'unexpected'
 
 /** A route's error hook: called with each swallowed failure and the stage it happened in. */
 export type ErrorReporter = (error: unknown, context: { stage: FormErrorStage }) => void | Promise<void>

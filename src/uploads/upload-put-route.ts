@@ -1,3 +1,4 @@
+import { containedReporter, type ErrorReporter } from '#reporting.js'
 import type { FileStorage } from '#storage/storage.js'
 import { assertValidSigningSecret, tokenFromPathSegment } from '#tokens.js'
 import { filenameDigest, verifyUploadClaims } from '#uploads/upload-claims.js'
@@ -15,10 +16,11 @@ export interface CreateUploadPutRouteConfig {
   tokenParam?: string
 
   /**
-   * Called with a failed write before the 502 is returned. Awaited and contained, so a reporter that
-   * throws can't change the response. Default: nothing is reported.
+   * Called with a failed write (stage `upload`) before the 502 is returned. Awaited and contained, so a
+   * reporter that throws can't change the response. The same contract as the form route's `onError`;
+   * default {@link defaultErrorReporter}.
    */
-  onError?: (error: unknown) => void | Promise<void>
+  onError?: ErrorReporter
 }
 
 const plain = (body: string, status: number) =>
@@ -58,6 +60,7 @@ export function createUploadPutRoute(config: CreateUploadPutRouteConfig): APIRou
   }
 
   const putStream = config.storage.putStream.bind(config.storage)
+  const report = containedReporter(config.onError)
 
   const tokenParam = config.tokenParam ?? 'token'
 
@@ -84,12 +87,7 @@ export function createUploadPutRoute(config: CreateUploadPutRouteConfig): APIRou
         size: upload.size
       })
     } catch (error) {
-      try {
-        await config.onError?.(error)
-      } catch {
-        // Nowhere left to report a broken reporter; the sender still gets the 502.
-      }
-
+      await report(error, 'upload')
       return plain('This file could not be stored. Please try again.', 502)
     }
 
