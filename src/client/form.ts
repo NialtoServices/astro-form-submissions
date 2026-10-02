@@ -30,6 +30,19 @@
  *   (a non-positive or non-finite value is ignored in favour of the default).
  * - `.cf-turnstile` — an optional Turnstile widget container (Cloudflare's own convention); the
  *   script refreshes it after each attempt so a retry never resubmits a spent token.
+ *
+ * ## Direct uploads (opt-in)
+ *
+ * - `data-astro-form-upload-action` on the `<form>` — the upload route (see `createUploadRoute`). With it,
+ *   file inputs marked `data-astro-form-upload` never join a submission; when any of them holds files, a
+ *   submit first asks the upload route where to send each one, uploads them with progress, refreshes
+ *   Turnstile, then posts the form with one receipt per file.
+ * - `data-astro-form-upload-receipt-field` on the `<form>` — the field the receipts are posted under.
+ *   Default `upload`, matching the `UploadedFiles` enricher.
+ * - `data-astro-form-message-uploading` on the status element — the copy shown while files upload, with
+ *   `{current}`, `{total}` and `{percent}` filled in.
+ * - `astro-form:upload-progress` — emitted on the form as bytes go up, with
+ *   `{ current, total, loaded, size, percent }`.
  */
 
 // MARK: - Configuration
@@ -37,6 +50,13 @@
 // Browsers provide no application deadline of their own: a stalled connection would otherwise
 // leave the form pending for the page lifetime. Override per form via `data-astro-form-submit-timeout` (ms).
 const DEFAULT_SUBMIT_TIMEOUT_MS = 30_000
+
+// A refreshed Turnstile widget usually issues a new token within a second or two; past this, the
+// submission goes ahead and the server's verification error explains the failure.
+const TURNSTILE_TOKEN_TIMEOUT_MS = 30_000
+const TURNSTILE_POLL_INTERVAL_MS = 100
+
+const DEFAULT_RECEIPT_FIELD = 'upload'
 
 // MARK: - Response parsing
 
@@ -188,6 +208,99 @@ function resetTurnstileWidget(formElement: HTMLFormElement): void {
   }
 }
 
+/**
+ * Resolves once this form's Turnstile widget holds a token, or after {@link TURNSTILE_TOKEN_TIMEOUT_MS}.
+ * Resolves at once for a form without a widget. Reads the hidden response input the widget renders.
+ */
+function waitForTurnstileToken(formElement: HTMLFormElement): Promise<void> {
+  if (!formElement.querySelector('.cf-turnstile')) return Promise.resolve()
+
+  const deadline = Date.now() + TURNSTILE_TOKEN_TIMEOUT_MS
+  return new Promise((resolve) => {
+    const poll = () => {
+      const tokenInput = formElement.querySelector<HTMLInputElement>('[name="cf-turnstile-response"]')
+      if ((tokenInput && tokenInput.value !== '') || Date.now() >= deadline) {
+        resolve()
+        return
+      }
+
+      setTimeout(poll, TURNSTILE_POLL_INTERVAL_MS)
+    }
+    poll()
+  })
+}
+
+// MARK: - Direct uploads
+
+/** Where and how to upload one file, and the receipt proving it was admitted, as the upload route grants them. */
+interface GrantedUpload {
+  url: string
+  method: string
+  headers: Record<string, string>
+  receipt: string
+}
+
+/** Narrow the upload route's `uploads` list, or `null` when any entry is malformed. */
+function readGrantedUploads(result: unknown): GrantedUpload[] | null {
+  if (!isRecord(result) || !Array.isArray(result.uploads)) return null
+
+  const uploads: GrantedUpload[] = []
+  for (const entry of result.uploads) {
+    if (!isRecord(entry) || typeof entry.url !== 'string' || typeof entry.method !== 'string') return null
+    if (typeof entry.receipt !== 'string' || !isRecord(entry.headers)) return null
+
+    const headers: Record<string, string> = {}
+    for (const [name, value] of Object.entries(entry.headers)) {
+      if (typeof value === 'string') headers[name] = value
+    }
+    uploads.push({ url: entry.url, method: entry.method, headers, receipt: entry.receipt })
+  }
+  return uploads
+}
+
+/** The file inputs whose files upload directly, rather than joining the submission. */
+function uploadInputs(formElement: HTMLFormElement): HTMLInputElement[] {
+  return Array.from(formElement.querySelectorAll<HTMLInputElement>('input[type="file"][data-astro-form-upload]'))
+}
+
+/** The form's data without any directly-uploaded file input. */
+function formDataWithoutUploads(formElement: HTMLFormElement, submitter: HTMLElement | null): FormData {
+  const formData = submitter ? new FormData(formElement, submitter) : new FormData(formElement)
+  for (const input of uploadInputs(formElement)) {
+    if (input.name) formData.delete(input.name)
+  }
+  return formData
+}
+
+/**
+ * Upload one file as instructed, reporting bytes sent as they go. Resolves `true` on a 2xx response and
+ * `false` on any other status or a network failure. `XMLHttpRequest`, because `fetch` reports no upload
+ * progress.
+ */
+function uploadFile(upload: GrantedUpload, file: File, onProgress: (loaded: number) => void): Promise<boolean> {
+  return new Promise((resolve) => {
+    const request = new XMLHttpRequest()
+    request.open(upload.method, upload.url)
+    for (const [name, value] of Object.entries(upload.headers)) request.setRequestHeader(name, value)
+
+    request.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) onProgress(event.loaded)
+    })
+    request.addEventListener('load', () => resolve(request.status >= 200 && request.status < 300))
+    request.addEventListener('error', () => resolve(false))
+    request.addEventListener('abort', () => resolve(false))
+    request.send(file)
+  })
+}
+
+/** Fill the uploading copy's `{current}`, `{total}` and `{percent}` placeholders. */
+function formatUploadingMessage(template: string, current: number, total: number, percent: number): string {
+  return template
+    .replaceAll('{current}', String(current))
+    .replaceAll('{total}', String(total))
+    .replaceAll('{percent}', String(percent))
+}
+
 // MARK: - Form enhancement
 
 /** The per-form elements and copy resolved once at enhancement time and shared by both handlers. */
@@ -197,6 +310,7 @@ interface FormBinding {
   successElement: HTMLElement | null
   messages: {
     sending?: string
+    uploading?: string
     success?: string
     genericError?: string
     networkError?: string
@@ -218,14 +332,14 @@ function resolveSubmitTimeout(formElement: HTMLFormElement): number {
  * misread as a delivery failure.
  */
 async function sendRequest(
-  formElement: HTMLFormElement,
+  url: string,
   formData: FormData,
   timeoutMs: number
 ): Promise<{ response: Response; result: unknown } | null> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetch(formElement.action, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         Accept: 'application/json'
@@ -315,6 +429,103 @@ function bindProgressiveRecovery(formElement: HTMLFormElement): void {
   })
 }
 
+/** What a POST to the form's endpoints came to: its parsed `{ ok: true }` body, or the error to present. */
+type PostOutcome =
+  { ok: true; result: Record<string, unknown> } | { ok: false; error: string; fieldErrors?: Record<string, string> }
+
+/**
+ * POST form data and interpret the reply against the `{ ok: true }` contract: success, the server's error
+ * and field errors, or the network-error copy when no reply arrived.
+ */
+async function postForm(binding: FormBinding, url: string, formData: FormData): Promise<PostOutcome> {
+  const { formElement, messages } = binding
+  const request = await sendRequest(url, formData, resolveSubmitTimeout(formElement))
+  if (!request) return { ok: false, error: messages.networkError ?? '' }
+
+  // Success is the documented `{ ok: true }` contract — any other parseable 2xx body
+  // (a proxy page, misrouting, a future endpoint) must not trigger the success UI.
+  const { response, result } = request
+  if (!(response.ok && isRecord(result) && result.ok === true)) {
+    const serverError = isRecord(result) && typeof result.error === 'string' ? result.error : ''
+    return { ok: false, error: serverError || messages.genericError || '', fieldErrors: readFieldErrors(result) }
+  }
+
+  return { ok: true, result }
+}
+
+/**
+ * The three-step submission for a form with direct uploads: ask the upload route where each file goes,
+ * upload them with progress, then post the form with a receipt per file. Every step's failure ends the
+ * attempt; a retry starts again from the first step, since the server deletes a refused submission's files.
+ */
+async function submitWithUploads(
+  binding: FormBinding,
+  uploadAction: string,
+  formData: FormData,
+  files: File[]
+): Promise<PostOutcome & { formData?: FormData }> {
+  const { formElement, statusElement, messages } = binding
+
+  const uploadRequest = new FormData()
+  for (const [name, value] of formData) uploadRequest.append(name, value)
+  uploadRequest.set(
+    'uploads',
+    JSON.stringify(files.map((file) => ({ name: file.name, size: file.size, type: file.type })))
+  )
+
+  const admission = await postForm(binding, uploadAction, uploadRequest)
+  if (!admission.ok) return admission
+
+  // A dropped or quarantined request is granted nothing, and the form route meets the same verdict, so
+  // the submission goes ahead without its files rather than revealing the difference.
+  const granted = readGrantedUploads(admission.result)
+  if (!granted || (granted.length > 0 && granted.length !== files.length)) {
+    return { ok: false, error: messages.genericError ?? '' }
+  }
+
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0)
+  let bytesBefore = 0
+  for (const [index, upload] of granted.entries()) {
+    const file = files[index]!
+    const onProgress = (loaded: number) => {
+      const percent = totalBytes > 0 ? Math.min(100, Math.floor(((bytesBefore + loaded) * 100) / totalBytes)) : 100
+      if (messages.uploading) {
+        statusElement.textContent = formatUploadingMessage(messages.uploading, index + 1, granted.length, percent)
+      }
+
+      formElement.dispatchEvent(
+        new CustomEvent('astro-form:upload-progress', {
+          bubbles: true,
+          detail: { current: index + 1, total: granted.length, loaded, size: file.size, percent }
+        })
+      )
+    }
+
+    onProgress(0)
+    if (!(await uploadFile(upload, file, onProgress))) return { ok: false, error: messages.networkError ?? '' }
+
+    bytesBefore += file.size
+  }
+
+  statusElement.textContent = messages.sending ?? ''
+
+  // The upload route spent the Turnstile token, so the form route needs a fresh one.
+  resetTurnstileWidget(formElement)
+  await waitForTurnstileToken(formElement)
+
+  const finalData = new FormData()
+  for (const [name, value] of formData) finalData.append(name, value)
+  for (const tokenInput of formElement.querySelectorAll<HTMLInputElement>('.cf-turnstile input[type="hidden"]')) {
+    if (tokenInput.name) finalData.set(tokenInput.name, tokenInput.value)
+  }
+
+  const receiptField = formElement.dataset.astroFormUploadReceiptField || DEFAULT_RECEIPT_FIELD
+  for (const upload of granted) finalData.append(receiptField, upload.receipt)
+
+  const outcome = await postForm(binding, formElement.action, finalData)
+  return outcome.ok ? { ...outcome, formData: finalData } : outcome
+}
+
 /** Handle a submit: guard re-entry, POST via `fetch`, and route the outcome to success or error presentation. */
 async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<void> {
   const { formElement, statusElement, messages } = binding
@@ -328,8 +539,16 @@ async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<voi
   const submitter =
     event.submitter instanceof HTMLButtonElement || event.submitter instanceof HTMLInputElement ? event.submitter : null
 
+  // Direct-upload inputs never join a submission; their files go up in steps of their own.
+  const uploadAction = formElement.dataset.astroFormUploadAction
+  const files = uploadAction ? uploadInputs(formElement).flatMap((input) => Array.from(input.files ?? [])) : []
+
   // A disabled control is omitted from FormData, so the submitter must still be enabled here.
-  const formData = submitter ? new FormData(formElement, submitter) : new FormData(formElement)
+  const formData = uploadAction
+    ? formDataWithoutUploads(formElement, submitter)
+    : submitter
+      ? new FormData(formElement, submitter)
+      : new FormData(formElement)
 
   formElement.dataset.astroFormSubmitting = 'true'
   if (submitter) submitter.disabled = true
@@ -339,30 +558,26 @@ async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<voi
   statusElement.textContent = messages.sending ?? ''
   statusElement.dataset.astroFormState = 'pending'
 
-  let request: { response: Response; result: unknown } | null
+  let outcome: PostOutcome & { formData?: FormData }
   try {
-    request = await sendRequest(formElement, formData, resolveSubmitTimeout(formElement))
+    outcome =
+      uploadAction && files.length > 0
+        ? await submitWithUploads(binding, uploadAction, formData, files)
+        : await postForm(binding, formElement.action, formData)
   } finally {
     if (submitter) submitter.disabled = false
     delete formElement.dataset.astroFormSubmitting
   }
 
-  if (!request) {
-    showError(binding, messages.networkError ?? '')
-    return
-  }
-
-  // Success is the documented `{ ok: true }` contract — any other parseable 2xx body
-  // (a proxy page, misrouting, a future endpoint) must not trigger the success UI.
-  const { response, result } = request
-  if (!(response.ok && isRecord(result) && result.ok === true)) {
-    const serverError = isRecord(result) && typeof result.error === 'string' ? result.error : ''
-    showError(binding, serverError || messages.genericError || '', readFieldErrors(result))
+  if (!outcome.ok) {
+    showError(binding, outcome.error, outcome.fieldErrors)
     return
   }
 
   // Dispatched before any swap so the form is still in the document for listeners.
-  formElement.dispatchEvent(new CustomEvent('astro-form:success', { bubbles: true, detail: { data: formData } }))
+  formElement.dispatchEvent(
+    new CustomEvent('astro-form:success', { bubbles: true, detail: { data: outcome.formData ?? formData } })
+  )
   showSuccess(binding)
 }
 
@@ -387,6 +602,7 @@ function enhanceForm(formElement: HTMLFormElement): void {
 
   const {
     astroFormMessageSending: sending,
+    astroFormMessageUploading: uploading,
     astroFormMessageSuccess: success,
     astroFormMessageGenericError: genericError,
     astroFormMessageNetworkError: networkError
@@ -397,7 +613,7 @@ function enhanceForm(formElement: HTMLFormElement): void {
     formElement,
     statusElement,
     successElement,
-    messages: { sending, success, genericError, networkError }
+    messages: { sending, uploading, success, genericError, networkError }
   }
 
   bindProgressiveRecovery(formElement)
