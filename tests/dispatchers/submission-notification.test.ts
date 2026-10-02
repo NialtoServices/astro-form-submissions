@@ -231,6 +231,17 @@ describe('submissionNotificationTemplates attachments', () => {
     expect(text).not.toContain('(')
   })
 
+  it('never shows a submission field named `size` as an attachment size', () => {
+    const order = { name: 'Ada Lovelace', size: 'Large' }
+    const orderTemplates = submissionNotificationTemplates<typeof order, 'files'>({
+      fields: ['name'],
+      attachments: 'files'
+    })
+
+    expect(orderTemplates.text(order, withFiles)).toContain('quote.pdf: https://example.com/files/aaa~bbb/')
+    expect(orderTemplates.html(order, withFiles)).not.toContain('Large')
+  })
+
   it('escapes a hostile attachment name in the html body', () => {
     const hostile = dispatchContext({
       resources: { files: [{ name: '<script>x</script>', url: 'https://example.com/files/x/' }] }

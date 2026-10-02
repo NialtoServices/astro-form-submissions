@@ -164,6 +164,17 @@ describe('submissionAcknowledgementTemplates', () => {
     expect(html).not.toContain('javascript:')
   })
 
+  it('never shows a submission field named `size` as an attachment size', () => {
+    const order = { name: 'Ada Lovelace', size: 'Large' }
+    const templates = submissionAcknowledgementTemplates<typeof order, 'files'>({ attachments: 'files' })
+    const withFiles = dispatchContext({
+      resources: { files: [{ name: 'quote.pdf', url: 'https://example.com/files/aaa~bbb/' }] }
+    })
+
+    expect(templates.text(order, withFiles)).toContain('quote.pdf: https://example.com/files/aaa~bbb/')
+    expect(templates.html(order, withFiles)).not.toContain('Large')
+  })
+
   it('marks the templates as exposing resources only when an attachments field is configured', () => {
     const withAttachments = submissionAcknowledgementTemplates<{ name: string }, 'files'>({
       attachments: 'files'

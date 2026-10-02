@@ -51,8 +51,12 @@ export interface AttachmentView {
   /** The attachment's download URL. */
   url: string
 
-  /** The attachment's human-readable size (e.g. `2.5 MB`), absent when the source has no usable size. */
-  size?: string
+  /**
+   * The attachment's human-readable size (e.g. `2.5 MB`), or `''` when the source has no usable size.
+   * Always present: Mustache resolves a missing key against the enclosing view, so an absent `size`
+   * would render the submission's own `size` field instead.
+   */
+  size: string
 }
 
 /** Accepts only well-formed `http:`/`https:` links, so a hostile `javascript:`/`data:` url is dropped. */
@@ -80,8 +84,7 @@ export function resolveAttachments(value: unknown): AttachmentView[] | undefined
     const { name, url, size } = entry
     if (typeof name !== 'string' || typeof url !== 'string' || !isSafeUrl(url)) return []
 
-    const formattedSize = typeof size === 'number' ? formatFileSize(size) : ''
-    return [formattedSize ? { name, url, size: formattedSize } : { name, url }]
+    return [{ name, url, size: typeof size === 'number' ? formatFileSize(size) : '' }]
   })
 
   return links.length > 0 ? links : undefined
