@@ -293,14 +293,17 @@ describe('form script — direct uploads', () => {
 
   it('gives up on an upload that stops making progress, leaving the form ready for a retry', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
-    installFakeXHR(['stall'])
-    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true, uploads: grants }))
+    const sent = installFakeXHR(['stall'])
+    stubFetch(async () => jsonResponse({ ok: true, uploads: grants }))
     const { form, fileInput, status, submit } = mountForm()
     form.dataset.astroFormSubmitTimeout = '5000'
     choose(fileInput, [photo, video])
 
+    // The idle deadline starts when the upload is sent, so measure from there. Flushing with a zero advance
+    // (rather than vi.waitFor, which moves fake time on every check) keeps the clock where the send left it.
     submit()
-    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledOnce())
+    for (let attempt = 0; attempt < 20 && sent.length === 0; attempt++) await vi.advanceTimersByTimeAsync(0)
+    expect(sent).toHaveLength(1)
     await vi.advanceTimersByTimeAsync(4_999)
     expect(status.dataset.astroFormState).toBe('pending')
 
@@ -395,6 +398,25 @@ describe('form script — direct uploads', () => {
     await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
 
     expect((fetchSpy.mock.calls[1]![1]!.body as FormData).get('turnstile-token')).toBe('fresh-token')
+  })
+
+  it('waits for a token before asking the upload route for grants', async () => {
+    installFakeXHR()
+    const fetchSpy = stubFetch(async (url) =>
+      String(url).includes('/uploads/')
+        ? jsonResponse({ ok: true, uploads: grants.slice(0, 1) })
+        : jsonResponse({ ok: true })
+    )
+    const { fileInput, status, submit } = mountForm()
+    const tokenInput = document.querySelector<HTMLInputElement>('.cf-turnstile input')!
+    tokenInput.value = ''
+    setTimeout(() => (tokenInput.value = 'first-token'), 300)
+    choose(fileInput, [photo])
+
+    submit()
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'), { timeout: 3000 })
+
+    expect((fetchSpy.mock.calls[0]![1]!.body as FormData).get('cf-turnstile-response')).toBe('first-token')
   })
 
   it('needs no Turnstile widget at all', async () => {

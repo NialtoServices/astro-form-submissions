@@ -12,7 +12,7 @@ function mountForm({ successPanel = false } = {}) {
   document.body.innerHTML = `
     <form data-astro-form action="/api/contact" method="POST">
       <input type="text" name="name" />
-      <div class="cf-turnstile"></div>
+      <div class="cf-turnstile"><input type="hidden" name="cf-turnstile-response" value="issued-token" /></div>
       <button type="submit">Send</button>
       <p
         data-astro-form-status
@@ -100,6 +100,7 @@ describe('form script', () => {
 
     submit()
     submit()
+    await vi.waitFor(() => expect(resolveResponse).toBeTypeOf('function'))
     resolveResponse!(jsonResponse({ ok: true }))
     await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
 
@@ -268,6 +269,7 @@ describe('form script submit controls', () => {
     form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, submitter: control }))
     expect(control.disabled).toBe(true)
 
+    await vi.waitFor(() => expect(resolveResponse).toBeTypeOf('function'))
     resolveResponse!(jsonResponse({ ok: true }))
     await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
     expect(control.disabled).toBe(false)
@@ -477,6 +479,7 @@ describe('form script field errors', () => {
     expect(email.getAttribute('aria-invalid')).toBeNull()
     expect(message.getAttribute('aria-invalid')).toBeNull()
 
+    await vi.waitFor(() => expect(resolveSecond).toBeTypeOf('function'))
     resolveSecond!(
       jsonResponse({ error: 'Please correct the highlighted fields.', fieldErrors: { email: 'Still invalid.' } }, 400)
     )
@@ -544,6 +547,7 @@ describe('form script field errors', () => {
 
     expect(summary.hidden).toBe(true)
     expect(summary.textContent).toBe('')
+    await vi.waitFor(() => expect(resolveSecond).toBeTypeOf('function'))
     resolveSecond!(jsonResponse({ ok: true }))
   })
 
@@ -602,6 +606,70 @@ describe('form script field errors', () => {
 
     email.dispatchEvent(new Event('input', { bubbles: true }))
     expect(email.getAttribute('aria-describedby')).toBe('contact-email-error')
+  })
+})
+
+describe('form script Turnstile wait', () => {
+  /** Mount a form whose widget has not issued a token yet, and issue one after `delayMs` (never when null). */
+  function mountWaitingForm(delayMs: number | null) {
+    document.body.innerHTML = `
+      <form data-astro-form action="/api/contact" method="POST">
+        <input type="text" name="name" value="Ada" />
+        <div class="cf-turnstile"><input type="hidden" name="cf-turnstile-response" value="" /></div>
+        <button type="submit">Send</button>
+        <p data-astro-form-status data-astro-form-message-success="Thanks."></p>
+      </form>`
+    initializeForms()
+    const tokenInput = document.querySelector<HTMLInputElement>('[name="cf-turnstile-response"]')!
+    if (delayMs !== null) setTimeout(() => (tokenInput.value = 'late-token'), delayMs)
+
+    const form = document.querySelector<HTMLFormElement>('form')!
+    const status = document.querySelector<HTMLElement>('[data-astro-form-status]')!
+    return { status, submit: () => form.dispatchEvent(new Event('submit', { cancelable: true })) }
+  }
+
+  it('waits for the widget to issue a token and sends that token', async () => {
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { status, submit } = mountWaitingForm(300)
+
+    submit()
+    expect(fetchSpy).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'), { timeout: 2000 })
+
+    expect((fetchSpy.mock.calls[0]![1]!.body as FormData).get('cf-turnstile-response')).toBe('late-token')
+  })
+
+  it('sends one request when submitted twice during the wait', async () => {
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { status, submit } = mountWaitingForm(300)
+
+    submit()
+    submit()
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'), { timeout: 2000 })
+
+    expect(fetchSpy).toHaveBeenCalledOnce()
+  })
+
+  it('submits after the wait times out, leaving verification to the server', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { submit } = mountWaitingForm(null)
+
+    submit()
+    await vi.advanceTimersByTimeAsync(29_000)
+    expect(fetchSpy).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(fetchSpy).toHaveBeenCalledOnce()
+  })
+
+  it('submits at once without a widget', async () => {
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { form, submit } = mountForm()
+    form.querySelector('.cf-turnstile')?.remove()
+
+    submit()
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledOnce(), { timeout: 200 })
   })
 })
 

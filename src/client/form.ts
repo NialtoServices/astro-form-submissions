@@ -240,6 +240,13 @@ function turnstileTokenInputs(formElement: HTMLFormElement): HTMLInputElement[] 
   return Array.from(formElement.querySelectorAll<HTMLInputElement>('.cf-turnstile input[type="hidden"]'))
 }
 
+/** Set the form's current Turnstile tokens on outgoing form data, replacing any captured before they were issued. */
+function applyTurnstileTokens(formElement: HTMLFormElement, formData: FormData): void {
+  for (const tokenInputElement of turnstileTokenInputs(formElement)) {
+    if (tokenInputElement.name) formData.set(tokenInputElement.name, tokenInputElement.value)
+  }
+}
+
 /**
  * Resolves once every Turnstile widget in this form holds a token, or after
  * {@link TURNSTILE_TOKEN_TIMEOUT_MS}. Resolves at once for a form without a widget. Reads the hidden
@@ -600,9 +607,7 @@ async function submitWithUploads(
 
   const finalData = new FormData()
   for (const [name, value] of formData) finalData.append(name, value)
-  for (const tokenInputElement of turnstileTokenInputs(formElement)) {
-    if (tokenInputElement.name) finalData.set(tokenInputElement.name, tokenInputElement.value)
-  }
+  applyTurnstileTokens(formElement, finalData)
 
   const receiptField = formElement.dataset.astroFormUploadReceiptField || DEFAULT_RECEIPT_FIELD
   for (const upload of granted) finalData.append(receiptField, upload.receipt)
@@ -651,6 +656,12 @@ async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<voi
   let outcome: PostOutcome & { formData?: FormData }
   try {
     const submissionURL = resolveSubmissionURL(formElement, submitter)
+
+    // An interaction-only or still-loading widget has no token yet; posting now would spend the attempt
+    // on a certain verification failure. The submitting guard above keeps a second click out meanwhile.
+    await waitForTurnstileToken(formElement)
+    applyTurnstileTokens(formElement, formData)
+
     outcome =
       uploadAction && files.length > 0
         ? await submitWithUploads(binding, uploadAction, submissionURL, formData, files)

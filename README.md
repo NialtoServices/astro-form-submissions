@@ -1062,6 +1062,9 @@ name/value joins the payload. Requests are bounded by a 30-second timeout (overr
 ignored and the default kept); a timeout shows the network-error copy. A [direct upload](#direct-uploads-in-the-form)
 uses the same value as an idle deadline instead, failing once that long passes with no progress, so a
 large file on a slow but moving connection still finishes.
+When the form holds a Turnstile widget that hasn't issued a token yet (still loading, or an
+interaction-only challenge in progress), a submit waits up to 30 seconds for one before posting, so the
+attempt isn't spent on a certain verification failure.
 Success requires the route's `{ ok: true }` body — any other 2xx response is treated as an error.
 
 ### The contract
