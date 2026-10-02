@@ -2,3 +2,4 @@ export type { PendingUpload, UploadInstruction, UploadTarget } from '#uploads/up
 export { R2PresignedUploadTarget, type R2PresignedUploadTargetOptions } from '#uploads/r2-presigned-upload-target.js'
 export { WorkerUploadTarget, type WorkerUploadTargetOptions } from '#uploads/worker-upload-target.js'
 export { createUploadPutRoute, type CreateUploadPutRouteConfig } from '#uploads/upload-put-route.js'
+export { createUploadRoute, type GrantedUpload, type UploadRouteConfig } from '#uploads/upload-route.js'

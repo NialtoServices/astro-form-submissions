@@ -50,8 +50,9 @@ export function jsonValidationError(failure: ValidationFailure, status = 400): R
 /**
  * Build the standard success response.
  *
- * @returns A 200 JSON `{ ok: true }` response.
+ * @param fields - Extra fields to return beside `ok` (e.g. the upload route's `uploads`).
+ * @returns A 200 JSON `{ ok: true, ...fields }` response.
  */
-export function jsonOk(): Response {
-  return new Response(JSON.stringify({ ok: true }), { status: 200, headers: JSON_HEADERS })
+export function jsonOk(fields: Record<string, unknown> = {}): Response {
+  return new Response(JSON.stringify({ ...fields, ok: true }), { status: 200, headers: JSON_HEADERS })
 }

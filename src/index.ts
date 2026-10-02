@@ -62,12 +62,15 @@ export {
 
 export {
   createUploadPutRoute,
+  createUploadRoute,
   R2PresignedUploadTarget,
   WorkerUploadTarget,
   type CreateUploadPutRouteConfig,
+  type GrantedUpload,
   type PendingUpload,
   type R2PresignedUploadTargetOptions,
   type UploadInstruction,
+  type UploadRouteConfig,
   type UploadTarget,
   type WorkerUploadTargetOptions
 } from '#uploads/index.js'
