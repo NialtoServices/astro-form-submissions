@@ -845,6 +845,67 @@ describe('createFormRoute localised copy for unexpected failures', () => {
   })
 })
 
+describe('createFormRoute client address', () => {
+  /** A guard recording the client address every stage is handed. */
+  function addressRecorder() {
+    const seen: (string | undefined)[] = []
+    const guard = {
+      guard: async (context: { clientAddress?: string }) => (
+        seen.push(context.clientAddress),
+        { action: 'accept' as const }
+      )
+    }
+    return { guard, seen }
+  }
+
+  it("uses Astro's client address by default", async () => {
+    const { guard, seen } = addressRecorder()
+    await createFormRoute({ ...baseConfig, guards: [guard] })(
+      makeRouteContext({ body: validForm(), clientAddress: '198.51.100.7' })
+    )
+
+    expect(seen).toEqual(['198.51.100.7'])
+  })
+
+  it('uses the site’s resolver for every stage when one is given', async () => {
+    const { guard, seen } = addressRecorder()
+    const inspected: (string | undefined)[] = []
+    const route = createFormRoute({
+      ...baseConfig,
+      clientAddress: ({ request }) => request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim(),
+      guards: [guard],
+      inspectors: [
+        { inspect: async (context) => (inspected.push(context.clientAddress), { action: 'accept' as const }) }
+      ]
+    })
+
+    await route(
+      makeRouteContext({
+        body: validForm(),
+        clientAddress: '203.0.113.99',
+        headers: { 'X-Forwarded-For': '203.0.113.99, 192.0.2.10' }
+      })
+    )
+
+    expect(seen).toEqual(['192.0.2.10'])
+    expect(inspected).toEqual(['192.0.2.10'])
+  })
+
+  it('treats a throwing resolver as an unknown address', async () => {
+    const { guard, seen } = addressRecorder()
+    const response = await createFormRoute({
+      ...baseConfig,
+      clientAddress: () => {
+        throw new Error('resolver bug')
+      },
+      guards: [guard]
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(200)
+    expect(seen).toEqual([undefined])
+  })
+})
+
 describe('createFormRoute inspector contract', () => {
   it('hands inspectors the built submission, raw form data, request/site URLs, and client address', async () => {
     const seen: {

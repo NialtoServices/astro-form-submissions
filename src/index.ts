@@ -132,6 +132,8 @@ export {
   type MergedProvided
 } from '#route.js'
 
+export type { ClientAddressResolver } from '#admission.js'
+
 export { defaultErrorReporter, type ErrorReporter } from '#reporting.js'
 
 export { MissingEnvError, requireEnv } from '#env.js'

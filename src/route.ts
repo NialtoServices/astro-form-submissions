@@ -1,4 +1,4 @@
-import { admit, ERRORS } from '#admission.js'
+import { admit, clientAddressLookup, ERRORS, type ClientAddressResolver } from '#admission.js'
 import type { DispatchContext, Dispatcher } from '#dispatchers/index.js'
 import { FileUploads, UploadedFiles, type Enricher, type EnrichmentContext } from '#enrichers/index.js'
 import type { FormError, FormErrors, ToolkitErrorKey } from '#errors.js'
@@ -71,6 +71,14 @@ export interface FormRouteConfig<
 > {
   /** Cheap gates run before the body is parsed (e.g. a declared-length fast path, rate limit). Each may accept, quarantine, reject, or drop. */
   guards?: Guard[]
+
+  /**
+   * Resolves the client's address for every stage (the rate-limit key, Turnstile's `remoteip`, and
+   * `clientAddress` on each context). Default: Astro's `context.clientAddress`, which on some adapters
+   * (Node behind a proxy, say) comes from a header the client can set. Pass a resolver that reads only
+   * what your own infrastructure vouches for. A resolver that throws resolves to `undefined`.
+   */
+  clientAddress?: ClientAddressResolver
 
   /**
    * The Standard Schema validator (or a per-request factory, for i18n) that validates and shapes the
@@ -177,15 +185,7 @@ export function createFormRoute<
       pendingReports.push(report(error, stage))
     }
 
-    // Astro's `clientAddress` getter throws in prerendered/static contexts; resolving to `undefined`
-    // keeps a fail-closed anti-bot inspector running there. Shared by all three contexts below.
-    const clientAddress = (): string | undefined => {
-      try {
-        return context.clientAddress
-      } catch {
-        return undefined
-      }
-    }
+    const clientAddress = clientAddressLookup(context, config.clientAddress)
 
     // Enrichers acquire resources (e.g. upload files) and hand back rollbacks. Declared out here so the
     // outer catch can also unwind them; they run in reverse on any later failure, so a half-finished

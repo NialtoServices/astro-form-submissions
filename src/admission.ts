@@ -13,6 +13,7 @@ import {
   type SchemaInput,
   type Submission
 } from '#schema.js'
+import type { APIContext } from 'astro'
 
 // MARK: - Errors
 
@@ -38,6 +39,36 @@ export interface AdmissionConfig<S extends SchemaInput> {
   schema: S
   inspectors?: Inspector<Submission<S>>[]
   errors?: FormErrors
+
+  /**
+   * Resolves the client's address for every stage (the rate-limit key, Turnstile's `remoteip`, and
+   * `clientAddress` on each context). Default: Astro's `context.clientAddress`, which on some adapters
+   * (Node behind a proxy, say) comes from a header the client can set. Pass a resolver that reads only
+   * what your own infrastructure vouches for. A resolver that throws resolves to `undefined`.
+   */
+  clientAddress?: ClientAddressResolver
+}
+
+/** Resolves the client's address from a request's Astro context, or `undefined` when it can't. */
+export type ClientAddressResolver = (context: APIContext) => string | undefined
+
+/**
+ * The client address lookup a route shares across its stages: the site's resolver when given, else
+ * Astro's own. Astro's getter throws in prerendered/static contexts; resolving to `undefined` keeps a
+ * fail-closed anti-bot inspector running there.
+ *
+ * @param context - The request's Astro context.
+ * @param resolver - The site's resolver, if any.
+ * @returns A lookup that never throws.
+ */
+export function clientAddressLookup(context: APIContext, resolver?: ClientAddressResolver): () => string | undefined {
+  return () => {
+    try {
+      return resolver ? resolver(context) : context.clientAddress
+    } catch {
+      return undefined
+    }
+  }
 }
 
 /** What admission reads about the request, and the route's reporters. */

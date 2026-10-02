@@ -1,4 +1,4 @@
-import { admit, ERRORS, type AdmissionConfig } from '#admission.js'
+import { admit, clientAddressLookup, ERRORS, type AdmissionConfig } from '#admission.js'
 import {
   DEFAULT_MAX_FILE_BYTES,
   DEFAULT_MAX_FILES,
@@ -135,13 +135,7 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
       pendingReports.push(report(error, stage))
     }
 
-    const clientAddress = (): string | undefined => {
-      try {
-        return context.clientAddress
-      } catch {
-        return undefined
-      }
-    }
+    const clientAddress = clientAddressLookup(context, config.clientAddress)
 
     // Held outside the try so an unexpected failure (a throwing upload target, say) can still hand the
     // copy resolver the sender's form data.

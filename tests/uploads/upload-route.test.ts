@@ -75,6 +75,17 @@ describe('createUploadRoute', () => {
     expect(claims.exp - Math.floor(Date.now() / 1000)).toBeLessThanOrEqual(120)
   })
 
+  it('hands guards the address from the site’s resolver', async () => {
+    const seen: (string | undefined)[] = []
+    const { route } = routeWith({
+      clientAddress: () => '192.0.2.10',
+      guards: [{ guard: async (context) => (seen.push(context.clientAddress), { action: 'accept' }) }]
+    })
+    await route(request([photo]))
+
+    expect(seen).toEqual(['192.0.2.10'])
+  })
+
   it('localises the failure when the upload target throws', async () => {
     const route = createUploadRoute({
       schema,
