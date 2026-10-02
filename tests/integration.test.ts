@@ -95,7 +95,7 @@ function fullRoute() {
       }),
       // The ops channel opts in, so it still pings and can surface the quarantine reason.
       new DiscordDispatcher({
-        webhookUrl: DISCORD_URL,
+        webhookURL: DISCORD_URL,
         acceptsQuarantined: true,
         title: (submission, context) =>
           context.quarantined

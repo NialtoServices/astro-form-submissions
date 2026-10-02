@@ -64,6 +64,20 @@ describe('createUploadRoute', () => {
     expect(prepared[0]?.filename).toBe('upload')
   })
 
+  it.each([
+    ['receiptTTLSeconds', { receiptTTLSeconds: 120 }],
+    ['the deprecated receiptTtlSeconds', { receiptTtlSeconds: 120 }]
+  ] as const)('signs receipts for the lifetime given as %s', async (_label, lifetime) => {
+    const { route } = routeWith(lifetime)
+    const response = await route(request([photo]))
+    const { uploads } = (await response.json()) as { uploads: { receipt: string }[] }
+    const body = uploads[0]?.receipt.split('.')[1] ?? ''
+    const claims = JSON.parse(atob(body.replace(/-/g, '+').replace(/_/g, '/'))) as { exp: number }
+
+    expect(claims.exp - Math.floor(Date.now() / 1000)).toBeGreaterThan(110)
+    expect(claims.exp - Math.floor(Date.now() / 1000)).toBeLessThanOrEqual(120)
+  })
+
   it('localises the failure when the upload target throws', async () => {
     const route = createUploadRoute({
       schema,

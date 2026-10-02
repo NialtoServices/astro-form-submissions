@@ -60,7 +60,7 @@ export interface AttachmentView {
 }
 
 /** Accepts only well-formed `http:`/`https:` links, so a hostile `javascript:`/`data:` url is dropped. */
-function isSafeUrl(value: string): boolean {
+function isSafeURL(value: string): boolean {
   try {
     const { protocol } = new URL(value)
     return protocol === 'https:' || protocol === 'http:'
@@ -82,7 +82,7 @@ export function resolveAttachments(value: unknown): AttachmentView[] | undefined
     if (!isRecord(entry)) return []
 
     const { name, url, size } = entry
-    if (typeof name !== 'string' || typeof url !== 'string' || !isSafeUrl(url)) return []
+    if (typeof name !== 'string' || typeof url !== 'string' || !isSafeURL(url)) return []
 
     return [{ name, url, size: typeof size === 'number' ? formatFileSize(size) : '' }]
   })

@@ -89,7 +89,7 @@ describe('TurnstileInspector', () => {
     try {
       // A fetch that never settles until its abort signal fires — the observable behaviour of a hung upstream.
       stubFetch(
-        (_requestUrl, requestInit) =>
+        (_requestURL, requestInit) =>
           new Promise<Response>((_resolve, reject) => {
             requestInit?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
           })
@@ -107,8 +107,8 @@ describe('TurnstileInspector', () => {
     const fetchSpy = stubFetch(() => new Response(JSON.stringify({ success: true, hostname: 'example.com' })))
     await new TurnstileInspector({ secretKey: 'secret-key-1' }).inspect(contextFor('token-1'))
 
-    const [requestUrl, requestInit] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit]
-    expect(requestUrl).toBe('https://challenges.cloudflare.com/turnstile/v0/siteverify')
+    const [requestURL, requestInit] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit]
+    expect(requestURL).toBe('https://challenges.cloudflare.com/turnstile/v0/siteverify')
     expect(requestInit.method).toBe('POST')
     const body = requestInit.body as FormData
     expect(body.get('secret')).toBe('secret-key-1')

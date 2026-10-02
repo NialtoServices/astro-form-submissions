@@ -59,11 +59,24 @@ export interface DiscordFieldSpec<E extends FormSubmission = FormSubmission> ext
 /** A bare submission key is shorthand for `{ key }`. */
 export type DiscordFieldInput<E extends FormSubmission = FormSubmission> = (keyof E & string) | DiscordFieldSpec<E>
 
-/** Options for constructing a {@link DiscordDispatcher}. */
-export interface DiscordDispatcherOptions<E extends FormSubmission = FormSubmission> {
-  /** The URL of the Discord webhook to send messages to. */
-  webhookUrl: string
+/**
+ * The webhook a {@link DiscordDispatcher} posts to, under its current name or the deprecated one. Exactly one
+ * of the two is given.
+ */
+export type DiscordWebhook =
+  | {
+      /** The URL of the Discord webhook to send messages to. */
+      webhookURL: string
+      webhookUrl?: undefined
+    }
+  | {
+      /** @deprecated Renamed to `webhookURL`; this spelling will be removed in a future release. */
+      webhookUrl: string
+      webhookURL?: undefined
+    }
 
+/** Options for constructing a {@link DiscordDispatcher}, besides its {@link DiscordWebhook}. */
+export interface DiscordDispatcherSettings<E extends FormSubmission = FormSubmission> {
   /** Embed title. Defaults to a generic label; build one from the site's own fields or the context to customise. */
   title?: (submission: E, context: DispatchContext) => string
 
@@ -102,6 +115,10 @@ export interface DiscordDispatcherOptions<E extends FormSubmission = FormSubmiss
   deliverWhen?: (submission: E, context: DispatchContext) => boolean
 }
 
+/** Options for constructing a {@link DiscordDispatcher}. */
+export type DiscordDispatcherOptions<E extends FormSubmission = FormSubmission> = DiscordDispatcherSettings<E> &
+  DiscordWebhook
+
 /**
  * A Discord webhook delivery failure. Carries the HTTP `status` as a property (so the route's PII-safe reporter can
  * log `status=…` and operators can tell a revoked webhook from rate-limiting or an outage), but never the webhook URL
@@ -123,6 +140,8 @@ export class DiscordDeliveryError extends Error {
  * then call `dispatch` for each submission.
  */
 export class DiscordDispatcher<E extends FormSubmission = FormSubmission> implements Dispatcher<E> {
+  private readonly webhookURL: string
+
   // MARK: - Object Lifecycle
 
   /**
@@ -130,7 +149,14 @@ export class DiscordDispatcher<E extends FormSubmission = FormSubmission> implem
    *
    * @param options - The Discord dispatcher options, including the webhook URL, title, description, fields, and color.
    */
-  constructor(private readonly options: DiscordDispatcherOptions<E>) {}
+  constructor(private readonly options: DiscordDispatcherOptions<E>) {
+    const webhookURL = options.webhookURL ?? options.webhookUrl
+    if (typeof webhookURL !== 'string' || webhookURL === '') {
+      throw new Error('DiscordDispatcher needs a non-empty `webhookURL`.')
+    }
+
+    this.webhookURL = webhookURL
+  }
 
   // MARK: - Dispatcher API
 
@@ -184,7 +210,7 @@ export class DiscordDispatcher<E extends FormSubmission = FormSubmission> implem
     let response: Response
 
     try {
-      response = await fetch(this.options.webhookUrl, {
+      response = await fetch(this.webhookURL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

@@ -37,7 +37,7 @@ const quote: TestFile = { name: 'quote.pdf', type: 'application/pdf', bytes: PDF
  * Runs the real upload route for the given files and returns their receipts and admitted uploads,
  * so every receipt under test is one the route actually issued.
  */
-async function admit(files: TestFile[], receiptTtlSeconds?: number) {
+async function admit(files: TestFile[], receiptTTLSeconds?: number) {
   const prepared: PendingUpload[] = []
   const target: UploadTarget = {
     prepare: async (upload) => {
@@ -49,7 +49,7 @@ async function admit(files: TestFile[], receiptTtlSeconds?: number) {
     schema,
     target,
     secret: SECRET,
-    receiptTtlSeconds,
+    receiptTTLSeconds,
     maxFileBytes: 1e9,
     maxTotalBytes: 1e9
   })

@@ -45,7 +45,7 @@ export function mustacheTemplates<E extends FormSubmission = FormSubmission, A =
     subject: (submission, context) => renderPlain(options.subject, view(submission, context)),
     text: (submission, context) => renderPlain(options.text, view(submission, context)),
     html: (submission, context) =>
-      Mustache.render(options.html, view(submission, context), undefined, { escape: escapeHtml })
+      Mustache.render(options.html, view(submission, context), undefined, { escape: escapeHTML })
   }
 }
 
@@ -59,7 +59,7 @@ function renderPlain(template: string, view: unknown): string {
  * element or a quoted attribute, but leaves `/` intact (it needs no escaping in HTML) so URLs render
  * legibly rather than as `&#x2F;` runs — Mustache's default escape would mangle every slash.
  */
-function escapeHtml(value: unknown): string {
+function escapeHTML(value: unknown): string {
   return String(value).replace(/[&<>"']/g, (character) => {
     switch (character) {
       case '&':

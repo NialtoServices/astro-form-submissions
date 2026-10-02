@@ -212,7 +212,7 @@ export const POST = createFormRoute({
       // No acceptsQuarantined, so a quarantined (e.g. spam) submission is withheld from this mailbox.
     }),
     new DiscordDispatcher({
-      webhookUrl: process.env.DISCORD_WEBHOOK_URL!,
+      webhookURL: process.env.DISCORD_WEBHOOK_URL!,
       fields: ['email'],
       description: (submission) => submission.message,
       acceptsQuarantined: true // the ops channel still gets pinged about flagged submissions
@@ -523,7 +523,7 @@ the trusted `context.siteURL`.
   `EmailDispatcher` **required**, `DiscordDispatcher` **best-effort**. A Discord-only site flips the default:
 
   ```ts
-  dispatchers: [new DiscordDispatcher({ webhookUrl, fields: ['email'], required: true })]
+  dispatchers: [new DiscordDispatcher({ webhookURL, fields: ['email'], required: true })]
   ```
 
 - **`exposesResources`** — whether this delivery carries the enrichers' acquired resources (uploaded-file
@@ -972,7 +972,7 @@ needs that origin in `connect-src`. The filename travels percent-encoded in `x-a
 
 - **Receipts, upload grants and download links are separate kinds of token.** All three are signed
   with the secret you pass, but each verifier accepts only its own kind, so none can stand in for
-  another. Receipts last an hour by default (`receiptTtlSeconds`), and upload URLs 15 minutes.
+  another. Receipts last an hour by default (`receiptTTLSeconds`), and upload URLs 15 minutes.
 - **A presigned URL stores exactly one object of exactly the admitted size.** Its `Content-Length` is
   signed, so R2 refuses any other size, and it carries `If-None-Match: *`, so a stored object can't be
   replaced. Through `WorkerUploadTarget`, a sender can replace their own upload with another of the same
@@ -1221,7 +1221,7 @@ Cloudflare, Wrangler's `.dev.vars` and `wrangler secret`) — and wire them in:
 
 - Postmark: `token` (transport), `from`/`to` (email dispatcher)
 - Turnstile: `secretKey` (inspector)
-- Discord (optional): a `webhookUrl` (dispatcher)
+- Discord (optional): a `webhookURL` (dispatcher)
 - File uploads (optional): a signing `secret` of at least 32 random characters, shared by `signedLink`,
   `createFileRoute` and, for direct uploads, `createUploadRoute`, `UploadedFiles`, `WorkerUploadTarget`
   and `createUploadPutRoute`. Rotating it invalidates every download link already sent and every receipt

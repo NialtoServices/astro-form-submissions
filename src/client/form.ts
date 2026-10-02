@@ -65,7 +65,7 @@ const DEFAULT_RECEIPT_FIELD = 'upload'
 // MARK: - Response parsing
 
 /** Parse a response body as JSON, treating any malformed payload as "no result". */
-function parseJson(text: string): unknown {
+function parseJSON(text: string): unknown {
   try {
     return JSON.parse(text) as unknown
   } catch {
@@ -391,7 +391,7 @@ async function sendRequest(
       body: formData,
       signal: controller.signal
     })
-    return { response, result: parseJson(await response.text()) }
+    return { response, result: parseJSON(await response.text()) }
   } catch {
     return null
   } finally {

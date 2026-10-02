@@ -31,6 +31,9 @@ export interface UploadRouteConfig<S extends SchemaInput> extends AdmissionConfi
   secret: string
 
   /** Receipt lifetime in seconds. Default one hour. */
+  receiptTTLSeconds?: number
+
+  /** @deprecated Renamed to `receiptTTLSeconds`; this spelling will be removed in a future release. */
   receiptTtlSeconds?: number
 
   /** Form field carrying the JSON file descriptors. Default `uploads`; the form script posts under `data-astro-form-upload-field`. */
@@ -116,6 +119,7 @@ function readDescriptors(value: FormDataEntryValue | null): FileDescriptor[] | n
 export function createUploadRoute<const S extends SchemaInput>(config: UploadRouteConfig<S>): APIRoute {
   assertValidSigningSecret(config.secret)
   assertFileLimitOptions('createUploadRoute', config)
+  assertPositiveNumberOption('createUploadRoute `receiptTTLSeconds`', config.receiptTTLSeconds)
   assertPositiveNumberOption('createUploadRoute `receiptTtlSeconds`', config.receiptTtlSeconds)
 
   const report = containedReporter(config.onError)
@@ -123,7 +127,7 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
   const maxFiles = config.maxFiles ?? DEFAULT_MAX_FILES
   const maxFileBytes = config.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES
   const maxTotalBytes = config.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES
-  const receiptTtlSeconds = config.receiptTtlSeconds ?? DEFAULT_RECEIPT_TTL_SECONDS
+  const receiptTTLSeconds = config.receiptTTLSeconds ?? config.receiptTtlSeconds ?? DEFAULT_RECEIPT_TTL_SECONDS
   const acceptedTypes = new Set((config.accept ?? ALL_TYPES).map((matcher) => matcher.contentType))
 
   return async (context) => {
@@ -179,7 +183,7 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
         }
 
         const instruction = await config.target.prepare(upload)
-        const receipt = await signUploadClaims('receipt', upload, receiptTtlSeconds, config.secret)
+        const receipt = await signUploadClaims('receipt', upload, receiptTTLSeconds, config.secret)
         uploads.push({ ...instruction, receipt })
       }
 

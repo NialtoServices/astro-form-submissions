@@ -30,7 +30,7 @@ describe('numeric options at construction', () => {
     )
   })
 
-  it.each(['maxFiles', 'maxFileBytes', 'maxTotalBytes', 'receiptTtlSeconds'] as const)(
+  it.each(['maxFiles', 'maxFileBytes', 'maxTotalBytes', 'receiptTTLSeconds'] as const)(
     'createUploadRoute refuses a NaN `%s`',
     (option) => {
       expect(() => createUploadRoute({ schema, target, secret: SECRET, [option]: Number.NaN })).toThrow(

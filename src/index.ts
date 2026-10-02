@@ -98,6 +98,8 @@ export {
   type OptionalAddressInput,
   type EmailTemplateCopy,
   type DiscordDispatcherOptions,
+  type DiscordDispatcherSettings,
+  type DiscordWebhook,
   type DiscordField,
   type DiscordFieldInput,
   type DiscordFieldSpec,

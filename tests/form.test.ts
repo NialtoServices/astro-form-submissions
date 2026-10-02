@@ -50,8 +50,8 @@ describe('form script', () => {
     await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
 
     expect(fetchSpy).toHaveBeenCalledOnce()
-    const [requestUrl, requestInit] = fetchSpy.mock.calls[0]!
-    expect(requestUrl).toBe(form.action)
+    const [requestURL, requestInit] = fetchSpy.mock.calls[0]!
+    expect(requestURL).toBe(form.action)
     expect(requestInit?.method).toBe('POST')
     expect(requestInit?.body).toBeInstanceOf(FormData)
     expect(status.textContent).toBe("Thanks — we'll be in touch.")
@@ -300,7 +300,7 @@ describe('form script failure handling', () => {
   it('aborts a stalled request after the timeout and shows the network-error state', async () => {
     vi.useFakeTimers()
     stubFetch(
-      (_requestUrl, requestInit) =>
+      (_requestURL, requestInit) =>
         new Promise<Response>((_resolve, reject) => {
           requestInit?.signal?.addEventListener('abort', () =>
             reject(new DOMException('The operation was aborted.', 'AbortError'))

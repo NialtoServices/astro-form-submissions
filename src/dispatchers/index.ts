@@ -45,5 +45,7 @@ export {
   type DiscordField,
   type DiscordFieldInput,
   type DiscordFieldSpec,
-  type DiscordDispatcherOptions
+  type DiscordDispatcherOptions,
+  type DiscordDispatcherSettings,
+  type DiscordWebhook
 } from '#dispatchers/discord.js'

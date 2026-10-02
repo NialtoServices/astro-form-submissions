@@ -1,5 +1,5 @@
 import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
-import { DiscordDispatcher, type DiscordFieldInput } from '#dispatchers/discord.js'
+import { DiscordDispatcher, type DiscordDispatcherSettings, type DiscordFieldInput } from '#dispatchers/discord.js'
 import type { FormSubmission } from '#pipeline.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { dispatchContext } from '../dispatch-context.js'
@@ -15,16 +15,16 @@ interface Embed {
 /** Send via the notifier and return the embed Discord would have received. */
 async function capture<E extends FormSubmission>(
   submission: E,
-  options: Partial<ConstructorParameters<typeof DiscordDispatcher<E>>[0]> = {},
+  options: Partial<DiscordDispatcherSettings<E>> = {},
   disposition: { quarantined?: boolean; quarantineReasons?: readonly string[] } = {}
 ): Promise<Embed> {
   let body: { embeds: Embed[] } | undefined
-  stubFetch((_requestUrl, requestInit) => {
+  stubFetch((_requestURL, requestInit) => {
     body = JSON.parse(requestInit?.body as string)
     return new Response('', { status: 200 })
   })
 
-  await new DiscordDispatcher<E>({ webhookUrl: 'https://discord.test/hook', fields: [], ...options }).dispatch(
+  await new DiscordDispatcher<E>({ webhookURL: 'https://discord.test/hook', fields: [], ...options }).dispatch(
     submission,
     dispatchContext(disposition)
   )
@@ -145,25 +145,25 @@ describe('DiscordDispatcher quarantine disposition', () => {
 
 describe('DiscordDispatcher dispatcher contract', () => {
   it('defaults acceptsQuarantined to false, opting in only when set', () => {
-    expect(new DiscordDispatcher({ webhookUrl: 'https://discord.test/hook', fields: [] }).acceptsQuarantined).toBe(
+    expect(new DiscordDispatcher({ webhookURL: 'https://discord.test/hook', fields: [] }).acceptsQuarantined).toBe(
       false
     )
     expect(
-      new DiscordDispatcher({ webhookUrl: 'https://discord.test/hook', fields: [], acceptsQuarantined: true })
+      new DiscordDispatcher({ webhookURL: 'https://discord.test/hook', fields: [], acceptsQuarantined: true })
         .acceptsQuarantined
     ).toBe(true)
   })
 
   it('is best-effort (not required) by default', () => {
-    expect(new DiscordDispatcher({ webhookUrl: 'https://discord.test/hook', fields: [] }).required).toBe(false)
+    expect(new DiscordDispatcher({ webhookURL: 'https://discord.test/hook', fields: [] }).required).toBe(false)
     expect(
-      new DiscordDispatcher({ webhookUrl: 'https://discord.test/hook', fields: [], required: true }).required
+      new DiscordDispatcher({ webhookURL: 'https://discord.test/hook', fields: [], required: true }).required
     ).toBe(true)
   })
 
   it('throws a delivery error carrying the HTTP status when Discord responds non-2xx (OBS-001)', async () => {
     stubFetch(() => new Response('', { status: 429 }))
-    const error = await new DiscordDispatcher({ webhookUrl: 'https://discord.test/hook', fields: [] })
+    const error = await new DiscordDispatcher({ webhookURL: 'https://discord.test/hook', fields: [] })
       .dispatch(base, dispatchContext())
       .catch((thrown: unknown) => thrown)
 
@@ -177,12 +177,29 @@ describe('DiscordDispatcher when the webhook cannot be reached', () => {
   it('names Discord as the destination and keeps the failure as the cause', async () => {
     const networkFailure = new TypeError('fetch failed')
     stubFetch(() => Promise.reject(networkFailure))
-    const dispatcher = new DiscordDispatcher({ webhookUrl: 'https://discord.test/hook', fields: [] })
+    const dispatcher = new DiscordDispatcher({ webhookURL: 'https://discord.test/hook', fields: [] })
 
     const failure = await dispatcher.dispatch({}, dispatchContext()).catch((error: unknown) => error)
 
     expect(failure).toBeInstanceOf(DestinationUnreachableError)
     expect(failure).toMatchObject({ destination: 'Discord', cause: networkFailure })
     expect(String(failure)).not.toContain('discord.test')
+  })
+})
+
+describe('DiscordDispatcher webhook option', () => {
+  it('still posts to a webhook given under the deprecated `webhookUrl`', async () => {
+    const fetchSpy = stubFetch(async () => new Response('', { status: 200 }))
+
+    await new DiscordDispatcher({ webhookUrl: 'https://discord.test/legacy', fields: [] }).dispatch(
+      {},
+      dispatchContext()
+    )
+
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe('https://discord.test/legacy')
+  })
+
+  it('refuses to construct without a webhook', () => {
+    expect(() => new DiscordDispatcher({ webhookURL: '', fields: [] })).toThrow('`webhookURL`')
   })
 })
