@@ -1,0 +1,91 @@
+import { presignURL } from '#uploads/sigv4.js'
+import { type PendingUpload, type UploadInstruction, type UploadTarget } from '#uploads/upload-target.js'
+
+/** Default presigned URL lifetime — 15 minutes, long enough to start a large upload on a slow uplink. */
+const DEFAULT_EXPIRES_IN_SECONDS = 15 * 60
+
+/** Options for constructing an {@link R2PresignedUploadTarget}. */
+export interface R2PresignedUploadTargetOptions {
+  /** The Cloudflare account id the bucket belongs to. */
+  accountId: string
+
+  /** The bucket name (the binding's `bucket_name`, not the binding). */
+  bucket: string
+
+  /** An R2 API token's access key id, scoped to Object Read & Write on this bucket. */
+  accessKeyId: string
+
+  /** That token's secret access key. */
+  secretAccessKey: string
+
+  /**
+   * Key prefix applied to every object, matching the {@link R2Storage} that reads them back (e.g.
+   * `uploads/`), so one lifecycle rule covers both upload paths.
+   */
+  prefix?: string
+
+  /** Presigned URL lifetime in seconds. Default 15 minutes. */
+  expiresInSeconds?: number
+
+  /**
+   * The S3 API endpoint. Default `https://<accountId>.r2.cloudflarestorage.com`; a bucket under a
+   * jurisdiction uses its own (e.g. `https://<accountId>.eu.r2.cloudflarestorage.com`).
+   */
+  endpoint?: string | URL
+}
+
+/**
+ * An {@link UploadTarget} that presigns a PUT straight to an R2 bucket through its S3-compatible API,
+ * so file bytes never pass through the Worker. The URL is bound to the object key and expires; its
+ * content-type and filename metadata headers are signed, so the upload must carry exactly the values the
+ * route admitted.
+ *
+ * The browser uploads cross-origin, so the bucket needs a CORS rule allowing `PUT` from the site's
+ * origins with the `Content-Type` and `x-amz-meta-filename-uri` headers.
+ */
+export class R2PresignedUploadTarget implements UploadTarget {
+  private readonly endpoint: URL
+
+  // MARK: - Object Lifecycle
+
+  /**
+   * Creates a presigning upload target.
+   *
+   * @param options - The bucket, its credential, and optional prefix, lifetime and endpoint.
+   */
+  constructor(private readonly options: R2PresignedUploadTargetOptions) {
+    for (const key of ['accountId', 'bucket', 'accessKeyId', 'secretAccessKey'] as const) {
+      if (typeof options[key] !== 'string' || options[key] === '') {
+        throw new Error(`R2PresignedUploadTarget needs a non-empty \`${key}\`.`)
+      }
+    }
+
+    this.endpoint = new URL(options.endpoint ?? `https://${options.accountId}.r2.cloudflarestorage.com`)
+  }
+
+  // MARK: - UploadTarget
+
+  async prepare(upload: PendingUpload): Promise<UploadInstruction> {
+    const objectURL = new URL(this.endpoint)
+    objectURL.pathname = `/${this.options.bucket}/${this.options.prefix ?? ''}${upload.objectKey}`
+
+    // Header values must be ASCII, so the filename travels percent-encoded; R2Storage decodes it on download.
+    const headers = {
+      'Content-Type': upload.contentType,
+      'x-amz-meta-filename-uri': encodeURIComponent(upload.filename)
+    }
+
+    const url = await presignURL({
+      method: 'PUT',
+      url: objectURL,
+      headers,
+      accessKeyId: this.options.accessKeyId,
+      secretAccessKey: this.options.secretAccessKey,
+      region: 'auto',
+      service: 's3',
+      expiresInSeconds: this.options.expiresInSeconds ?? DEFAULT_EXPIRES_IN_SECONDS
+    })
+
+    return { url: url.toString(), method: 'PUT', headers }
+  }
+}

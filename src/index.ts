@@ -59,6 +59,14 @@ export {
 } from '#files/index.js'
 
 export {
+  R2PresignedUploadTarget,
+  type PendingUpload,
+  type R2PresignedUploadTargetOptions,
+  type UploadInstruction,
+  type UploadTarget
+} from '#uploads/index.js'
+
+export {
   DiscordDispatcher,
   EmailDispatcher,
   submissionAcknowledgementTemplates,
