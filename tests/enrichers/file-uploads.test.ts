@@ -121,6 +121,14 @@ describe('FileUploads', () => {
     expect(put.mock.calls[1]![2]).toEqual({ contentType: 'image/png', filename: 'photo.png' })
   })
 
+  it('names a file whose name is only stripped characters `upload`', async () => {
+    const { storage, put } = stubStorage()
+    const result = await uploader(storage).enrich({ name: 'Ada' }, contextWith([upload('"\r\n', PDF_HEADER)]))
+
+    expect(put.mock.calls[0]![2]).toEqual({ contentType: 'application/pdf', filename: 'upload' })
+    expect('provide' in result && result.provide?.files[0]?.name).toBe('upload')
+  })
+
   it('rolls back its own uploads and rejects `send` when a later upload fails', async () => {
     let call = 0
     const { storage, deleted } = stubStorage(() => {

@@ -5,6 +5,7 @@ import {
   DEFAULT_MAX_TOTAL_BYTES,
   FileUploads
 } from '#enrichers/file-uploads.js'
+import { storedFilename } from '#files/filename.js'
 import { ALL_TYPES, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions, assertPositiveNumberOption } from '#numeric-options.js'
 import { containedReporter, type ErrorReporter, type FormErrorStage } from '#reporting.js'
@@ -167,7 +168,7 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
       for (const descriptor of descriptors) {
         const upload: PendingUpload = {
           objectKey: crypto.randomUUID(),
-          filename: descriptor.name.replace(/[\r\n"]/g, '') || 'upload',
+          filename: storedFilename(descriptor.name),
           size: descriptor.size,
           contentType: acceptedTypes.has(descriptor.type) ? descriptor.type : OPAQUE_CONTENT_TYPE
         }

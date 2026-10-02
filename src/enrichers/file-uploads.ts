@@ -1,5 +1,6 @@
 import type { Enricher, EnrichmentContext, EnrichmentResult } from '#enrichers/enricher.js'
 import { formError } from '#errors.js'
+import { storedFilename } from '#files/filename.js'
 import type { FilePayload } from '#files/signing.js'
 import { ALL_TYPES, sniffType, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions } from '#numeric-options.js'
@@ -136,7 +137,7 @@ export class FileUploads<
     try {
       for (const { file, contentType } of validated) {
         const objectKey = crypto.randomUUID()
-        const filename = (file.name || 'upload').replace(/[\r\n"]/g, '')
+        const filename = storedFilename(file.name)
         storedKeys.push(objectKey)
         await this.options.storage.put(objectKey, file, { contentType, filename })
 
