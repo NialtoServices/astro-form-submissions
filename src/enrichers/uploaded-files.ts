@@ -10,7 +10,7 @@ import { formError, type FormError } from '#errors.js'
 import type { FilePayload } from '#files/signing.js'
 import { ALL_TYPES, HEADER_BYTES, sniffBytes, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions } from '#numeric-options.js'
-import type { FormSubmission } from '#pipeline.js'
+import type { FormSubmission, VerdictDetails } from '#pipeline.js'
 import type { FileStorage, PeekedObject } from '#storage/storage.js'
 import { assertValidSigningSecret } from '#tokens.js'
 import { verifyUploadClaims } from '#uploads/upload-claims.js'
@@ -113,26 +113,35 @@ export class UploadedFiles<
     }
 
     const keys = [...uploads.keys()]
-    const refuse = async (error: FormError) => {
+    const refuse = async (error: FormError, code: string, details?: VerdictDetails) => {
       await this.delete(keys, context)
-      return { reject: error }
+      return { reject: error, code, details }
     }
 
-    if (verified.includes(null)) return refuse(UploadedFiles.errors.uploadMissing)
+    const invalidReceipts = verified.filter((upload) => upload === null).length
+    if (invalidReceipts > 0) {
+      return refuse(UploadedFiles.errors.uploadMissing, 'uploaded-files.receipt-invalid', { count: invalidReceipts })
+    }
 
-    const limitError = this.limitError([...uploads.values()])
-    if (limitError) return refuse(limitError)
+    const limitRefusal = this.limitRefusal([...uploads.values()])
+    if (limitRefusal) return refuse(limitRefusal.error, limitRefusal.code, limitRefusal.details)
 
     try {
       const links: FileLink[] = []
       for (const upload of uploads.values()) {
         const object = await this.peek(upload.objectKey, HEADER_BYTES)
-        if (!object || object.size !== upload.size) return refuse(UploadedFiles.errors.uploadMissing)
+        if (!object) return refuse(UploadedFiles.errors.uploadMissing, 'uploaded-files.object-missing')
+        if (object.size !== upload.size) {
+          return refuse(UploadedFiles.errors.uploadMissing, 'uploaded-files.size-mismatch', {
+            declared: upload.size,
+            stored: object.size
+          })
+        }
 
         const contentType = sniffBytes(object.header, this.options.accept ?? ALL_TYPES)
         const storedType = object.contentType ?? OPAQUE_CONTENT_TYPE
         if (!contentType || (storedType !== OPAQUE_CONTENT_TYPE && storedType !== contentType)) {
-          return refuse(FileUploads.errors.fileType)
+          return refuse(FileUploads.errors.fileType, 'uploaded-files.type-not-accepted')
         }
 
         const url = await this.options.link(
@@ -150,25 +159,45 @@ export class UploadedFiles<
       // Clean up and fail closed. No rollback is returned: the objects are already gone, so the route
       // must not delete them a second time.
       context.report?.(error)
-      return refuse(FileUploads.errors.uploadFailed)
+      return refuse(FileUploads.errors.uploadFailed, 'uploaded-files.verify-failed')
     }
   }
 
   // MARK: - Validation
 
-  private limitError(uploads: PendingUpload[]): FormError | undefined {
+  private limitRefusal(
+    uploads: PendingUpload[]
+  ): { error: FormError; code: string; details: VerdictDetails } | undefined {
     const maxFiles = this.options.maxFiles ?? DEFAULT_MAX_FILES
     const maxFileBytes = this.options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES
     const maxTotalBytes = this.options.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES
 
-    if (uploads.length > maxFiles) return FileUploads.errors.tooManyFiles
+    if (uploads.length > maxFiles) {
+      return {
+        error: FileUploads.errors.tooManyFiles,
+        code: 'uploaded-files.too-many',
+        details: { count: uploads.length, limit: maxFiles }
+      }
+    }
 
     let totalBytes = 0
     for (const upload of uploads) {
-      if (upload.size > maxFileBytes) return FileUploads.errors.fileTooLarge
+      if (upload.size > maxFileBytes) {
+        return {
+          error: FileUploads.errors.fileTooLarge,
+          code: 'uploaded-files.too-large',
+          details: { size: upload.size, limit: maxFileBytes }
+        }
+      }
 
       totalBytes += upload.size
-      if (totalBytes > maxTotalBytes) return FileUploads.errors.fileTooLarge
+      if (totalBytes > maxTotalBytes) {
+        return {
+          error: FileUploads.errors.fileTooLarge,
+          code: 'uploaded-files.total-too-large',
+          details: { total: totalBytes, limit: maxTotalBytes }
+        }
+      }
     }
 
     return undefined

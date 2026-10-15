@@ -76,7 +76,11 @@ describe('FileUploads', () => {
     const files = [1, 2, 3].map((fileNumber) => upload(`f${fileNumber}.pdf`, PDF_HEADER))
     const result = await uploader(storage, { maxFiles: 2 }).enrich({ name: 'Ada' }, contextWith(files))
 
-    expect(result).toEqual({ reject: FileUploads.errors.tooManyFiles })
+    expect(result).toEqual({
+      reject: FileUploads.errors.tooManyFiles,
+      code: 'file-uploads.too-many',
+      details: { count: 3, limit: 2 }
+    })
   })
 
   it('rejects a file over the per-file size limit', async () => {
@@ -85,7 +89,11 @@ describe('FileUploads', () => {
       { name: 'Ada' },
       contextWith([upload('big.pdf', PDF_HEADER, 512)])
     )
-    expect(result).toEqual({ reject: FileUploads.errors.fileTooLarge })
+    expect(result).toEqual({
+      reject: FileUploads.errors.fileTooLarge,
+      code: 'file-uploads.too-large',
+      details: { size: 512, limit: 256 }
+    })
   })
 
   it('rejects when the combined size exceeds the total limit', async () => {
@@ -93,7 +101,11 @@ describe('FileUploads', () => {
     const files = [upload('a.pdf', PDF_HEADER, 400), upload('b.pdf', PDF_HEADER, 400)]
     const result = await uploader(storage, { maxTotalBytes: 600 }).enrich({ name: 'Ada' }, contextWith(files))
 
-    expect(result).toEqual({ reject: FileUploads.errors.fileTooLarge })
+    expect(result).toEqual({
+      reject: FileUploads.errors.fileTooLarge,
+      code: 'file-uploads.total-too-large',
+      details: { total: 800, limit: 600 }
+    })
   })
 
   it('rejects a file whose magic bytes are not on the allow-list', async () => {
@@ -101,7 +113,7 @@ describe('FileUploads', () => {
     const notAllowed = new File([new Uint8Array([0x00, 0x01, 0x02, 0x03])], 'mystery.bin')
     const result = await uploader(storage).enrich({ name: 'Ada' }, contextWith([notAllowed]))
 
-    expect(result).toEqual({ reject: FileUploads.errors.fileType })
+    expect(result).toEqual({ reject: FileUploads.errors.fileType, code: 'file-uploads.type-not-accepted' })
   })
 
   it('stores each file and provides the resolved links as a resource', async () => {
@@ -146,7 +158,7 @@ describe('FileUploads', () => {
     const context = contextWith(files)
     const result = await uploader(storage).enrich({ name: 'Ada' }, context)
 
-    expect(result).toEqual({ reject: FileUploads.errors.uploadFailed })
+    expect(result).toEqual({ reject: FileUploads.errors.uploadFailed, code: 'file-uploads.store-failed' })
     // Every attempted key is cleaned up (keys are tracked before `put`, so a write that committed
     // but lost its ack is still deleted); no rollback is returned to the route.
     expect(deleted.length).toBeGreaterThanOrEqual(1)
@@ -166,7 +178,7 @@ describe('FileUploads', () => {
     const context = contextWith([upload('a.pdf', PDF_HEADER)])
     const result = await uploaderWithBadLink.enrich({ name: 'Ada' }, context)
 
-    expect(result).toEqual({ reject: FileUploads.errors.uploadFailed })
+    expect(result).toEqual({ reject: FileUploads.errors.uploadFailed, code: 'file-uploads.store-failed' })
     expect(deleted).toHaveLength(1)
     expect(context.report).toHaveBeenCalled()
   })

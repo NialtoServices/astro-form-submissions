@@ -160,8 +160,8 @@ describe('UploadedFiles', () => {
   })
 
   describe('refusals, which delete everything the submission referenced', () => {
-    const expectRefused = async (result: unknown, key: string, bucket: MemoryBucket) => {
-      expect(result).toMatchObject({ reject: { key } })
+    const expectRefused = async (result: unknown, key: string, code: string, bucket: MemoryBucket) => {
+      expect(result).toMatchObject({ reject: { key }, code })
       expect(bucket.objects.size).toBe(0)
     }
 
@@ -173,7 +173,11 @@ describe('UploadedFiles', () => {
       const result = await enricher.enrich({ name: 'Ada' }, contextWith([receipts[0]!, `${receipts[1]}x`]))
 
       // A tampered receipt names no trustworthy key, so its object is left to the bucket's lifecycle rule.
-      expect(result).toMatchObject({ reject: { key: 'uploadMissing' } })
+      expect(result).toMatchObject({
+        reject: { key: 'uploadMissing' },
+        code: 'uploaded-files.receipt-invalid',
+        details: { count: 1 }
+      })
       expect([...bucket.objects.keys()]).toEqual([`uploads/${prepared[1]!.objectKey}`])
     })
 
@@ -186,7 +190,11 @@ describe('UploadedFiles', () => {
       vi.setSystemTime(Date.now() + 61_000)
       const result = await enricher.enrich({ name: 'Ada' }, contextWith(receipts))
 
-      expect(result).toMatchObject({ reject: { key: 'uploadMissing' } })
+      expect(result).toMatchObject({
+        reject: { key: 'uploadMissing' },
+        code: 'uploaded-files.receipt-invalid',
+        details: { count: 1 }
+      })
     })
 
     it('refuses an upload grant or a receipt from another secret presented as a receipt', async () => {
@@ -197,7 +205,9 @@ describe('UploadedFiles', () => {
         .replaceAll('~', '.')
 
       expect(await enricher.enrich({ name: 'Ada' }, contextWith([grant]))).toMatchObject({
-        reject: { key: 'uploadMissing' }
+        reject: { key: 'uploadMissing' },
+        code: 'uploaded-files.receipt-invalid',
+        details: { count: 1 }
       })
     })
 
@@ -206,7 +216,12 @@ describe('UploadedFiles', () => {
       const { receipts, prepared } = await admit([photo, quote])
       store(bucket, prepared.slice(0, 1), [photo])
 
-      await expectRefused(await enricher.enrich({ name: 'Ada' }, contextWith(receipts)), 'uploadMissing', bucket)
+      await expectRefused(
+        await enricher.enrich({ name: 'Ada' }, contextWith(receipts)),
+        'uploadMissing',
+        'uploaded-files.object-missing',
+        bucket
+      )
     })
 
     it('refuses an object whose size differs from its receipt', async () => {
@@ -219,7 +234,9 @@ describe('UploadedFiles', () => {
         'garden.jpg'
       )
 
-      await expectRefused(await enricher.enrich({ name: 'Ada' }, contextWith(receipts)), 'uploadMissing', bucket)
+      const result = await enricher.enrich({ name: 'Ada' }, contextWith(receipts))
+      await expectRefused(result, 'uploadMissing', 'uploaded-files.size-mismatch', bucket)
+      expect(result).toMatchObject({ details: { declared: JPEG.length, stored: JPEG.length + 1 } })
     })
 
     it('refuses bytes that match nothing accepted', async () => {
@@ -228,7 +245,12 @@ describe('UploadedFiles', () => {
       const { receipts, prepared } = await admit([notes])
       store(bucket, prepared, [notes])
 
-      await expectRefused(await enricher.enrich({ name: 'Ada' }, contextWith(receipts)), 'fileType', bucket)
+      await expectRefused(
+        await enricher.enrich({ name: 'Ada' }, contextWith(receipts)),
+        'fileType',
+        'uploaded-files.type-not-accepted',
+        bucket
+      )
     })
 
     it('refuses bytes that contradict the type they were stored with', async () => {
@@ -237,7 +259,12 @@ describe('UploadedFiles', () => {
       const { receipts, prepared } = await admit([disguised])
       store(bucket, prepared, [disguised])
 
-      await expectRefused(await enricher.enrich({ name: 'Ada' }, contextWith(receipts)), 'fileType', bucket)
+      await expectRefused(
+        await enricher.enrich({ name: 'Ada' }, contextWith(receipts)),
+        'fileType',
+        'uploaded-files.type-not-accepted',
+        bucket
+      )
     })
 
     it('re-checks the count and size limits against the receipts', async () => {
@@ -251,11 +278,13 @@ describe('UploadedFiles', () => {
       await expectRefused(
         await tooMany.enricher.enrich({ name: 'Ada' }, contextWith(first.receipts)),
         'tooManyFiles',
+        'uploaded-files.too-many',
         tooMany.bucket
       )
       await expectRefused(
         await tooLarge.enricher.enrich({ name: 'Ada' }, contextWith(second.receipts)),
         'fileTooLarge',
+        'uploaded-files.total-too-large',
         tooLarge.bucket
       )
     })
@@ -278,7 +307,7 @@ describe('UploadedFiles', () => {
 
       const result = await enricher.enrich({ name: 'Ada' }, context)
 
-      expect(result).toMatchObject({ reject: { key: 'send', status: 502 } })
+      expect(result).toMatchObject({ reject: { key: 'send', status: 502 }, code: 'uploaded-files.verify-failed' })
       expect(context.report).toHaveBeenCalledWith(failure)
       expect(bucket.objects.size).toBe(0)
     })

@@ -113,18 +113,36 @@ export class FileUploads<
     const files = context.data.getAll(field).filter((entry): entry is File => entry instanceof File && entry.size > 0)
     if (files.length === 0) return {}
 
-    if (files.length > maxFiles) return { reject: FileUploads.errors.tooManyFiles }
+    if (files.length > maxFiles) {
+      return {
+        reject: FileUploads.errors.tooManyFiles,
+        code: 'file-uploads.too-many',
+        details: { count: files.length, limit: maxFiles }
+      }
+    }
 
     const validated: { file: File; contentType: string }[] = []
     let totalBytes = 0
     for (const file of files) {
-      if (file.size > maxFileBytes) return { reject: FileUploads.errors.fileTooLarge }
+      if (file.size > maxFileBytes) {
+        return {
+          reject: FileUploads.errors.fileTooLarge,
+          code: 'file-uploads.too-large',
+          details: { size: file.size, limit: maxFileBytes }
+        }
+      }
 
       totalBytes += file.size
-      if (totalBytes > maxTotalBytes) return { reject: FileUploads.errors.fileTooLarge }
+      if (totalBytes > maxTotalBytes) {
+        return {
+          reject: FileUploads.errors.fileTooLarge,
+          code: 'file-uploads.total-too-large',
+          details: { total: totalBytes, limit: maxTotalBytes }
+        }
+      }
 
       const contentType = await sniffType(file, accept)
-      if (!contentType) return { reject: FileUploads.errors.fileType }
+      if (!contentType) return { reject: FileUploads.errors.fileType, code: 'file-uploads.type-not-accepted' }
 
       validated.push({ file, contentType })
     }
@@ -154,7 +172,7 @@ export class FileUploads<
       // objects are already gone, so the route must not delete them a second time.
       context.report?.(error)
       await this.rollback(storedKeys, context)
-      return { reject: FileUploads.errors.uploadFailed }
+      return { reject: FileUploads.errors.uploadFailed, code: 'file-uploads.store-failed' }
     }
   }
 
