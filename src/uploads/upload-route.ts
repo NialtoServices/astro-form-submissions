@@ -5,12 +5,15 @@ import {
   DEFAULT_MAX_TOTAL_BYTES,
   FileUploads
 } from '#enrichers/file-uploads.js'
+import type { FormError } from '#errors.js'
 import { storedFilename } from '#files/filename.js'
 import { ALL_TYPES, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions, assertPositiveNumberOption } from '#numeric-options.js'
+import type { VerdictDetails } from '#pipeline.js'
 import { containedReporter, type ErrorReporter, type FormErrorStage } from '#reporting.js'
 import { jsonFormError, jsonOk } from '#responses.js'
 import type { SchemaInput } from '#schema.js'
+import { SubmissionVerdictError } from '#submission-verdict-error.js'
 import { assertValidSigningSecret } from '#tokens.js'
 import { signUploadClaims } from '#uploads/upload-claims.js'
 import type { PendingUpload, UploadInstruction, UploadTarget } from '#uploads/upload-target.js'
@@ -157,19 +160,36 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
 
       const { formData } = admission
       admittedFormData = formData
-      const fail = (error: Parameters<typeof jsonFormError>[0]) =>
-        jsonFormError(error, config.errors, { data: formData })
+      const refuse = (error: FormError, code: string, details?: VerdictDetails) => {
+        registerReport(new SubmissionVerdictError('reject', code, details), 'upload')
+        return jsonFormError(error, config.errors, { data: formData })
+      }
 
       const descriptors = readDescriptors(formData.get(field))
-      if (!descriptors) return fail(ERRORS.invalidForm)
-      if (descriptors.length > maxFiles) return fail(FileUploads.errors.tooManyFiles)
+      if (!descriptors) return refuse(ERRORS.invalidForm, 'upload-route.descriptors-invalid')
+      if (descriptors.length > maxFiles) {
+        return refuse(FileUploads.errors.tooManyFiles, 'upload-route.too-many', {
+          count: descriptors.length,
+          limit: maxFiles
+        })
+      }
 
       let totalBytes = 0
       for (const descriptor of descriptors) {
-        if (descriptor.size > maxFileBytes) return fail(FileUploads.errors.fileTooLarge)
+        if (descriptor.size > maxFileBytes) {
+          return refuse(FileUploads.errors.fileTooLarge, 'upload-route.too-large', {
+            size: descriptor.size,
+            limit: maxFileBytes
+          })
+        }
 
         totalBytes += descriptor.size
-        if (totalBytes > maxTotalBytes) return fail(FileUploads.errors.fileTooLarge)
+        if (totalBytes > maxTotalBytes) {
+          return refuse(FileUploads.errors.fileTooLarge, 'upload-route.total-too-large', {
+            total: totalBytes,
+            limit: maxTotalBytes
+          })
+        }
       }
 
       const uploads: GrantedUpload[] = []

@@ -7,7 +7,7 @@ import { createUploadRoute, type UploadRouteConfig } from '#uploads/upload-route
 import type { PendingUpload, UploadTarget } from '#uploads/upload-target.js'
 import { WorkerUploadTarget } from '#uploads/worker-upload-target.js'
 import { describe, expect, it, vi } from 'vitest'
-import { makeRouteContext } from '../support/harness.js'
+import { makeRouteContext, verdictReport } from '../support/harness.js'
 
 const SECRET = 'a-sufficiently-long-signing-secret'
 
@@ -272,5 +272,67 @@ describe('createUploadRoute', () => {
 
   it('refuses to construct with a short receipt secret', () => {
     expect(() => routeWith({ secret: 'short' })).toThrow('at least 32')
+  })
+})
+
+describe('createUploadRoute reports why it refused', () => {
+  it('reports a malformed descriptor list', async () => {
+    const onError = vi.fn()
+    const { route } = routeWith({ onError })
+    const response = await route(request('not json'))
+
+    expect(response.status).toBe(400)
+    expect(onError).toHaveBeenCalledWith(verdictReport('reject', 'upload-route.descriptors-invalid'), {
+      stage: 'upload'
+    })
+  })
+
+  it('reports too many files with the count and the limit', async () => {
+    const onError = vi.fn()
+    const { route } = routeWith({ onError, maxFiles: 1 })
+    await route(request([photo, photo]))
+
+    expect(onError).toHaveBeenCalledWith(verdictReport('reject', 'upload-route.too-many', { count: 2, limit: 1 }), {
+      stage: 'upload'
+    })
+  })
+
+  it('reports a file over the per-file limit with its size, never its name', async () => {
+    const onError = vi.fn()
+    const { route } = routeWith({ onError, maxFileBytes: 1_000_000 })
+    await route(request([photo]))
+
+    expect(onError).toHaveBeenCalledWith(
+      verdictReport('reject', 'upload-route.too-large', { size: 2_000_000, limit: 1_000_000 }),
+      { stage: 'upload' }
+    )
+    expect(JSON.stringify(onError.mock.calls)).not.toContain('garden.jpg')
+  })
+
+  it('reports files over the total limit with the running total', async () => {
+    const onError = vi.fn()
+    const { route } = routeWith({ onError, maxTotalBytes: 3_000_000 })
+    await route(request([photo, photo]))
+
+    expect(onError).toHaveBeenCalledWith(
+      verdictReport('reject', 'upload-route.total-too-large', { total: 4_000_000, limit: 3_000_000 }),
+      { stage: 'upload' }
+    )
+  })
+
+  it('reports an inspector refusal once, through admission', async () => {
+    const onError = vi.fn()
+    const refuse: Inspector = {
+      inspect: async () => ({
+        action: 'reject',
+        error: formError('verification', 400, 'No.'),
+        code: 'turnstile.missing-token'
+      })
+    }
+    const { route } = routeWith({ onError, inspectors: [refuse] })
+    await route(request([photo]))
+
+    expect(onError).toHaveBeenCalledOnce()
+    expect(onError).toHaveBeenCalledWith(verdictReport('reject', 'turnstile.missing-token'), { stage: 'inspection' })
   })
 })
