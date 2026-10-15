@@ -1,6 +1,6 @@
 import type { EmailMessage } from '#dispatchers/email.js'
 import type { APIRoute } from 'astro'
-import { vi, type Mock } from 'vitest'
+import { expect, vi, type Mock } from 'vitest'
 
 /**
  * Builds the Astro `APIContext` stub a form route handler receives. Callers pass real typed options
@@ -50,4 +50,13 @@ export function stubFetch(handler: FetchHandler): Mock {
 /** Reads back the {@link EmailMessage} a transport `deliver` mock received on its `index`-th call. */
 export function deliveredMessage(deliverMock: Mock, index = 0): EmailMessage {
   return deliverMock.mock.calls[index]![0] as EmailMessage
+}
+
+/** Matches the `SubmissionVerdictError` a route reports to `onError` for a non-accept verdict. */
+export function verdictReport(
+  action: 'reject' | 'drop' | 'quarantine',
+  code?: string,
+  details: Record<string, unknown> = {}
+) {
+  return expect.objectContaining({ name: 'SubmissionVerdictError', action, code, details })
 }

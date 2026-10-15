@@ -8,6 +8,7 @@ import type { FormSubmission } from '#pipeline.js'
 import { containedReporter, type ErrorReporter, type FormErrorStage } from '#reporting.js'
 import { jsonFormError, jsonOk } from '#responses.js'
 import type { SchemaInput, Submission } from '#schema.js'
+import { SubmissionVerdictError } from '#submission-verdict-error.js'
 import type { APIRoute } from 'astro'
 
 export { ERRORS, type FormErrorStage }
@@ -251,6 +252,7 @@ export function createFormRoute<
           // provided — stays inside this try: a hostile getter/proxy that throws mid-interpretation then
           // triggers cleanup rather than escaping to the outer catch with resources already acquired.
           if ('reject' in result) {
+            registerReport(new SubmissionVerdictError('reject', result.code, result.details), 'enrichment')
             await runRollbacks()
             return fail(result.reject, formData)
           }
@@ -266,6 +268,7 @@ export function createFormRoute<
               // genuine request only ever feeds one. A request feeding both is crafted: overwriting would
               // strand the first enricher's files and let it carry each enricher's limits in full.
               if (Object.hasOwn(resources, key)) {
+                registerReport(new SubmissionVerdictError('reject', 'resources.duplicate-key', { key }), 'enrichment')
                 await runRollbacks()
                 return fail(ERRORS.invalidForm, formData)
               }

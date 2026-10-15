@@ -122,6 +122,23 @@ function fieldName(path: StandardSchemaV1.Issue['path']): string | undefined {
 }
 
 /**
+ * The distinct form field names a set of issues points at, in order: never the issues' messages, which can
+ * quote what the sender typed. An issue without a path names no field.
+ *
+ * @param issues - The Standard Schema failure issues.
+ * @returns The field names, each once.
+ */
+export function issueFields(issues: ReadonlyArray<StandardSchemaV1.Issue>): string[] {
+  const fields = new Set<string>()
+  for (const issue of issues) {
+    const field = fieldName(issue.path)
+    if (field !== undefined) fields.add(field)
+  }
+
+  return [...fields]
+}
+
+/**
  * Map Standard Schema issues to the wire shape. Per-field copy is the validator's own `issue.message`
  * (authored in the schema, or the library's default) — the toolkit reads only `message` and `path`,
  * never a vendor issue code, so nothing couples to Zod. The summary is **always** the generic

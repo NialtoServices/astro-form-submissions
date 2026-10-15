@@ -2,10 +2,12 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { formError, type FormError, type FormErrors } from '#errors.js'
 import type { AdmittingRoute, Guard, GuardContext } from '#guards/index.js'
 import type { InspectionContext, Inspector } from '#inspectors/index.js'
+import type { Verdict } from '#pipeline.js'
 import type { FormErrorStage } from '#reporting.js'
 import { jsonFormError, jsonValidationError } from '#responses.js'
 import {
   formDataToObject,
+  issueFields,
   mapIssues,
   resolveValidator,
   validationFailed,
@@ -13,6 +15,7 @@ import {
   type SchemaInput,
   type Submission
 } from '#schema.js'
+import { SubmissionVerdictError } from '#submission-verdict-error.js'
 import type { APIContext } from 'astro'
 
 // MARK: - Errors
@@ -103,6 +106,16 @@ type Admission<S extends SchemaInput> =
     }
 
 /**
+ * The report for a guard's or inspector's verdict: a {@link SubmissionVerdictError} for a refusal, drop or
+ * quarantine, and `undefined` for an accept or an action an untyped stage invented.
+ */
+function verdictError(verdict: Verdict): SubmissionVerdictError | undefined {
+  if (verdict.action !== 'reject' && verdict.action !== 'drop' && verdict.action !== 'quarantine') return undefined
+
+  return new SubmissionVerdictError(verdict.action, verdict.code, verdict.details)
+}
+
+/**
  * Runs guards (before the body is read), parses the body, validates it against the schema, and runs
  * the inspectors in order.
  *
@@ -153,6 +166,10 @@ export async function admit<S extends SchemaInput>(
     }
 
     if (!result) continue
+
+    const guardVerdict = verdictError(result)
+    if (guardVerdict) registerReport(guardVerdict, 'guard')
+
     if (result.action === 'reject') return fail(result.error)
     if (result.action === 'drop') return { outcome: 'drop' }
 
@@ -164,7 +181,10 @@ export async function admit<S extends SchemaInput>(
   }
 
   const formData = await request.request.formData().catch(() => undefined)
-  if (!formData) return fail(ERRORS.invalidForm)
+  if (!formData) {
+    registerReport(new SubmissionVerdictError('reject', 'form.unparseable'), 'validation')
+    return fail(ERRORS.invalidForm)
+  }
 
   const schemaContext: SchemaContext = { data: formData, requestURL: url, siteURL: site, submittedAt }
   let validation: StandardSchemaV1.Result<unknown>
@@ -181,12 +201,19 @@ export async function admit<S extends SchemaInput>(
   // Standard Schema signals failure by the *presence* of `issues` — an empty array is still a
   // failure, so fail closed on any issues result. `mapIssues([])` yields the generic summary with no fieldErrors.
   if (validation.issues) {
+    registerReport(
+      new SubmissionVerdictError('reject', 'schema.invalid', { fields: issueFields(validation.issues) }),
+      'validation'
+    )
     return { outcome: 'respond', response: jsonValidationError(mapIssues(validation.issues, config.errors, formData)) }
   }
 
   // A conformant success carries `value`; a result with neither issues nor value is non-conformant,
   // so reject rather than dispatch an empty submission.
-  if (!('value' in validation)) return fail(ERRORS.invalidForm, formData)
+  if (!('value' in validation)) {
+    registerReport(new SubmissionVerdictError('reject', 'schema.no-value'), 'validation')
+    return fail(ERRORS.invalidForm, formData)
+  }
 
   // Every stage indexes/spreads the submission, so enforce the record precondition here: a schema
   // that transforms to a scalar/array/null is a misconfiguration — report it and fail closed rather
@@ -229,6 +256,10 @@ export async function admit<S extends SchemaInput>(
     // The type requires an explicit result, but an untyped consumer could still return nothing;
     // treat that as an accept (fail-open, consistent with how a throwing inspector is handled).
     if (!result) continue
+
+    const inspectionVerdict = verdictError(result)
+    if (inspectionVerdict) registerReport(inspectionVerdict, 'inspection')
+
     if (result.action === 'reject') return fail(result.error, formData)
     if (result.action === 'drop') return { outcome: 'drop' }
 

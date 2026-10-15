@@ -7,7 +7,7 @@ import { createFormRoute, defineLazyRoute, type FormRouteConfig } from '#route.j
 import { validationFailed } from '#schema.js'
 import type { APIRoute } from 'astro'
 import { describe, expect, it, vi } from 'vitest'
-import { makeRouteContext } from './support/harness.js'
+import { makeRouteContext, verdictReport } from './support/harness.js'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -221,7 +221,7 @@ describe('createFormRoute', () => {
     expect(ops.dispatch).toHaveBeenCalledOnce()
   })
 
-  it('a quarantined submission with no accepting dispatcher → silent 200 and one onError warning', async () => {
+  it('a quarantined submission with no accepting dispatcher → silent 200, the verdict and one onError warning', async () => {
     const onError = vi.fn()
     const { dispatcher, dispatch } = stubDispatcher()
     const response = await createFormRoute({
@@ -232,7 +232,8 @@ describe('createFormRoute', () => {
     })(contextFor(validForm()))
     expect(response.status).toBe(200)
     expect(dispatch).not.toHaveBeenCalled()
-    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError).toHaveBeenCalledTimes(2)
+    expect(onError).toHaveBeenCalledWith(verdictReport('quarantine', undefined), { stage: 'inspection' })
     expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'unexpected' })
   })
 
@@ -244,7 +245,8 @@ describe('createFormRoute', () => {
       onError
     })(contextFor(validForm()))
     expect(response.status).toBe(200)
-    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError).toHaveBeenCalledTimes(2)
+    expect(onError).toHaveBeenCalledWith(verdictReport('quarantine', undefined), { stage: 'inspection' })
     expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'unexpected' })
   })
 
@@ -1620,7 +1622,8 @@ describe('createFormRoute dispatch groups', () => {
       dispatchers: [[stubDispatcher().dispatcher], [stubDispatcher().dispatcher]],
       onError: warned
     })(contextFor(validForm()))
-    expect(warned).toHaveBeenCalledOnce()
+    expect(warned).toHaveBeenCalledTimes(2)
+    expect(warned).toHaveBeenCalledWith(verdictReport('quarantine', undefined), { stage: 'inspection' })
     expect(warned).toHaveBeenCalledWith(expect.any(Error), { stage: 'unexpected' })
 
     const quiet = vi.fn()
@@ -1630,7 +1633,8 @@ describe('createFormRoute dispatch groups', () => {
       dispatchers: [[stubDispatcher().dispatcher], [stubDispatcher({ acceptsQuarantined: true }).dispatcher]],
       onError: quiet
     })(contextFor(validForm()))
-    expect(quiet).not.toHaveBeenCalled()
+    expect(quiet).toHaveBeenCalledOnce()
+    expect(quiet).toHaveBeenCalledWith(verdictReport('quarantine', undefined), { stage: 'inspection' })
   })
 
   it('allows empty groups', async () => {
@@ -1663,5 +1667,186 @@ describe('createFormRoute dispatch groups', () => {
     expect(() => createFormRoute({ ...baseConfig, dispatchers: notDispatcher })).toThrow(
       /must contain only dispatchers/
     )
+  })
+})
+
+describe('createFormRoute reports why a submission was turned away', () => {
+  it('reports a guard refusal under the guard stage, with its code and details', async () => {
+    const onError = vi.fn()
+    const response = await createFormRoute({
+      ...baseConfig,
+      guards: [
+        {
+          guard: async () => ({
+            action: 'reject' as const,
+            error: verificationError,
+            code: 'geo.blocked',
+            details: { country: 'XX' }
+          })
+        }
+      ],
+      onError
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(400)
+    expect(onError).toHaveBeenCalledOnce()
+    expect(onError).toHaveBeenCalledWith(verdictReport('reject', 'geo.blocked', { country: 'XX' }), { stage: 'guard' })
+  })
+
+  it('reports an inspector drop under the inspection stage, and still answers success', async () => {
+    const onError = vi.fn()
+    const response = await createFormRoute({
+      ...baseConfig,
+      inspectors: [{ inspect: async () => ({ action: 'drop' as const, code: 'spam.blocklisted' }) }],
+      onError
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(200)
+    expect(onError).toHaveBeenCalledWith(verdictReport('drop', 'spam.blocklisted'), { stage: 'inspection' })
+  })
+
+  it('reports a third-party refusal that gives no code, and answers exactly as before', async () => {
+    const onError = vi.fn()
+    const response = await createFormRoute({
+      ...baseConfig,
+      inspectors: [{ inspect: async () => ({ action: 'reject' as const, error: verificationError }) }],
+      onError
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'Verification failed. Please try again.' })
+    expect(onError).toHaveBeenCalledWith(verdictReport('reject', undefined), { stage: 'inspection' })
+  })
+
+  it('hands a site reporter the details exactly as the stage gave them', async () => {
+    const onError = vi.fn()
+    await createFormRoute({
+      ...baseConfig,
+      inspectors: [
+        {
+          inspect: async () => ({
+            action: 'reject' as const,
+            error: verificationError,
+            code: 'spam.blocked',
+            details: { note: 'free text' }
+          })
+        }
+      ],
+      onError
+    })(contextFor(validForm()))
+
+    expect(onError).toHaveBeenCalledWith(verdictReport('reject', 'spam.blocked', { note: 'free text' }), {
+      stage: 'inspection'
+    })
+  })
+
+  it('reports nothing for a submission every stage accepts', async () => {
+    const onError = vi.fn()
+    await createFormRoute({
+      ...baseConfig,
+      inspectors: [{ inspect: async () => ({ action: 'accept' as const }) }],
+      dispatchers: [stubDispatcher().dispatcher],
+      onError
+    })(contextFor(validForm()))
+
+    expect(onError).not.toHaveBeenCalled()
+  })
+
+  it('keeps the documented response when the site reporter throws on a verdict', async () => {
+    const response = await createFormRoute({
+      ...baseConfig,
+      inspectors: [
+        { inspect: async () => ({ action: 'reject' as const, error: verificationError, code: 'spam.blocked' }) }
+      ],
+      onError: () => {
+        throw new Error('reporter broke')
+      }
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'Verification failed. Please try again.' })
+  })
+
+  it('reports a schema refusal with the failing field names, never what was typed', async () => {
+    const onError = vi.fn()
+    const response = await createFormRoute({ ...baseConfig, onError })(
+      contextFor(validForm({ email: 'not-an-email-ada-typed' }))
+    )
+
+    expect(response.status).toBe(400)
+    expect(onError).toHaveBeenCalledWith(verdictReport('reject', 'schema.invalid', { fields: ['email'] }), {
+      stage: 'validation'
+    })
+    expect(JSON.stringify(onError.mock.calls)).not.toContain('not-an-email-ada-typed')
+    expect(onError.mock.calls.map(([error]) => (error as Error).message).join(' ')).not.toContain('valid email')
+  })
+
+  it('names each failing field once, reading `{ key }` path segments and skipping path-less issues', async () => {
+    const onError = vi.fn()
+    const schema = standardSchema<ContactSubmission>(() => ({
+      issues: [
+        { message: 'a', path: [{ key: 'email' }] },
+        { message: 'b', path: ['email', 0] },
+        { message: 'c', path: ['name'] },
+        { message: 'd' }
+      ]
+    }))
+    await createFormRoute({ schema, onError })(contextFor(validForm()))
+
+    expect(onError).toHaveBeenCalledWith(verdictReport('reject', 'schema.invalid', { fields: ['email', 'name'] }), {
+      stage: 'validation'
+    })
+  })
+
+  it('reports a body that will not parse as form data', async () => {
+    const onError = vi.fn()
+    const response = await createFormRoute({ ...baseConfig, onError })(
+      contextFor('plain text', { 'content-type': 'text/plain' })
+    )
+
+    expect(response.status).toBe(400)
+    expect(onError).toHaveBeenCalledWith(verdictReport('reject', 'form.unparseable'), { stage: 'validation' })
+  })
+
+  it('reports a schema result with neither issues nor a value', async () => {
+    const onError = vi.fn()
+    const schema = standardSchema<ContactSubmission>(() => ({}) as StandardSchemaV1.Result<ContactSubmission>)
+    const response = await createFormRoute({ schema, onError })(contextFor(validForm()))
+
+    expect(response.status).toBe(400)
+    expect(onError).toHaveBeenCalledWith(verdictReport('reject', 'schema.no-value'), { stage: 'validation' })
+  })
+
+  it('reports an enricher refusal under the enrichment stage', async () => {
+    const onError = vi.fn()
+    const response = await createFormRoute({
+      ...baseConfig,
+      enrichers: [
+        { enrich: async () => ({ reject: verificationError, code: 'scan.infected', details: { engine: 'clam' } }) }
+      ],
+      onError
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(400)
+    expect(onError).toHaveBeenCalledWith(verdictReport('reject', 'scan.infected', { engine: 'clam' }), {
+      stage: 'enrichment'
+    })
+  })
+
+  it('reports two enrichers providing one resource key', async () => {
+    const onError = vi.fn()
+    const response = await createFormRoute({
+      ...baseConfig,
+      enrichers: [
+        { enrich: async () => ({ provide: { files: [] } }) },
+        { enrich: async () => ({ provide: { files: [] } }) }
+      ],
+      onError
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(400)
+    expect(onError).toHaveBeenCalledWith(verdictReport('reject', 'resources.duplicate-key', { key: 'files' }), {
+      stage: 'enrichment'
+    })
   })
 })
