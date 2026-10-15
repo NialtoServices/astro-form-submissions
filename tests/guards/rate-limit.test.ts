@@ -28,7 +28,8 @@ describe('RateLimitGuard', () => {
     const { limiter } = stubLimiter({ success: false })
     expect(await new RateLimitGuard({ limiter }).guard(guardContext())).toEqual({
       action: 'reject',
-      error: RateLimitGuard.errors.rateLimited
+      error: RateLimitGuard.errors.rateLimited,
+      code: 'rate-limit.exceeded'
     })
   })
 

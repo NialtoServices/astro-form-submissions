@@ -1,6 +1,6 @@
 import { formError } from '#errors.js'
 import type { InspectionContext, Inspector } from '#inspectors/inspector.js'
-import type { FormSubmission, Verdict } from '#pipeline.js'
+import type { FormSubmission, Verdict, VerdictDetails } from '#pipeline.js'
 import { isRecord } from '#type-guards.js'
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
@@ -40,20 +40,19 @@ function isSiteVerifyResponse(value: unknown): value is SiteVerifyResponse {
   return isRecord(value) && typeof value.success === 'boolean'
 }
 
-/** The verification outcome, with an operational failure category when one occurred. */
-interface VerifyResult {
-  /** Whether the token passed verification — `false` for expected token invalidity and operational failures alike. */
-  success: boolean
+/** What Siteverify said about a token. */
+type VerifyResult =
+  /** The token passed; `hostname` is where it was solved, when Siteverify reports one. */
+  | { outcome: 'verified'; hostname?: string }
 
-  /** The hostname the token was solved on, when Siteverify reports one. */
-  hostname?: string
+  /** Siteverify judged the token itself invalid (expired, reused, forged): expected sender behaviour. */
+  | { outcome: 'token-rejected'; errorCodes: string[] }
 
   /**
-   * A sanitised description of an operational failure (outage, misconfiguration, contract change) — never set for
-   * expected token invalidity, and never carrying the token or secret.
+   * Verification could not complete (an outage, a bad secret, a contract change). `failure` describes it for
+   * the operational report and `details` gives it to the verdict; neither carries the token or secret.
    */
-  failure?: string
-}
+  | { outcome: 'failed'; failure: string; details: VerdictDetails }
 
 /**
  * Canonicalises a hostname for comparison — DNS names are case-insensitive, and URL parsing lowercases ASCII hosts.
@@ -106,6 +105,7 @@ export interface TurnstileInspectorOptions {
  * Never throws: errors are caught internally so the route's fail-open handling of unexpected inspector errors can't
  * accidentally bypass verification. Operational failures (outage, bad secret, contract change) are surfaced through
  * `context.report` so a total form outage is diagnosable, while the sender still sees the generic rejection.
+ * Every rejection carries a `turnstile.*` code naming which check failed.
  */
 export class TurnstileInspector implements Inspector {
   /** Errors this inspector rejects with. Override the copy per-site via `errors[key]`. */
@@ -139,16 +139,19 @@ export class TurnstileInspector implements Inspector {
     const token = `${context.data.get(tokenField) ?? ''}`
 
     // A missing token is expected sender/bot behaviour, not an operational event — no report.
-    if (!token) return { action: 'reject', error: TurnstileInspector.errors.verification }
+    if (!token) return this.reject('turnstile.missing-token', { field: tokenField })
 
     // `remoteip` is optional to Siteverify and a personal-data transfer, so it's gated by `sendRemoteIP`.
     const sendRemoteIP = this.options.sendRemoteIP ?? true
     const result = await this.verify(token, sendRemoteIP ? context.clientAddress : undefined)
-    if (result.failure) {
+    if (result.outcome === 'failed') {
       context.report?.(new Error(`Turnstile verification could not complete: ${result.failure}`))
+      return this.reject('turnstile.siteverify-failed', result.details)
     }
 
-    if (!result.success) return { action: 'reject', error: TurnstileInspector.errors.verification }
+    if (result.outcome === 'token-rejected') {
+      return this.reject('turnstile.token-rejected', { errorCodes: result.errorCodes })
+    }
 
     if (verifyHostname !== false) {
       // `true` binds to the configured Astro `site`; a string/array is the allowlist itself.
@@ -177,7 +180,7 @@ export class TurnstileInspector implements Inspector {
           )
         }
 
-        return { action: 'reject', error: TurnstileInspector.errors.verification }
+        return this.reject('turnstile.hostname-unconfigured')
       }
 
       // Canonicalise both sides: DNS names are case-insensitive and neither side is guaranteed lowercase.
@@ -192,7 +195,7 @@ export class TurnstileInspector implements Inspector {
             )
           )
 
-          return { action: 'reject', error: TurnstileInspector.errors.verification }
+          return this.reject('turnstile.hostname-invalid', { entry: candidate })
         }
 
         expectedHostnames.add(expectedHostname)
@@ -200,11 +203,21 @@ export class TurnstileInspector implements Inspector {
 
       const solvedHostname = result.hostname === undefined ? undefined : canonicalHostname(result.hostname)
       if (solvedHostname === undefined || !expectedHostnames.has(solvedHostname)) {
-        return { action: 'reject', error: TurnstileInspector.errors.verification }
+        return this.reject('turnstile.hostname-mismatch', {
+          expected: [...expectedHostnames],
+          ...(result.hostname === undefined ? {} : { solved: result.hostname })
+        })
       }
     }
 
     return { action: 'accept' }
+  }
+
+  // MARK: - Verdicts
+
+  /** The `verification` rejection, with the reason an operator's log names. */
+  private reject(code: string, details: VerdictDetails = {}): Verdict {
+    return { action: 'reject', error: TurnstileInspector.errors.verification, code, details }
   }
 
   // MARK: - Turnstile API
@@ -214,7 +227,7 @@ export class TurnstileInspector implements Inspector {
    *
    * @param token - The Turnstile response token from the form (non-empty; the caller rejects blanks).
    * @param remoteIP - The client IP, when known.
-   * @returns The verification outcome, the solved hostname, and any operational failure category.
+   * @returns What Siteverify said: verified (with the solved hostname), a rejected token, or a failure.
    */
   private async verify(token: string, remoteIP?: string): Promise<VerifyResult> {
     const requestBody = new FormData()
@@ -233,7 +246,13 @@ export class TurnstileInspector implements Inspector {
         signal: controller.signal
       })
 
-      if (!response.ok) return { success: false, failure: `siteverify responded with status ${response.status}` }
+      if (!response.ok) {
+        return {
+          outcome: 'failed',
+          failure: `siteverify responded with status ${response.status}`,
+          details: { failure: 'status', status: response.status }
+        }
+      }
 
       // The abort timer also covers the body read, so a response that sends headers and then stalls is
       // reported as a timeout; only a body that isn't JSON counts as an invalid response.
@@ -242,27 +261,44 @@ export class TurnstileInspector implements Inspector {
         return undefined
       })
     } catch {
-      return { success: false, failure: 'siteverify was unreachable or timed out' }
+      return {
+        outcome: 'failed',
+        failure: 'siteverify was unreachable or timed out',
+        details: { failure: 'unreachable' }
+      }
     } finally {
       clearTimeout(timeout)
     }
 
     if (!isSiteVerifyResponse(responseData)) {
-      return { success: false, failure: 'siteverify returned an invalid response body' }
+      return {
+        outcome: 'failed',
+        failure: 'siteverify returned an invalid response body',
+        details: { failure: 'invalid-body' }
+      }
     }
 
     const verification = responseData
 
     if (!verification.success) {
-      const errorCodes = Array.isArray(verification['error-codes']) ? verification['error-codes'] : []
+      const errorCodes = Array.isArray(verification['error-codes'])
+        ? verification['error-codes'].filter((code): code is string => typeof code === 'string')
+        : []
       const operational = errorCodes.filter((code) => OPERATIONAL_ERROR_CODES.has(code))
       if (operational.length > 0) {
-        return { success: false, failure: `siteverify reported: ${operational.join(', ')}` }
+        return {
+          outcome: 'failed',
+          failure: `siteverify reported: ${operational.join(', ')}`,
+          details: { failure: 'operational', errorCodes: operational }
+        }
       }
 
-      return { success: false }
+      return { outcome: 'token-rejected', errorCodes }
     }
 
-    return { success: true, hostname: typeof verification.hostname === 'string' ? verification.hostname : undefined }
+    return {
+      outcome: 'verified',
+      hostname: typeof verification.hostname === 'string' ? verification.hostname : undefined
+    }
   }
 }

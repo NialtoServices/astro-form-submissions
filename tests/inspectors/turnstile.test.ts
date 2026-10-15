@@ -32,6 +32,13 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+const verification = TurnstileInspector.errors.verification
+
+/** The reject verdict the inspector returns for one reason. */
+function rejected(code: string, details: Record<string, unknown> = {}) {
+  return { action: 'reject', error: verification, code, details }
+}
+
 describe('TurnstileInspector', () => {
   it('passes when verification succeeds', async () => {
     mockSiteverify(JSON.stringify({ success: true, hostname: 'example.com' }))
@@ -49,7 +56,7 @@ describe('TurnstileInspector', () => {
     const fetchSpy = stubFetch(() => new Response())
     const context = contextFor(undefined)
     const result = await new TurnstileInspector({ secretKey: 'secret' }).inspect(context)
-    expect(result).toEqual({ action: 'reject', error: TurnstileInspector.errors.verification })
+    expect(result).toEqual(rejected('turnstile.missing-token', { field: 'cf-turnstile-response' }))
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(context.report).not.toHaveBeenCalled()
   })
@@ -57,31 +64,31 @@ describe('TurnstileInspector', () => {
   it('rejects when verification is unsuccessful', async () => {
     mockSiteverify(JSON.stringify({ success: false }))
     const result = await new TurnstileInspector({ secretKey: 'secret' }).inspect(contextFor('token'))
-    expect(result).toEqual({ action: 'reject', error: TurnstileInspector.errors.verification })
+    expect(result).toEqual(rejected('turnstile.token-rejected', { errorCodes: [] }))
   })
 
   it('rejects on a non-2xx response', async () => {
     mockSiteverify('', 500)
     const result = await new TurnstileInspector({ secretKey: 'secret' }).inspect(contextFor('token'))
-    expect(result).toEqual({ action: 'reject', error: TurnstileInspector.errors.verification })
+    expect(result).toEqual(rejected('turnstile.siteverify-failed', { failure: 'status', status: 500 }))
   })
 
   it('rejects (never throws) on a network error', async () => {
     stubFetch(() => Promise.reject(new Error('boom')))
     const result = await new TurnstileInspector({ secretKey: 'secret' }).inspect(contextFor('token'))
-    expect(result).toEqual({ action: 'reject', error: TurnstileInspector.errors.verification })
+    expect(result).toEqual(rejected('turnstile.siteverify-failed', { failure: 'unreachable' }))
   })
 
   it('rejects on an unparseable body', async () => {
     mockSiteverify('not json')
     const result = await new TurnstileInspector({ secretKey: 'secret' }).inspect(contextFor('token'))
-    expect(result).toEqual({ action: 'reject', error: TurnstileInspector.errors.verification })
+    expect(result).toEqual(rejected('turnstile.siteverify-failed', { failure: 'invalid-body' }))
   })
 
   it('rejects a schema-invalid body whose success flag is not a boolean', async () => {
     mockSiteverify(JSON.stringify({ success: 'false', hostname: 'example.com' }))
     const result = await new TurnstileInspector({ secretKey: 'secret' }).inspect(contextFor('token'))
-    expect(result).toEqual({ action: 'reject', error: TurnstileInspector.errors.verification })
+    expect(result).toEqual(rejected('turnstile.siteverify-failed', { failure: 'invalid-body' }))
   })
 
   it('rejects when the verification service hangs past the timeout', async () => {
@@ -97,7 +104,7 @@ describe('TurnstileInspector', () => {
 
       const pending = new TurnstileInspector({ secretKey: 'secret' }).inspect(contextFor('token'))
       await vi.advanceTimersByTimeAsync(5000)
-      expect(await pending).toEqual({ action: 'reject', error: TurnstileInspector.errors.verification })
+      expect(await pending).toEqual(rejected('turnstile.siteverify-failed', { failure: 'unreachable' }))
     } finally {
       vi.useRealTimers()
     }
@@ -123,7 +130,7 @@ describe('TurnstileInspector', () => {
       const pending = new TurnstileInspector({ secretKey: 'secret' }).inspect(context)
       await vi.advanceTimersByTimeAsync(5000)
 
-      expect(await pending).toEqual({ action: 'reject', error: TurnstileInspector.errors.verification })
+      expect(await pending).toEqual(rejected('turnstile.siteverify-failed', { failure: 'unreachable' }))
       expect(String(context.report.mock.calls[0]?.[0])).toContain('unreachable or timed out')
     } finally {
       vi.useRealTimers()
@@ -170,14 +177,37 @@ describe('TurnstileInspector', () => {
   })
 })
 
+describe('TurnstileInspector reasons', () => {
+  it('names the token-level codes siteverify gave', async () => {
+    mockSiteverify(JSON.stringify({ success: false, 'error-codes': ['timeout-or-duplicate'] }))
+    const result = await new TurnstileInspector({ secretKey: 'secret' }).inspect(contextFor('token'))
+    expect(result).toEqual(rejected('turnstile.token-rejected', { errorCodes: ['timeout-or-duplicate'] }))
+  })
+
+  it('names operational siteverify codes as a failure, not a token rejection', async () => {
+    mockSiteverify(JSON.stringify({ success: false, 'error-codes': ['invalid-input-secret'] }))
+    const result = await new TurnstileInspector({ secretKey: 'secret' }).inspect(contextFor('token'))
+    expect(result).toEqual(
+      rejected('turnstile.siteverify-failed', { failure: 'operational', errorCodes: ['invalid-input-secret'] })
+    )
+  })
+
+  it('names the expected and solved hostnames when a token was solved elsewhere', async () => {
+    mockSiteverify(JSON.stringify({ success: true, hostname: 'localhost' }))
+    const result = await new TurnstileInspector({ secretKey: 'secret', verifyHostname: 'example.com' }).inspect(
+      contextFor('token')
+    )
+    expect(result).toEqual(rejected('turnstile.hostname-mismatch', { expected: ['example.com'], solved: 'localhost' }))
+  })
+})
+
 describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () => {
   it('rejects on a hostname mismatch', async () => {
     mockSiteverify(JSON.stringify({ success: true, hostname: 'other.com' }))
     const inspector = new TurnstileInspector({ secretKey: 'secret', verifyHostname: true })
-    expect(await inspector.inspect(contextFor('token'))).toEqual({
-      action: 'reject',
-      error: TurnstileInspector.errors.verification
-    })
+    expect(await inspector.inspect(contextFor('token'))).toEqual(
+      rejected('turnstile.hostname-mismatch', { expected: ['example.com'], solved: 'other.com' })
+    )
   })
 
   it('binds against the configured site host, not the request host', async () => {
@@ -193,10 +223,9 @@ describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () =
     mockSiteverify(JSON.stringify({ success: true, hostname: 'evil.com' }))
     const context = contextFor('token', { host: 'evil.com', siteURL: new URL('https://example.com/') })
     const inspector = new TurnstileInspector({ secretKey: 'secret', verifyHostname: true })
-    expect(await inspector.inspect(context)).toEqual({
-      action: 'reject',
-      error: TurnstileInspector.errors.verification
-    })
+    expect(await inspector.inspect(context)).toEqual(
+      rejected('turnstile.hostname-mismatch', { expected: ['example.com'], solved: 'evil.com' })
+    )
   })
 
   it('verifies against an explicit hostname string, overriding the configured site host', async () => {
@@ -224,10 +253,12 @@ describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () =
       secretKey: 'secret',
       verifyHostname: ['example.com', 'my-site.nialto.workers.dev']
     })
-    expect(await inspector.inspect(contextFor('token'))).toEqual({
-      action: 'reject',
-      error: TurnstileInspector.errors.verification
-    })
+    expect(await inspector.inspect(contextFor('token'))).toEqual(
+      rejected('turnstile.hostname-mismatch', {
+        expected: ['example.com', 'my-site.nialto.workers.dev'],
+        solved: 'attacker.example'
+      })
+    )
   })
 
   it('rejects and reports when any allowlist entry is invalid', async () => {
@@ -238,10 +269,9 @@ describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () =
       verifyHostname: ['example.com', 'exa mple.com/path']
     })
 
-    expect(await inspector.inspect(context)).toEqual({
-      action: 'reject',
-      error: TurnstileInspector.errors.verification
-    })
+    expect(await inspector.inspect(context)).toEqual(
+      rejected('turnstile.hostname-invalid', { entry: 'exa mple.com/path' })
+    )
     expect(context.report).toHaveBeenCalledOnce()
     expect(String(context.report.mock.calls[0]![0])).toContain('not a valid hostname')
   })
@@ -252,8 +282,8 @@ describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () =
     const first = contextFor('token')
     const second = contextFor('token')
 
-    expect(await inspector.inspect(first)).toEqual({ action: 'reject', error: TurnstileInspector.errors.verification })
-    expect(await inspector.inspect(second)).toEqual({ action: 'reject', error: TurnstileInspector.errors.verification })
+    expect(await inspector.inspect(first)).toEqual(rejected('turnstile.hostname-unconfigured'))
+    expect(await inspector.inspect(second)).toEqual(rejected('turnstile.hostname-unconfigured'))
 
     // The diagnostic fires once across requests, not on every deterministic rejection.
     expect(first.report).toHaveBeenCalledOnce()
@@ -270,10 +300,9 @@ describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () =
   it('does not let a path or port smuggle past hostname validation', async () => {
     mockSiteverify(JSON.stringify({ success: true, hostname: 'example.com' }))
     const inspector = new TurnstileInspector({ secretKey: 'secret', verifyHostname: 'example.com:8443/evil' })
-    expect(await inspector.inspect(contextFor('token'))).toEqual({
-      action: 'reject',
-      error: TurnstileInspector.errors.verification
-    })
+    expect(await inspector.inspect(contextFor('token'))).toEqual(
+      rejected('turnstile.hostname-invalid', { entry: 'example.com:8443/evil' })
+    )
   })
 
   it('rejects and reports rather than trusting the request host when no trusted hostname exists', async () => {
@@ -281,10 +310,7 @@ describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () =
     const context = contextFor('token', { siteURL: null })
     const inspector = new TurnstileInspector({ secretKey: 'secret', verifyHostname: true })
 
-    expect(await inspector.inspect(context)).toEqual({
-      action: 'reject',
-      error: TurnstileInspector.errors.verification
-    })
+    expect(await inspector.inspect(context)).toEqual(rejected('turnstile.hostname-unconfigured'))
     expect(context.report).toHaveBeenCalledOnce()
     expect(String(context.report.mock.calls[0]![0])).toContain('no trusted hostname')
   })
@@ -292,10 +318,9 @@ describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () =
   it('fails closed when a successful verification omits the hostname', async () => {
     mockSiteverify(JSON.stringify({ success: true }))
     const inspector = new TurnstileInspector({ secretKey: 'secret', verifyHostname: true })
-    expect(await inspector.inspect(contextFor('token'))).toEqual({
-      action: 'reject',
-      error: TurnstileInspector.errors.verification
-    })
+    expect(await inspector.inspect(contextFor('token'))).toEqual(
+      rejected('turnstile.hostname-mismatch', { expected: ['example.com'] })
+    )
   })
 
   it('skips the hostname check entirely when disabled', async () => {

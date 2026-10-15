@@ -20,7 +20,7 @@ describe('HoneypotInspector', () => {
     const result = await new HoneypotInspector({ fieldName: 'website' }).inspect(
       contextFor({ website: 'https://spam.example' })
     )
-    expect(result).toEqual({ action: 'drop' })
+    expect(result).toEqual({ action: 'drop', code: 'honeypot.filled', details: { field: 'website' } })
   })
 
   it('accepts when the honeypot is absent', async () => {
@@ -35,7 +35,11 @@ describe('HoneypotInspector', () => {
 
   it('only inspects its configured field', async () => {
     const inspector = new HoneypotInspector({ fieldName: 'fax_number' })
-    expect(await inspector.inspect(contextFor({ fax_number: 'bot' }))).toEqual({ action: 'drop' })
+    expect(await inspector.inspect(contextFor({ fax_number: 'bot' }))).toEqual({
+      action: 'drop',
+      code: 'honeypot.filled',
+      details: { field: 'fax_number' }
+    })
     expect(await inspector.inspect(contextFor({ website: 'bot' }))).toEqual({ action: 'accept' })
   })
 })

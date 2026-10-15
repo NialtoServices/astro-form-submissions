@@ -83,6 +83,8 @@ export class RateLimitGuard implements Guard {
       return { success: true }
     })
 
-    return success ? { action: 'accept' } : { action: 'reject', error: RateLimitGuard.errors.rateLimited }
+    if (success) return { action: 'accept' }
+
+    return { action: 'reject', error: RateLimitGuard.errors.rateLimited, code: 'rate-limit.exceeded' }
   }
 }

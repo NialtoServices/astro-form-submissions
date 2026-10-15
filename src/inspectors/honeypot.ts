@@ -35,12 +35,12 @@ export class HoneypotInspector implements Inspector {
    * Inspects the submission's honeypot field.
    *
    * @param context - The inspection context; reads the honeypot field from the raw form data.
-   * @returns `{ action: 'drop' }` when the honeypot is filled, otherwise `{ action: 'accept' }`.
+   * @returns A `honeypot.filled` drop when the honeypot is filled, otherwise `{ action: 'accept' }`.
    */
   async inspect(context: InspectionContext<FormSubmission>): Promise<Verdict> {
     // `getField` trims, so a whitespace-only value (some browsers autofill spaces) doesn't count as filled.
     if (getField(context.data, this.options.fieldName) !== undefined) {
-      return { action: 'drop' }
+      return { action: 'drop', code: 'honeypot.filled', details: { field: this.options.fieldName } }
     }
 
     return { action: 'accept' }
