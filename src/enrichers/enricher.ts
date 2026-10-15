@@ -1,5 +1,5 @@
 import type { FormError } from '#errors.js'
-import type { FormSubmission } from '#pipeline.js'
+import type { FormSubmission, VerdictReason } from '#pipeline.js'
 
 /**
  * Everything an enricher may read while acquiring resources for a submission-in-progress. The
@@ -46,12 +46,14 @@ export interface EnrichmentContext<E extends FormSubmission = FormSubmission> {
  *   submission itself is never mutated, so it stays exactly the schema's validated input. `rollback`
  *   undoes the acquired resource and is invoked, in reverse order across all enrichers, if a later
  *   enricher fails or refuses, or if no delivery that exposes resources succeeds.
- * - `{ reject }` — a clean refusal (e.g. a file failed validation); the client sees the keyed error.
+ * - `{ reject, code?, details? }` — a clean refusal (e.g. a file failed validation); the client sees the keyed
+ *   error, and the route reports the reason to `onError`.
  *
  * `A` is the resource this enricher contributes; the route infers it and hands the dispatchers a
  * `DispatchContext` whose `resources` is the merge of every enricher's `A`.
  */
-export type EnrichmentResult<A = object> = { provide?: A; rollback?: () => Promise<void> } | { reject: FormError }
+export type EnrichmentResult<A = object> =
+  { provide?: A; rollback?: () => Promise<void> } | ({ reject: FormError } & VerdictReason)
 
 /**
  * A pluggable resource-acquisition step run after the inspectors and before delivery (e.g. moving

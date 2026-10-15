@@ -20,7 +20,7 @@ export {
   type TurnstileInspectorOptions
 } from '#inspectors/index.js'
 
-export type { FormSubmission, Verdict } from '#pipeline.js'
+export type { FormSubmission, Verdict, VerdictDetail, VerdictDetails, VerdictReason } from '#pipeline.js'
 
 export {
   DEFAULT_MAX_FILE_BYTES,
@@ -135,6 +135,7 @@ export {
 export type { ClientAddressResolver } from '#admission.js'
 
 export { defaultErrorReporter, type ErrorReporter } from '#reporting.js'
+export { SubmissionVerdictError, type ReportedVerdictAction } from '#submission-verdict-error.js'
 
 export { requireEnv } from '#env.js'
 export { MissingEnvError } from '#missing-env-error.js'

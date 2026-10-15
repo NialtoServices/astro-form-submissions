@@ -6,6 +6,28 @@ import type { FormError } from '#errors.js'
  */
 export type FormSubmission = Record<string, unknown>
 
+/** One machine-readable detail on a verdict: a configuration value, a provider code, a count. */
+export type VerdictDetail = string | number | boolean | readonly (string | number | boolean)[]
+
+/**
+ * Machine-readable facts about a verdict, for an operator's logs. Only configuration values, provider codes,
+ * counts and sizes belong here, never anything the sender submitted: the default reporter prints the entries
+ * that look like identifiers, and a site's own reporter receives them all.
+ */
+export type VerdictDetails = Readonly<Record<string, VerdictDetail>>
+
+/** Why a stage turned a submission away, for an operator's logs. Never shown to the sender. */
+export interface VerdictReason {
+  /**
+   * A stable identifier for the reason, namespaced by the stage that gives it
+   * (`turnstile.hostname-mismatch`). The default reporter prints it when it is a bounded identifier.
+   */
+  code?: string
+
+  /** Facts that explain the reason (the expected and solved hostname, say). */
+  details?: VerdictDetails
+}
+
 /**
  * What a guard or inspector decided:
  *
@@ -15,9 +37,12 @@ export type FormSubmission = Record<string, unknown>
  *   verdict is non-terminal, so later stages still run; an optional `reason` accumulates across stages.
  * - `{ action: 'drop' }` — silent stop; the sender sees success but nothing is delivered.
  * - `{ action: 'reject', error }` — hard stop; the sender sees the error's copy and status.
+ *
+ * Every verdict but an accept may carry a {@link VerdictReason}; the route reports it to `onError` so an
+ * operator can see why.
  */
 export type Verdict =
   | { action: 'accept' }
-  | { action: 'quarantine'; reason?: string }
-  | { action: 'drop' }
-  | { action: 'reject'; error: FormError }
+  | ({ action: 'quarantine'; reason?: string } & VerdictReason)
+  | ({ action: 'drop' } & VerdictReason)
+  | ({ action: 'reject'; error: FormError } & VerdictReason)

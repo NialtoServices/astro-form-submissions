@@ -8,6 +8,7 @@ describe('package entry', () => {
       DiscordDeliveryError: expect.any(Function),
       EmailRecipientError: expect.any(Function),
       PostmarkDeliveryError: expect.any(Function),
+      SubmissionVerdictError: expect.any(Function),
       defaultErrorReporter: expect.any(Function)
     })
   })
@@ -16,5 +17,16 @@ describe('package entry', () => {
     expectTypeOf<toolkit.LazyRouteOptions['onError']>().toEqualTypeOf<toolkit.ErrorReporter | undefined>()
     expectTypeOf<NonNullable<toolkit.FormRouteConfig<never>['onError']>>().toEqualTypeOf<toolkit.ErrorReporter>()
     expectTypeOf(toolkit.defaultErrorReporter).toExtend<toolkit.ErrorReporter>()
+  })
+
+  it('lets a stage give a reason with any verdict but an accept', () => {
+    expectTypeOf<{
+      action: 'reject'
+      error: toolkit.FormError
+      code: string
+      details: { limit: number }
+    }>().toExtend<toolkit.Verdict>()
+    expectTypeOf<{ action: 'drop'; code: string }>().toExtend<toolkit.Verdict>()
+    expectTypeOf<{ reject: toolkit.FormError; code: string }>().toExtend<toolkit.EnrichmentResult>()
   })
 })
