@@ -116,6 +116,14 @@ describe('defaultErrorReporter on a verdict', () => {
     expect(line).toBe('[astro-form-submissions] inspection rejected: spam.blocked score=5')
   })
 
+  it('prints no details when an untyped stage gives a string or an array instead of a record', async () => {
+    const asString = new SubmissionVerdictError('reject', 'spam.blocked', 'ada.lovelace@example.com' as never)
+    const asArray = new SubmissionVerdictError('reject', 'spam.blocked', ['Ada', 'Lovelace'] as never)
+
+    expect(await warnedLine(asString)).toBe('[astro-form-submissions] inspection rejected: spam.blocked')
+    expect(await warnedLine(asArray)).toBe('[astro-form-submissions] inspection rejected: spam.blocked')
+  })
+
   it('keeps an empty array as an empty list', async () => {
     expect(await warnedLine(new SubmissionVerdictError('reject', 'turnstile.token-rejected', { errorCodes: [] }))).toBe(
       '[astro-form-submissions] inspection rejected: turnstile.token-rejected errorCodes=[]'

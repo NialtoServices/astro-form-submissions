@@ -55,7 +55,13 @@ function formatDetail(value: unknown): string | undefined {
  */
 function summarizeVerdict(verdict: SubmissionVerdictError): string {
   const parts = [isSafeIdentifier(verdict.code) ? String(verdict.code) : 'unspecified']
-  for (const [key, value] of Object.entries(verdict.details ?? {})) {
+
+  // An untyped stage can hand over a string or an array, whose entries are its characters or items under
+  // index keys that pass the identifier check, so only a plain record is read.
+  const { details } = verdict
+  if (typeof details !== 'object' || details === null || Array.isArray(details)) return parts.join(' ')
+
+  for (const [key, value] of Object.entries(details)) {
     if (!SAFE_ERROR_CODE.test(key)) continue
 
     const formatted = formatDetail(value)
