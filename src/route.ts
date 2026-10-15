@@ -4,6 +4,7 @@ import { FileUploads, UploadedFiles, type Enricher, type EnrichmentContext } fro
 import type { FormError, FormErrors, ToolkitErrorKey } from '#errors.js'
 import { RateLimitGuard, type Guard } from '#guards/index.js'
 import { TurnstileInspector, type Inspector } from '#inspectors/index.js'
+import { OperationalError } from '#operational-error.js'
 import type { FormSubmission } from '#pipeline.js'
 import { containedReporter, type ErrorReporter, type FormErrorStage } from '#reporting.js'
 import { jsonFormError, jsonOk } from '#responses.js'
@@ -328,7 +329,8 @@ export function createFormRoute<
               if (dispatcher.exposesResources !== false && error instanceof DestinationUnreachableError) {
                 resourcesExposed = true
                 await report(
-                  new Error(
+                  new OperationalError(
+                    'delivery.links-kept',
                     `${error.destination} may have delivered the upload links before failing; the files were kept.`
                   ),
                   'delivery'
@@ -351,7 +353,8 @@ export function createFormRoute<
       )
       if (quarantined && !acceptsQuarantine) {
         await report(
-          new Error(
+          new OperationalError(
+            'quarantine.undeliverable',
             'Submission quarantined but no dispatcher accepts quarantined submissions — nothing was delivered.'
           ),
           'unexpected'

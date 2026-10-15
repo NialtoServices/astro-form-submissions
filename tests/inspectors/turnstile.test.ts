@@ -274,6 +274,7 @@ describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () =
     )
     expect(context.report).toHaveBeenCalledOnce()
     expect(String(context.report.mock.calls[0]![0])).toContain('not a valid hostname')
+    expect(context.report).toHaveBeenCalledWith(expect.objectContaining({ code: 'turnstile.hostname-invalid' }))
   })
 
   it('rejects every submission and reports once for a literal empty allowlist', async () => {
@@ -288,6 +289,7 @@ describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () =
     // The diagnostic fires once across requests, not on every deterministic rejection.
     expect(first.report).toHaveBeenCalledOnce()
     expect(String(first.report.mock.calls[0]![0])).toContain('empty allowlist')
+    expect(first.report).toHaveBeenCalledWith(expect.objectContaining({ code: 'turnstile.hostname-unconfigured' }))
     expect(second.report).not.toHaveBeenCalled()
   })
 
@@ -313,6 +315,7 @@ describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () =
     expect(await inspector.inspect(context)).toEqual(rejected('turnstile.hostname-unconfigured'))
     expect(context.report).toHaveBeenCalledOnce()
     expect(String(context.report.mock.calls[0]![0])).toContain('no trusted hostname')
+    expect(context.report).toHaveBeenCalledWith(expect.objectContaining({ code: 'turnstile.hostname-unconfigured' }))
   })
 
   it('fails closed when a successful verification omits the hostname', async () => {
@@ -343,6 +346,7 @@ describe('TurnstileInspector operational diagnostics', () => {
     const report = await reportFor(() => {}, '', 503)
     expect(report).toHaveBeenCalledOnce()
     expect(String(report.mock.calls[0]![0])).toContain('status 503')
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({ code: 'turnstile.siteverify-failed' }))
   })
 
   it('reports an unreachable or timed-out siteverify', async () => {

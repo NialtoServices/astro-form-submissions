@@ -1,6 +1,7 @@
 import { formError } from '#errors.js'
 import type { Guard, GuardContext } from '#guards/guard.js'
 import { rateLimitKeyForAddress } from '#guards/rate-limit-key.js'
+import { OperationalError } from '#operational-error.js'
 import type { Verdict } from '#pipeline.js'
 
 /**
@@ -72,14 +73,23 @@ export class RateLimitGuard implements Guard {
     // No per-client key (no custom `key`, no resolvable address) → fail open rather than throttle every
     // such caller against one shared bucket, which would let a single one exhaust everyone's quota.
     if (key === undefined) {
-      context.report?.(new Error('Rate limiter has no client key for this request; failing open'))
+      context.report?.(
+        new OperationalError(
+          'rate-limit.no-client-key',
+          'Rate limiter has no client key for this request; failing open'
+        )
+      )
       return { action: 'accept' }
     }
 
     // Fail open on a limiter error (an outage must never reject a legitimate submission), but report
     // it — without the possibly-sensitive key — so a silently-disabled throttle doesn't go unnoticed.
     const { success } = await this.options.limiter.limit({ key }).catch((error: unknown) => {
-      context.report?.(new Error('Rate limiter unavailable; failing open', { cause: error }))
+      context.report?.(
+        new OperationalError('rate-limit.limiter-unavailable', 'Rate limiter unavailable; failing open', {
+          cause: error
+        })
+      )
       return { success: true }
     })
 

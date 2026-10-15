@@ -40,6 +40,9 @@ describe('RateLimitGuard', () => {
     expect(await new RateLimitGuard({ limiter }).guard(context)).toEqual({ action: 'accept' })
 
     expect(report).toHaveBeenCalledOnce()
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'OperationalError', code: 'rate-limit.limiter-unavailable' })
+    )
     expect(String(report.mock.calls[0]![0])).not.toContain('10.0.0.1')
   })
 
@@ -71,6 +74,7 @@ describe('RateLimitGuard', () => {
     expect(await new RateLimitGuard({ limiter }).guard(context)).toEqual({ action: 'accept' })
     expect(limit).not.toHaveBeenCalled()
     expect(report).toHaveBeenCalledOnce()
+    expect(report).toHaveBeenCalledWith(expect.objectContaining({ code: 'rate-limit.no-client-key' }))
   })
 
   it('still throttles an address-less request when a custom key supplies its own dimension', async () => {

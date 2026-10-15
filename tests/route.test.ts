@@ -234,7 +234,9 @@ describe('createFormRoute', () => {
     expect(dispatch).not.toHaveBeenCalled()
     expect(onError).toHaveBeenCalledTimes(2)
     expect(onError).toHaveBeenCalledWith(verdictReport('quarantine', undefined), { stage: 'inspection' })
-    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'unexpected' })
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'quarantine.undeliverable' }), {
+      stage: 'unexpected'
+    })
   })
 
   it('warns even with no dispatchers configured when a submission is quarantined', async () => {
@@ -247,7 +249,9 @@ describe('createFormRoute', () => {
     expect(response.status).toBe(200)
     expect(onError).toHaveBeenCalledTimes(2)
     expect(onError).toHaveBeenCalledWith(verdictReport('quarantine', undefined), { stage: 'inspection' })
-    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'unexpected' })
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'quarantine.undeliverable' }), {
+      stage: 'unexpected'
+    })
   })
 
   it('a reject after a quarantine still rejects (terminal wins over the recorded quarantine)', async () => {

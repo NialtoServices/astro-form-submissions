@@ -1,5 +1,6 @@
 import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 import { PostmarkDeliveryError } from '#dispatchers/postmark-delivery-error.js'
+import { OperationalError } from '#operational-error.js'
 import { defaultErrorReporter, type FormErrorStage } from '#reporting.js'
 import { SubmissionVerdictError } from '#submission-verdict-error.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -30,6 +31,16 @@ describe('defaultErrorReporter', () => {
 
     expect(await loggedLine(new DestinationUnreachableError('Discord', { cause: timeout }))).toBe(
       '[astro-form-submissions] delivery error: DestinationUnreachableError destination=Discord cause=AbortError'
+    )
+  })
+
+  it('names an operational failure by its code and keeps its cause class', async () => {
+    const error = new OperationalError('rate-limit.limiter-unavailable', 'Rate limiter unavailable; failing open', {
+      cause: new TypeError('binding missing')
+    })
+
+    expect(await loggedLine(error)).toBe(
+      '[astro-form-submissions] delivery error: OperationalError code=rate-limit.limiter-unavailable cause=TypeError'
     )
   })
 

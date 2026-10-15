@@ -1,5 +1,6 @@
 import { formError } from '#errors.js'
 import type { InspectionContext, Inspector } from '#inspectors/inspector.js'
+import { OperationalError } from '#operational-error.js'
 import type { FormSubmission, Verdict, VerdictDetails } from '#pipeline.js'
 import { isRecord } from '#type-guards.js'
 
@@ -145,7 +146,12 @@ export class TurnstileInspector implements Inspector {
     const sendRemoteIP = this.options.sendRemoteIP ?? true
     const result = await this.verify(token, sendRemoteIP ? context.clientAddress : undefined)
     if (result.outcome === 'failed') {
-      context.report?.(new Error(`Turnstile verification could not complete: ${result.failure}`))
+      context.report?.(
+        new OperationalError(
+          'turnstile.siteverify-failed',
+          `Turnstile verification could not complete: ${result.failure}`
+        )
+      )
       return this.reject('turnstile.siteverify-failed', result.details)
     }
 
@@ -163,7 +169,8 @@ export class TurnstileInspector implements Inspector {
           if (!this.emptyAllowlistReported) {
             this.emptyAllowlistReported = true
             context.report?.(
-              new Error(
+              new OperationalError(
+                'turnstile.hostname-unconfigured',
                 'Turnstile verifyHostname is an empty allowlist ([]) — every submission is rejected. ' +
                   'Pass a hostname, `true` to bind to Astro `site`, or `false` to disable.'
               )
@@ -173,7 +180,8 @@ export class TurnstileInspector implements Inspector {
           // Enabled but no configured `site`: fail closed rather than bind to a request-derived host that a
           // spoofed Host header could choose.
           context.report?.(
-            new Error(
+            new OperationalError(
+              'turnstile.hostname-unconfigured',
               'Turnstile hostname verification is enabled but no trusted hostname is configured. ' +
                 'Set `verifyHostname` to a hostname or Astro `site`, or disable via `verifyHostname: false`.'
             )
@@ -190,7 +198,8 @@ export class TurnstileInspector implements Inspector {
         const expectedHostname = canonicalHostname(candidate)
         if (!expectedHostname) {
           context.report?.(
-            new Error(
+            new OperationalError(
+              'turnstile.hostname-invalid',
               `Turnstile hostname verification is misconfigured: ${JSON.stringify(candidate)} is not a valid hostname.`
             )
           )

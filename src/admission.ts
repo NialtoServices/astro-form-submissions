@@ -2,6 +2,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { formError, type FormError, type FormErrors } from '#errors.js'
 import type { AdmittingRoute, Guard, GuardContext } from '#guards/index.js'
 import type { InspectionContext, Inspector } from '#inspectors/index.js'
+import { OperationalError } from '#operational-error.js'
 import type { Verdict } from '#pipeline.js'
 import type { FormErrorStage } from '#reporting.js'
 import { jsonFormError, jsonValidationError } from '#responses.js'
@@ -220,7 +221,7 @@ export async function admit<S extends SchemaInput>(
   // than object-spread it into a garbage submission.
   const value = validation.value
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    await report(new Error('Schema output must be an object'), 'unexpected')
+    await report(new OperationalError('schema.non-object', 'Schema output must be an object'), 'unexpected')
     return fail(ERRORS.unavailable, formData)
   }
 

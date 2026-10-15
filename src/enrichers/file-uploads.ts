@@ -4,6 +4,7 @@ import { storedFilename } from '#files/filename.js'
 import type { FilePayload } from '#files/signing.js'
 import { ALL_TYPES, sniffType, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions } from '#numeric-options.js'
+import { OperationalError } from '#operational-error.js'
 import type { FormSubmission } from '#pipeline.js'
 import type { FileStorage } from '#storage/storage.js'
 
@@ -184,7 +185,12 @@ export class FileUploads<
     if (failed.length > 0) {
       // Report the keys we couldn't delete so an operator can reconcile them — the objects may
       // hold personal files, and a silent failure would leave no trail.
-      context.report?.(new Error(`Failed to delete ${failed.length} uploaded object(s): ${failed.join(', ')}`))
+      context.report?.(
+        new OperationalError(
+          'storage.delete-failed',
+          `Failed to delete ${failed.length} uploaded object(s): ${failed.join(', ')}`
+        )
+      )
     }
   }
 }

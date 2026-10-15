@@ -10,6 +10,7 @@ import { formError, type FormError } from '#errors.js'
 import type { FilePayload } from '#files/signing.js'
 import { ALL_TYPES, HEADER_BYTES, sniffBytes, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions } from '#numeric-options.js'
+import { OperationalError } from '#operational-error.js'
 import type { FormSubmission, VerdictDetails } from '#pipeline.js'
 import type { FileStorage, PeekedObject } from '#storage/storage.js'
 import { assertValidSigningSecret } from '#tokens.js'
@@ -211,7 +212,12 @@ export class UploadedFiles<
     if (failed.length > 0) {
       // Report the keys we couldn't delete so an operator can reconcile them — the objects may
       // hold personal files, and a silent failure would leave no trail.
-      context.report?.(new Error(`Failed to delete ${failed.length} uploaded object(s): ${failed.join(', ')}`))
+      context.report?.(
+        new OperationalError(
+          'storage.delete-failed',
+          `Failed to delete ${failed.length} uploaded object(s): ${failed.join(', ')}`
+        )
+      )
     }
   }
 }

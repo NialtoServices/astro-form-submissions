@@ -139,6 +139,7 @@ export { SubmissionVerdictError, type ReportedVerdictAction } from '#submission-
 
 export { requireEnv } from '#env.js'
 export { MissingEnvError } from '#missing-env-error.js'
+export { OperationalError } from '#operational-error.js'
 
 export {
   formDataToObject,
