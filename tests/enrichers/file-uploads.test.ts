@@ -121,10 +121,21 @@ describe('FileUploads', () => {
     const files = [upload('quote.pdf', PDF_HEADER), upload('photo.png', PNG_HEADER)]
     const result = await uploader(storage).enrich({ name: 'Ada' }, contextWith(files))
 
+    const storedKeys = put.mock.calls.map((call) => (call as unknown[])[0])
     expect('provide' in result && result.provide).toEqual({
       files: [
-        { name: 'quote.pdf', url: expect.stringMatching(/^https:\/\/example\.com\/files\/.+\/$/), size: 512 },
-        { name: 'photo.png', url: expect.stringMatching(/^https:\/\/example\.com\/files\/.+\/$/), size: 512 }
+        {
+          name: 'quote.pdf',
+          url: expect.stringMatching(/^https:\/\/example\.com\/files\/.+\/$/),
+          size: 512,
+          key: storedKeys[0]
+        },
+        {
+          name: 'photo.png',
+          url: expect.stringMatching(/^https:\/\/example\.com\/files\/.+\/$/),
+          size: 512,
+          key: storedKeys[1]
+        }
       ]
     })
     expect(put).toHaveBeenCalledTimes(2)

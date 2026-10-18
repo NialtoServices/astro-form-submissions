@@ -206,7 +206,7 @@ export class UploadedFiles<
         const url = checkedLink(
           await this.options.link({ objectKey: upload.objectKey, filename: upload.filename, contentType }, context)
         )
-        links.push({ name: upload.filename, url, size: upload.size })
+        links.push({ name: upload.filename, url, size: upload.size, key: upload.objectKey })
       }
 
       // A computed-key object widens to `{ [x: string]: FileLink[] }`, so the assertion is the one

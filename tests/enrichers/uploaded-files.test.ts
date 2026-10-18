@@ -113,13 +113,24 @@ describe('UploadedFiles', () => {
 
     const result = await enricher.enrich({ name: 'Ada' }, contextWith(receipts))
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       provide: {
         files: [
-          { name: 'garden.jpg', url: `https://example.com/files/${prepared[0]!.objectKey}/`, size: JPEG.length },
-          { name: 'quote.pdf', url: `https://example.com/files/${prepared[1]!.objectKey}/`, size: PDF.length }
+          {
+            name: 'garden.jpg',
+            url: `https://example.com/files/${prepared[0]!.objectKey}/`,
+            size: JPEG.length,
+            key: prepared[0]!.objectKey
+          },
+          {
+            name: 'quote.pdf',
+            url: `https://example.com/files/${prepared[1]!.objectKey}/`,
+            size: PDF.length,
+            key: prepared[1]!.objectKey
+          }
         ]
-      }
+      },
+      rollback: expect.any(Function)
     })
     expect(link.mock.calls.map(([stored]) => stored)).toEqual([
       { objectKey: prepared[0]!.objectKey, filename: 'garden.jpg', contentType: 'image/jpeg' },

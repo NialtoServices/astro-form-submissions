@@ -29,6 +29,12 @@ export interface FileLink {
 
   /** The file's size in bytes. `FileUploads` always sets it; optional so a hand-built link may omit it. */
   size?: number
+
+  /**
+   * The logical key the file is stored under, for deleting it later (an erasure request, say) with
+   * `FileStorage.delete`. Both upload enrichers set it; the built-in emails never show it.
+   */
+  key?: string
 }
 
 /** Options for constructing a {@link FileUploads} enricher. */
@@ -189,7 +195,7 @@ export class FileUploads<
         await this.options.storage.put(objectKey, file, { contentType, filename })
 
         const url = checkedLink(await this.options.link({ objectKey, filename, contentType }, context))
-        links.push({ name: filename, url, size: file.size })
+        links.push({ name: filename, url, size: file.size, key: objectKey })
       }
 
       // A computed-key object widens to `{ [x: string]: FileLink[] }`, so the assertion is the one

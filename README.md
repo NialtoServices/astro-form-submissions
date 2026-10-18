@@ -990,9 +990,9 @@ you own both:
 **Servicing an erasure request.** `FileStorage` exposes `delete(key)` — implemented by `R2Storage`,
 and the same call the enricher's rollback uses — so removing a specific stored file on demand (e.g. a
 data-subject deletion request) is a supported operation, not only a console action. It takes the bare
-logical key the file was stored under (`R2Storage` applies the `prefix`); persist that key alongside
-your submission record if you need to honour deletion requests programmatically, or delete the object
-directly from the bucket under the `prefix`.
+logical key the file was stored under (`R2Storage` applies the `prefix`), which each `FileLink` carries as
+`key`. A dispatcher that records the submission (to a database, say) can store the keys from
+`context.resources.files` alongside it, so a later request can be honoured with `storage.delete(key)`.
 
 A rolled-back or lifecycle-expired object simply 410s. Deletion/erasure of stored uploads is the
 bucket's job; the toolkit never retains the files or the bearer URLs itself.
