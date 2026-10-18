@@ -545,6 +545,21 @@ describe('form script field errors', () => {
     expect(links[0]!.getAttribute('href')).toBe('#contact-email')
   })
 
+  it('makes a summary entry for a field without an id reachable and usable from the keyboard', async () => {
+    stubFetch(async () => validationResponse())
+    const { submit, email } = mountFieldsForm({ summary: true })
+    email.removeAttribute('id')
+    const summary = document.querySelector<HTMLElement>('[data-astro-form-field-error-summary]')!
+
+    submit()
+    await vi.waitFor(() => expect(summary.hidden).toBe(false))
+    const link = summary.querySelector<HTMLAnchorElement>('li a')!
+    link.click()
+
+    expect(link.getAttribute('href')).toBe('#')
+    expect(document.activeElement).toBe(email)
+  })
+
   it('removes only the edited field’s summary entry on input, hiding the summary when empty', async () => {
     stubFetch(async () => validationResponse())
     const { email, message, submit } = mountFieldsForm({ summary: true })

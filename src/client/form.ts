@@ -192,8 +192,10 @@ function renderFieldErrorSummary(
     itemElement.dataset.astroFormSummaryItem = name
     const inputElement = formElement.querySelector<HTMLElement>(`[name="${CSS.escape(name)}"]`)
     if (inputElement) {
+      // An anchor without `href` isn't a link to a keyboard or a screen reader, so a field with no `id` still
+      // gets one; the click handler, which Enter also fires, does the focusing either way.
       const linkElement = document.createElement('a')
-      if (inputElement.id) linkElement.href = `#${inputElement.id}`
+      linkElement.href = inputElement.id ? `#${inputElement.id}` : '#'
       linkElement.textContent = message
       linkElement.addEventListener('click', (event) => {
         event.preventDefault()
