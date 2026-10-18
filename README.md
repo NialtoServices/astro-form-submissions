@@ -357,7 +357,7 @@ The toolkit's codes:
 | Stage        | Code                               | Details                                                                                    | Meaning                                                                                      |
 | ------------ | ---------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
 | `guard`      | `rate-limit.exceeded`              | none                                                                                       | The limiter refused the request. The key is never logged, since it derives from the address. |
-| `validation` | `request.too-large`                | `limit`                                                                                    | The body was larger than `maxBodyBytes`, so it wasn't read.                                  |
+| `validation` | `request.too-large`                | `limit`                                                                                    | The body was larger than `maxBodyBytes`; reading stopped at the limit.                       |
 | `validation` | `form.unparseable`                 | none                                                                                       | The body wasn't form data.                                                                   |
 | `validation` | `schema.invalid`                   | `fields`                                                                                   | The schema refused these fields. Only their names are logged, never the messages.            |
 | `validation` | `schema.no-value`                  | none                                                                                       | The schema returned neither issues nor a value.                                              |
@@ -503,9 +503,11 @@ The resolver feeds every stage, so the rate limit, Turnstile and your own guards
 `maxTotalBytes`) bounds what the route parses after the guards have run: a declared `Content-Length` over it
 is refused with `requestTooLarge` (413) before a byte is read, and a body that runs past it is cut off there,
 so memory never holds more than the limit however the length was declared. Raise it for an enricher of your
-own that reads files from the body. A ceiling at your host's edge (a Cloudflare request-body limit or WAF
-rule, an Nginx `client_max_body_size`) is still worth setting: the route stops reading, but the bytes keep
-crossing the network until the connection closes.
+own that reads files from the body. Set a ceiling at your host's edge as well (a Cloudflare request-body limit
+or WAF rule, an Nginx `client_max_body_size`): the route stops reading, but the bytes keep crossing the network
+until the connection closes. **A route that accepts files through `FileUploads` must set one**, since its default
+limit is 50 MiB of files plus 1 MiB, and on Cloudflare Workers two bodies that size at once come close to the
+isolate's 128 MB.
 
 ## Inspectors
 
@@ -948,7 +950,7 @@ issued link.
 (set it in `astro.config`), or against its `baseURL` option when downloads are served from another
 origin; `basePath` (default `/files`) must match where the download route is mounted. It never falls back to
 the request's own host, which some adapters let a sender choose, so with neither set every submission that
-carries a file fails with `uploadFailed`, and the log names `signed-link.no-base-url`.
+carries a file fails with `send` (502), and the log names `signed-link.no-base-url`.
 
 **Retention.** Tokens are **opaque** — they carry only the storage key and an expiry, never the
 filename or content-type (a JWT body is base64url, decodable by anyone holding the URL); the download

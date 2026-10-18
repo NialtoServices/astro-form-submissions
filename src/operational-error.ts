@@ -2,7 +2,10 @@ import type { VerdictDetails } from '#pipeline.js'
 
 /** Options for an {@link OperationalError}: the standard `cause`, plus details that locate the failure. */
 export interface OperationalErrorOptions extends ErrorOptions {
-  /** Identifiers that locate the failure, such as the keys of objects left behind. */
+  /**
+   * Identifiers that locate the failure, such as the keys of objects left behind. Never submission values: the
+   * default reporter prints any value shaped like an identifier, and a filename or an address can be.
+   */
   details?: VerdictDetails
 }
 

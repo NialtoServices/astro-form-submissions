@@ -5,6 +5,8 @@ import type { FileStorage, PeekedObject, PutOptions, StoredObject, StreamPutOpti
 /**
  * The slice of Cloudflare's `R2Bucket` binding {@link R2Storage} uses. Declared structurally so the
  * toolkit needs no `@cloudflare/workers-types` dependency — a real `env.<BUCKET>` binding satisfies it.
+ * Anything else standing in for one must honour `put`'s `onlyIf` and resolve `null` when it fails: upload
+ * grants and receipts are single-use only because those writes can't replace an existing object.
  */
 export interface R2BucketLike {
   /**
