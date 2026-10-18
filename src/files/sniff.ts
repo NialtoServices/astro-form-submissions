@@ -20,6 +20,13 @@ export interface FileMatcher {
   contentType: string
 
   /**
+   * The extensions a file of this type is saved under, without the dot, most common first. A stored name
+   * that doesn't end in one of them gets the first appended, so the saved file opens as the type its bytes
+   * were checked against. Omit it to keep names as given.
+   */
+  extensions?: readonly string[]
+
+  /**
    * Tests the file's leading bytes; `true` accepts the file as {@link FileMatcher.contentType}.
    *
    * The array holds at most {@link HEADER_BYTES} bytes and may be **shorter**, so no index can be assumed present.
@@ -118,6 +125,7 @@ function ftypBrandsIncludeAny(brands: string[], allowed: string[]): boolean {
 export const IMAGE_TYPES: FileMatcher[] = [
   {
     contentType: 'image/avif',
+    extensions: ['avif'],
 
     // A conformant AVIF must declare 'avif' (still) or 'avis' (sequence), so their absence is decisive. The registered
     // `image/avif` covers sequences too, hence no separate matcher for 'avis'.
@@ -125,12 +133,14 @@ export const IMAGE_TYPES: FileMatcher[] = [
   },
   {
     contentType: 'image/gif',
+    extensions: ['gif'],
 
     // Those are the only two versions ever published, so matching the full signature costs nothing over 'GIF8'.
     test: (bytes) => hasSignature(bytes, 'GIF87a') || hasSignature(bytes, 'GIF89a')
   },
   {
     contentType: 'image/heic',
+    extensions: ['heic', 'heif'],
 
     // Per IANA's `image/heic` registration, the subtype applies only to files declaring 'heic', 'heix', 'heim' or
     // 'heis'. Excluded on purpose: 'mif1'/'msf1' are HEIF's structural (container, not codec) brands that every
@@ -143,6 +153,7 @@ export const IMAGE_TYPES: FileMatcher[] = [
   },
   {
     contentType: 'image/jpeg',
+    extensions: ['jpg', 'jpeg', 'jpe', 'jfif'],
 
     // \xff\xd8 is the SOI marker; the trailing \xff is the lead byte of whichever marker follows, and rules out a bare
     // two-byte SOI with nothing after it.
@@ -150,6 +161,7 @@ export const IMAGE_TYPES: FileMatcher[] = [
   },
   {
     contentType: 'image/png',
+    extensions: ['png'],
 
     // The bytes around 'PNG' are a deliberate corruption trap: the high bit catches 7-bit-stripping transports, and the
     // \r\n / \n pair catches CRLF translation.
@@ -157,6 +169,7 @@ export const IMAGE_TYPES: FileMatcher[] = [
   },
   {
     contentType: 'image/webp',
+    extensions: ['webp'],
 
     // Bytes 4–7 are the RIFF chunk size, hence the gap.
     test: (bytes) => hasSignature(bytes, 'RIFF') && hasSignature(bytes, 'WEBP', 8)
@@ -167,6 +180,7 @@ export const IMAGE_TYPES: FileMatcher[] = [
 export const DOCUMENT_TYPES: FileMatcher[] = [
   {
     contentType: 'application/pdf',
+    extensions: ['pdf'],
 
     // Readers tolerate junk before the header; the allow-list deliberately does not.
     test: (bytes) => hasSignature(bytes, '%PDF-')
@@ -192,6 +206,17 @@ export function sniffBytes(header: Uint8Array, matchers: FileMatcher[] = ALL_TYP
   }
 
   return null
+}
+
+/**
+ * The extensions an allow-list saves a content-type under, or `undefined` when its matcher names none.
+ *
+ * @param contentType - A content-type the allow-list granted.
+ * @param matchers - The allow-list it came from.
+ * @returns The matcher's extensions, if any.
+ */
+export function extensionsFor(contentType: string, matchers: FileMatcher[]): readonly string[] | undefined {
+  return matchers.find((matcher) => matcher.contentType === contentType)?.extensions
 }
 
 /**

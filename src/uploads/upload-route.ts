@@ -7,7 +7,7 @@ import {
 } from '#enrichers/file-uploads.js'
 import type { FormError } from '#errors.js'
 import { storedFilename } from '#files/filename.js'
-import { ALL_TYPES, type FileMatcher } from '#files/sniff.js'
+import { ALL_TYPES, extensionsFor, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions, assertPositiveNumberOption } from '#numeric-options.js'
 import type { VerdictDetails } from '#pipeline.js'
 import { containedReporter, type ErrorReporter, type FormErrorStage } from '#reporting.js'
@@ -132,7 +132,8 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
   const maxFileBytes = config.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES
   const maxTotalBytes = config.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES
   const receiptTTLSeconds = config.receiptTTLSeconds ?? DEFAULT_RECEIPT_TTL_SECONDS
-  const acceptedTypes = new Set((config.accept ?? ALL_TYPES).map((matcher) => matcher.contentType))
+  const accept = config.accept ?? ALL_TYPES
+  const acceptedTypes = new Set(accept.map((matcher) => matcher.contentType))
 
   return async (context) => {
     const { request, site, url } = context
@@ -199,11 +200,12 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
 
       const uploads: GrantedUpload[] = []
       for (const descriptor of descriptors) {
+        const contentType = acceptedTypes.has(descriptor.type) ? descriptor.type : OPAQUE_CONTENT_TYPE
         const upload: PendingUpload = {
           objectKey: crypto.randomUUID(),
-          filename: storedFilename(descriptor.name),
+          filename: storedFilename(descriptor.name, extensionsFor(contentType, accept)),
           size: descriptor.size,
-          contentType: acceptedTypes.has(descriptor.type) ? descriptor.type : OPAQUE_CONTENT_TYPE
+          contentType
         }
 
         const instruction = await config.target.prepare(upload)

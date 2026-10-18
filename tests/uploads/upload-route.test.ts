@@ -62,7 +62,7 @@ describe('createUploadRoute', () => {
     const { route, prepared } = routeWith()
     await route(request([{ ...photo, name: '"\r\n' }]))
 
-    expect(prepared[0]?.filename).toBe('upload')
+    expect(prepared[0]?.filename).toBe('upload.jpg')
   })
 
   it('signs receipts for the configured lifetime', async () => {
@@ -147,6 +147,20 @@ describe('createUploadRoute', () => {
     ])
   })
 
+  it("appends a declared type's extension, and leaves an undeclared type's name to the enricher", async () => {
+    const { route, prepared } = routeWith()
+
+    await route(
+      request([
+        { ...photo, name: 'invoice.js' },
+        { ...photo, name: 'IMG_1234.JPEG' },
+        { name: 'invoice.js', size: 1_000, type: 'text/javascript' }
+      ])
+    )
+
+    expect(prepared.map((upload) => upload.filename)).toEqual(['invoice.js.jpg', 'IMG_1234.JPEG', 'invoice.js'])
+  })
+
   it('strips header-breaking characters from the filename and names an empty one', async () => {
     const { route, prepared } = routeWith()
 
@@ -157,7 +171,7 @@ describe('createUploadRoute', () => {
       ])
     )
 
-    expect(prepared.map((upload) => upload.filename)).toEqual(['evil.jpg', 'upload'])
+    expect(prepared.map((upload) => upload.filename)).toEqual(['evil.jpg', 'upload.jpg'])
   })
 
   it('answers with an empty list when no files are described', async () => {

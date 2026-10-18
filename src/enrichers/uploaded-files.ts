@@ -7,8 +7,9 @@ import {
   type FileLink
 } from '#enrichers/file-uploads.js'
 import { formError, type FormError } from '#errors.js'
+import { hasAnyExtension, hasExtension } from '#files/filename.js'
 import type { FilePayload } from '#files/signing.js'
-import { ALL_TYPES, HEADER_BYTES, sniffBytes, type FileMatcher } from '#files/sniff.js'
+import { ALL_TYPES, extensionsFor, HEADER_BYTES, sniffBytes, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions } from '#numeric-options.js'
 import { OperationalError } from '#operational-error.js'
 import type { FormSubmission, VerdictDetails } from '#pipeline.js'
@@ -179,10 +180,23 @@ export class UploadedFiles<
           })
         }
 
-        const contentType = sniffBytes(object.header, this.options.accept ?? ALL_TYPES)
+        const accept = this.options.accept ?? ALL_TYPES
+        const contentType = sniffBytes(object.header, accept)
         const storedType = object.contentType ?? OPAQUE_CONTENT_TYPE
         if (!contentType || (storedType !== OPAQUE_CONTENT_TYPE && storedType !== contentType)) {
           return refuse(FileUploads.errors.fileType, 'uploaded-files.type-not-accepted')
+        }
+
+        // An opaque upload was named before its bytes were known and its stored name can't change now, so
+        // one whose extension contradicts its bytes would be saved by a recipient as something it isn't.
+        const extensions = extensionsFor(contentType, accept)
+        if (
+          storedType === OPAQUE_CONTENT_TYPE &&
+          extensions &&
+          hasAnyExtension(upload.filename) &&
+          !hasExtension(upload.filename, extensions)
+        ) {
+          return refuse(FileUploads.errors.fileType, 'uploaded-files.extension-mismatch')
         }
 
         const url = await this.options.link(

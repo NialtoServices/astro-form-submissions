@@ -355,40 +355,41 @@ Workers Logs and `wrangler tail`; under `astro dev`, in the terminal.
 
 The toolkit's codes:
 
-| Stage        | Code                               | Details                                                                                    | Meaning                                                                                      |
-| ------------ | ---------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| `guard`      | `rate-limit.exceeded`              | none                                                                                       | The limiter refused the request. The key is never logged, since it derives from the address. |
-| `validation` | `request.too-large`                | `limit`                                                                                    | The body was larger than `maxBodyBytes`; reading stopped at the limit.                       |
-| `validation` | `form.unparseable`                 | none                                                                                       | The body wasn't form data.                                                                   |
-| `validation` | `schema.invalid`                   | `fields`                                                                                   | The schema refused these fields. Only their names are logged, never the messages.            |
-| `validation` | `schema.no-value`                  | none                                                                                       | The schema returned neither issues nor a value.                                              |
-| `inspection` | `honeypot.filled`                  | `field`                                                                                    | The honeypot was filled; the sender saw success.                                             |
-| `inspection` | `turnstile.missing-token`          | `field`                                                                                    | The submission carried no Turnstile token.                                                   |
-| `inspection` | `turnstile.token-rejected`         | `errorCodes`                                                                               | Siteverify judged the token invalid (expired, reused, forged).                               |
-| `inspection` | `turnstile.token-too-long`         | `length`, `limit`                                                                          | The token was longer than any Cloudflare issues, so Siteverify wasn't asked.                 |
-| `inspection` | `turnstile.siteverify-failed`      | `failure` (`status`, `unreachable`, `invalid-body`, `operational`), `status`, `errorCodes` | Verification couldn't complete. Also reported as a failure.                                  |
-| `inspection` | `turnstile.hostname-unconfigured`  | none                                                                                       | `verifyHostname` is `[]`, or `true` with no Astro `site`.                                    |
-| `inspection` | `turnstile.hostname-invalid`       | `entry`                                                                                    | A `verifyHostname` entry isn't a bare hostname.                                              |
-| `inspection` | `turnstile.hostname-mismatch`      | `expected`, `solved`                                                                       | The token was solved on a hostname outside `verifyHostname`.                                 |
-| `enrichment` | `file-uploads.too-many`            | `count`, `limit`                                                                           | More files than `maxFiles`.                                                                  |
-| `enrichment` | `file-uploads.too-large`           | `size`, `limit`                                                                            | A file over `maxFileBytes`.                                                                  |
-| `enrichment` | `file-uploads.total-too-large`     | `total`, `limit`                                                                           | The files together over `maxTotalBytes`.                                                     |
-| `enrichment` | `file-uploads.type-not-accepted`   | none                                                                                       | A file's bytes matched no accepted type.                                                     |
-| `enrichment` | `file-uploads.store-failed`        | none                                                                                       | Storing or linking a file failed. Also reported as a failure.                                |
-| `enrichment` | `uploaded-files.receipt-invalid`   | `count`                                                                                    | Receipts that were tampered with, expired, or not receipts.                                  |
-| `enrichment` | `uploaded-files.receipt-used`      | `count`                                                                                    | Receipts another submission already used. Their files were left alone.                       |
-| `enrichment` | `uploaded-files.too-many`          | `count`, `limit`                                                                           | More receipts than `maxFiles`.                                                               |
-| `enrichment` | `uploaded-files.too-large`         | `size`, `limit`                                                                            | An upload over `maxFileBytes`.                                                               |
-| `enrichment` | `uploaded-files.total-too-large`   | `total`, `limit`                                                                           | The uploads together over `maxTotalBytes`.                                                   |
-| `enrichment` | `uploaded-files.object-missing`    | none                                                                                       | A receipt's object never arrived in storage.                                                 |
-| `enrichment` | `uploaded-files.size-mismatch`     | `declared`, `stored`                                                                       | The stored object's size differs from its receipt.                                           |
-| `enrichment` | `uploaded-files.type-not-accepted` | none                                                                                       | The stored bytes matched no accepted type, or contradict their stored type.                  |
-| `enrichment` | `uploaded-files.verify-failed`     | none                                                                                       | Checking or linking a stored object failed. Also reported as a failure.                      |
-| `enrichment` | `resources.duplicate-key`          | `key`                                                                                      | Two enrichers provided the same resource; a genuine request only ever feeds one.             |
-| `upload`     | `upload-route.descriptors-invalid` | none                                                                                       | The upload route's file list wasn't a valid JSON array of descriptors.                       |
-| `upload`     | `upload-route.too-many`            | `count`, `limit`                                                                           | More declared files than `maxFiles`.                                                         |
-| `upload`     | `upload-route.too-large`           | `size`, `limit`                                                                            | A declared file over `maxFileBytes`.                                                         |
-| `upload`     | `upload-route.total-too-large`     | `total`, `limit`                                                                           | The declared files together over `maxTotalBytes`.                                            |
+| Stage        | Code                                | Details                                                                                    | Meaning                                                                                      |
+| ------------ | ----------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `guard`      | `rate-limit.exceeded`               | none                                                                                       | The limiter refused the request. The key is never logged, since it derives from the address. |
+| `validation` | `request.too-large`                 | `limit`                                                                                    | The body was larger than `maxBodyBytes`; reading stopped at the limit.                       |
+| `validation` | `form.unparseable`                  | none                                                                                       | The body wasn't form data.                                                                   |
+| `validation` | `schema.invalid`                    | `fields`                                                                                   | The schema refused these fields. Only their names are logged, never the messages.            |
+| `validation` | `schema.no-value`                   | none                                                                                       | The schema returned neither issues nor a value.                                              |
+| `inspection` | `honeypot.filled`                   | `field`                                                                                    | The honeypot was filled; the sender saw success.                                             |
+| `inspection` | `turnstile.missing-token`           | `field`                                                                                    | The submission carried no Turnstile token.                                                   |
+| `inspection` | `turnstile.token-rejected`          | `errorCodes`                                                                               | Siteverify judged the token invalid (expired, reused, forged).                               |
+| `inspection` | `turnstile.token-too-long`          | `length`, `limit`                                                                          | The token was longer than any Cloudflare issues, so Siteverify wasn't asked.                 |
+| `inspection` | `turnstile.siteverify-failed`       | `failure` (`status`, `unreachable`, `invalid-body`, `operational`), `status`, `errorCodes` | Verification couldn't complete. Also reported as a failure.                                  |
+| `inspection` | `turnstile.hostname-unconfigured`   | none                                                                                       | `verifyHostname` is `[]`, or `true` with no Astro `site`.                                    |
+| `inspection` | `turnstile.hostname-invalid`        | `entry`                                                                                    | A `verifyHostname` entry isn't a bare hostname.                                              |
+| `inspection` | `turnstile.hostname-mismatch`       | `expected`, `solved`                                                                       | The token was solved on a hostname outside `verifyHostname`.                                 |
+| `enrichment` | `file-uploads.too-many`             | `count`, `limit`                                                                           | More files than `maxFiles`.                                                                  |
+| `enrichment` | `file-uploads.too-large`            | `size`, `limit`                                                                            | A file over `maxFileBytes`.                                                                  |
+| `enrichment` | `file-uploads.total-too-large`      | `total`, `limit`                                                                           | The files together over `maxTotalBytes`.                                                     |
+| `enrichment` | `file-uploads.type-not-accepted`    | none                                                                                       | A file's bytes matched no accepted type.                                                     |
+| `enrichment` | `file-uploads.store-failed`         | none                                                                                       | Storing or linking a file failed. Also reported as a failure.                                |
+| `enrichment` | `uploaded-files.receipt-invalid`    | `count`                                                                                    | Receipts that were tampered with, expired, or not receipts.                                  |
+| `enrichment` | `uploaded-files.receipt-used`       | `count`                                                                                    | Receipts another submission already used. Their files were left alone.                       |
+| `enrichment` | `uploaded-files.too-many`           | `count`, `limit`                                                                           | More receipts than `maxFiles`.                                                               |
+| `enrichment` | `uploaded-files.too-large`          | `size`, `limit`                                                                            | An upload over `maxFileBytes`.                                                               |
+| `enrichment` | `uploaded-files.total-too-large`    | `total`, `limit`                                                                           | The uploads together over `maxTotalBytes`.                                                   |
+| `enrichment` | `uploaded-files.object-missing`     | none                                                                                       | A receipt's object never arrived in storage.                                                 |
+| `enrichment` | `uploaded-files.size-mismatch`      | `declared`, `stored`                                                                       | The stored object's size differs from its receipt.                                           |
+| `enrichment` | `uploaded-files.type-not-accepted`  | none                                                                                       | The stored bytes matched no accepted type, or contradict their stored type.                  |
+| `enrichment` | `uploaded-files.extension-mismatch` | none                                                                                       | A file uploaded without an accepted type was named for a different type than its bytes.      |
+| `enrichment` | `uploaded-files.verify-failed`      | none                                                                                       | Checking or linking a stored object failed. Also reported as a failure.                      |
+| `enrichment` | `resources.duplicate-key`           | `key`                                                                                      | Two enrichers provided the same resource; a genuine request only ever feeds one.             |
+| `upload`     | `upload-route.descriptors-invalid`  | none                                                                                       | The upload route's file list wasn't a valid JSON array of descriptors.                       |
+| `upload`     | `upload-route.too-many`             | `count`, `limit`                                                                           | More declared files than `maxFiles`.                                                         |
+| `upload`     | `upload-route.too-large`            | `size`, `limit`                                                                            | A declared file over `maxFileBytes`.                                                         |
+| `upload`     | `upload-route.total-too-large`      | `total`, `limit`                                                                           | The declared files together over `maxTotalBytes`.                                            |
 
 A line carries codes and details only: never a submitted value, a validation message, a filename, a token
 or an address. A guard or inspector of your own can give its verdicts a `code` and `details` too (see
@@ -931,8 +932,10 @@ Declare them once in a module both import — e.g. `src/lib/contact-limits.ts` e
 they drift. The package also exports the enricher's own defaults (`DEFAULT_MAX_FILES`,
 `DEFAULT_MAX_FILE_BYTES`, `DEFAULT_MAX_TOTAL_BYTES`) if you want to reference them.
 
-Files are **content-sniffed by magic bytes** (never the client MIME), so a renamed executable is
-rejected; validation failures return `tooManyFiles` / `fileTooLarge` / `fileType`. The links are
+Files are **content-sniffed by magic bytes** (never the client MIME), and a file whose name doesn't end
+in its checked type's extension has it appended, so `invoice.js` that is really a GIF is stored and linked as
+`invoice.js.gif` and opens as an image when saved. Invisible formatting characters that can disguise a name
+are removed. Validation failures return `tooManyFiles` / `fileTooLarge` / `fileType`. The links are
 signed, tamper-proof, and non-guessable — serve them from a companion route (`defineLazyRoute` handles
 the Cloudflare request-time binding, as for the form route):
 
@@ -1130,6 +1133,10 @@ needs that origin in `connect-src`. The filename travels percent-encoded in `x-a
   `uploadMissing`, and a refusal or rollback only ever deletes files its own submission claimed, so it
   can't remove a file an earlier submission delivered. The markers sit under the same `prefix`, so the
   lifecycle rule removes them with the files.
+- **Names follow the checked type.** A file whose browser-reported type is accepted is named with that
+  type's extension when the upload is granted, as on the multipart path. Any other file is named as given,
+  because its type is only known once its bytes are checked and its stored name can't change by then; it is
+  refused with `fileType` if that name ends in another type's extension.
 - **Abandoned uploads** — files uploaded for a form that was never submitted, or behind a receipt that
   failed verification — are left to the bucket's lifecycle rule, which is already required (see above).
 - **A dropped or quarantined request is granted nothing**, silently: the upload route answers

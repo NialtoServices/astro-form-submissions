@@ -139,4 +139,8 @@ describe('sniffType', () => {
     expect(await sniffType(fileWithHeader(HEADERS.pdf), IMAGE_TYPES)).toBeNull()
     expect(await sniffType(fileWithHeader(HEADERS.jpeg), ALL_TYPES)).toBe('image/jpeg')
   })
+
+  it('names the extensions every built-in type is saved under', () => {
+    expect(ALL_TYPES.filter((matcher) => !matcher.extensions?.length)).toEqual([])
+  })
 })

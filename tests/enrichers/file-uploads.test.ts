@@ -141,12 +141,29 @@ describe('FileUploads', () => {
     expect(put.mock.calls[0]![2]).toEqual({ contentType: 'application/pdf', filename: 'ab.pdf' })
   })
 
-  it('names a file whose name is only stripped characters `upload`', async () => {
+  it("names a file whose name is only stripped characters `upload`, with its type's extension", async () => {
     const { storage, put } = stubStorage()
     const result = await uploader(storage).enrich({ name: 'Ada' }, contextWith([upload('"\r\n', PDF_HEADER)]))
 
-    expect(put.mock.calls[0]![2]).toEqual({ contentType: 'application/pdf', filename: 'upload' })
-    expect('provide' in result && result.provide?.files[0]?.name).toBe('upload')
+    expect(put.mock.calls[0]![2]).toEqual({ contentType: 'application/pdf', filename: 'upload.pdf' })
+    expect('provide' in result && result.provide?.files[0]?.name).toBe('upload.pdf')
+  })
+
+  it("appends the checked type's extension to a name that claims another, in storage and in the link", async () => {
+    const { storage, put } = stubStorage()
+    const result = await uploader(storage).enrich(
+      { name: 'Ada' },
+      contextWith([upload('invoice.js', PDF_HEADER), upload('Quote.PDF', PDF_HEADER)])
+    )
+
+    expect(put.mock.calls.map((call) => (call as unknown[])[2])).toEqual([
+      { contentType: 'application/pdf', filename: 'invoice.js.pdf' },
+      { contentType: 'application/pdf', filename: 'Quote.PDF' }
+    ])
+    expect('provide' in result && result.provide?.files.map((file) => file.name)).toEqual([
+      'invoice.js.pdf',
+      'Quote.PDF'
+    ])
   })
 
   it('rolls back its own uploads and rejects `send` when a later upload fails', async () => {
