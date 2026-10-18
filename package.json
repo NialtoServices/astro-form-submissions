@@ -55,6 +55,7 @@
     "@types/mustache": "^4.2.6",
     "astro": "^7.3.5",
     "aws4fetch": "^1.0.20",
+    "email-addresses": "^5.0.0",
     "eslint": "^10.6.0",
     "fast-check": "^4.10.2",
     "happy-dom": "^20.10.6",

@@ -1,14 +1,35 @@
 import { EmailRecipientError } from '#dispatchers/email-recipient-error.js'
 import { EmailDispatcher, renderEmail, type EmailTemplates } from '#dispatchers/email.js'
 import { submissionNotificationTemplates } from '#dispatchers/submission-notification.js'
+import emailAddresses from 'email-addresses'
+import fc from 'fast-check'
 import { describe, expect, it, vi } from 'vitest'
 import { dispatchContext } from '../dispatch-context.js'
+import { addressLike, displayName, quoted, textWithControlCharacter } from '../support/addresses.js'
 import { deliveredMessage } from '../support/harness.js'
 
 const templates: EmailTemplates = {
   subject: (submission) => `Enquiry from ${submission.name}`,
   text: () => 'text body',
   html: () => '<p>html body</p>'
+}
+
+/** Dispatches with `to` or `replyTo` resolving to `address`, and returns what the transport received, if anything. */
+async function deliverResolving(field: 'to' | 'replyTo', address: string) {
+  const deliver = vi.fn()
+  const dispatcher = new EmailDispatcher({
+    transport: { deliver },
+    templates,
+    from: 'noreply@acme.test',
+    to: field === 'to' ? () => address : 'owner@acme.test',
+    replyTo: field === 'replyTo' ? () => address : undefined
+  })
+  const refusal = await dispatcher.dispatch({}, dispatchContext()).then(
+    () => undefined,
+    (error: unknown) => error
+  )
+
+  return { refusal, message: deliver.mock.calls.length > 0 ? deliveredMessage(deliver) : undefined }
 }
 
 function dispatcherWith(deliver = vi.fn(), options: { required?: boolean } = {}) {
@@ -199,6 +220,63 @@ describe('EmailDispatcher', () => {
       expect(content.subject).toBe('Thanks Ada Bcc: eve@example.com')
     }
   )
+
+  it('refuses any resolved address carrying a control character, delivering nothing', async () => {
+    await fc.assert(
+      fc.asyncProperty(fc.constantFrom('to', 'replyTo'), textWithControlCharacter, async (field, address) => {
+        const { refusal, message } = await deliverResolving(field, address)
+
+        expect(refusal).toMatchObject({ name: 'EmailRecipientError', field })
+        expect(message).toBeUndefined()
+      })
+    )
+  })
+
+  it('delivers any quoted display name with one address, unchanged', async () => {
+    await fc.assert(
+      fc.asyncProperty(fc.constantFrom('to', 'replyTo'), displayName, async (field, name) => {
+        const address = `${quoted(name)} <ada@example.com>`
+        const { refusal, message } = await deliverResolving(field, address)
+
+        expect(refusal).toBeUndefined()
+        expect(message?.[field]).toBe(address)
+      })
+    )
+  })
+
+  it('never accepts an address that an RFC 5322 parser reads as more than one recipient', async () => {
+    await fc.assert(
+      fc.asyncProperty(fc.constantFrom('to', 'replyTo'), addressLike, async (field, address) => {
+        const { message } = await deliverResolving(field, address)
+        if (!message) return
+
+        const recipients = emailAddresses.parseAddressList({ input: address, rfc6532: true })
+        if (recipients === null) return
+
+        expect(recipients).toHaveLength(1)
+        expect(recipients[0]?.type).toBe('mailbox')
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  it('never delivers a control character in the subject or a resolved `from`', async () => {
+    await fc.assert(
+      fc.asyncProperty(textWithControlCharacter, textWithControlCharacter, async (subject, sender) => {
+        const deliver = vi.fn()
+        await new EmailDispatcher({
+          transport: { deliver },
+          templates: { ...templates, subject: () => subject },
+          from: () => sender,
+          to: 'owner@acme.test'
+        }).dispatch({}, dispatchContext())
+
+        const message = deliveredMessage(deliver)
+        expect(message.subject).not.toMatch(/\p{Cc}/u)
+        expect(message.from).not.toMatch(/\p{Cc}/u)
+      })
+    )
+  })
 
   it('keeps the address out of the recipient error', () => {
     expect(new EmailRecipientError().message).not.toContain('@')
