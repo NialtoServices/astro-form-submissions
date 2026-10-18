@@ -7,6 +7,7 @@
 // independently of storage; rotating the secret invalidates every issued link at once.
 
 import type { EnrichmentContext } from '#enrichers/enricher.js'
+import { assertPositiveNumberOption } from '#numeric-options.js'
 import { OperationalError } from '#operational-error.js'
 import type { FormSubmission } from '#pipeline.js'
 import { assertValidSigningSecret, signClaims, tokenToPathSegment, verifyClaims } from '#tokens.js'
@@ -106,11 +107,10 @@ export function signedLink<E extends FormSubmission = FormSubmission>(
 ): (stored: FilePayload, context: EnrichmentContext<E>) => Promise<string> {
   assertValidSigningSecret(options.secret)
 
+  assertPositiveNumberOption('signedLink `ttlSeconds`', options.ttlSeconds)
+
   const basePath = (options.basePath ?? '/files').replace(/\/+$/, '')
   const ttlSeconds = options.ttlSeconds ?? DEFAULT_LINK_TTL_SECONDS
-  if (!Number.isFinite(ttlSeconds) || ttlSeconds <= 0) {
-    throw new Error('signedLink `ttlSeconds` must be a finite positive number.')
-  }
 
   return async (stored, context) => {
     const base = options.baseURL ?? context.siteURL

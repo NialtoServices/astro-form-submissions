@@ -1,4 +1,5 @@
 import type { RateLimiter } from '#guards/rate-limit.js'
+import { assertPositiveNumberOption } from '#numeric-options.js'
 
 /** The default {@link InMemoryRateLimiterOptions.maxKeys} cap when none is supplied. */
 const DEFAULT_MAX_KEYS = 100_000
@@ -54,19 +55,11 @@ export class InMemoryRateLimiter implements RateLimiter {
    * @throws When `limit`, `windowSeconds`, or `maxKeys` is not a finite positive number.
    */
   constructor(private readonly options: InMemoryRateLimiterOptions) {
-    if (!Number.isFinite(options.limit) || options.limit <= 0) {
-      throw new Error('InMemoryRateLimiter `limit` must be a finite positive number.')
-    }
-
-    if (!Number.isFinite(options.windowSeconds) || options.windowSeconds <= 0) {
-      throw new Error('InMemoryRateLimiter `windowSeconds` must be a finite positive number.')
-    }
+    assertPositiveNumberOption('InMemoryRateLimiter `limit`', options.limit)
+    assertPositiveNumberOption('InMemoryRateLimiter `windowSeconds`', options.windowSeconds)
+    assertPositiveNumberOption('InMemoryRateLimiter `maxKeys`', options.maxKeys)
 
     this.maxKeys = options.maxKeys ?? DEFAULT_MAX_KEYS
-
-    if (!Number.isFinite(this.maxKeys) || this.maxKeys <= 0) {
-      throw new Error('InMemoryRateLimiter `maxKeys` must be a finite positive number.')
-    }
   }
 
   // MARK: - RateLimiter
