@@ -16,10 +16,9 @@ describe('attachmentDisposition', () => {
     expect(value).toContain("filename*=UTF-8''dev%E9%80%81.pdf")
   })
 
-  it('strips control characters (incl. CR/LF) so the value cannot inject headers', () => {
-    const value = attachmentDisposition('a\r\nb\tc.pdf')
-    expect(value).not.toMatch(/[\r\n\t]/)
-    expect(value).toContain('filename="abc.pdf"')
+  it('strips control characters (incl. CR/LF and the C1 range) so the value cannot inject headers', () => {
+    const value = attachmentDisposition('a\r\nb\tc\u0085d\u009b.pdf')
+    expect(value).toBe('attachment; filename="abcd.pdf"; filename*=UTF-8\'\'abcd.pdf')
   })
 
   it('neutralises quotes and backslashes in the ASCII fallback', () => {

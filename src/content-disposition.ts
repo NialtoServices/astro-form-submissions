@@ -15,18 +15,10 @@ const FALLBACK_FILENAME = 'download'
  * @returns A header value safe to place in `Content-Disposition`.
  */
 export function attachmentDisposition(filename: string): string {
-  const CONTROL_CEILING = 0x1f
-  const DELETE = 0x7f
   const PRINTABLE_ASCII_FLOOR = 0x20
   const PRINTABLE_ASCII_CEILING = 0x7e
 
-  const cleaned =
-    [...filename.toWellFormed()]
-      .filter((character) => {
-        const code = character.charCodeAt(0)
-        return code > CONTROL_CEILING && code !== DELETE
-      })
-      .join('') || FALLBACK_FILENAME
+  const cleaned = filename.toWellFormed().replace(/\p{Cc}/gu, '') || FALLBACK_FILENAME
 
   // A quoted-string fallback that is always valid: quotes and backslashes can't be escaped portably
   // across clients, and non-ASCII bytes aren't allowed here at all, so replace them all with `_`.
