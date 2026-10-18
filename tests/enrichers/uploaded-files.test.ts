@@ -148,6 +148,34 @@ describe('UploadedFiles', () => {
     expect((result as { provide: { files: unknown[] } }).provide.files).toHaveLength(1)
   })
 
+  it('reports the keys of the claimed objects it could not delete', async () => {
+    const { bucket, storage } = setup()
+    const { receipts, prepared } = await admit([photo])
+    store(bucket, prepared, [photo])
+    const failure = new Error('bucket unavailable')
+    const undeletable: FileStorage = {
+      put: storage.put.bind(storage),
+      get: storage.get.bind(storage),
+      peek: storage.peek.bind(storage),
+      claim: storage.claim.bind(storage),
+      delete: async () => {
+        throw failure
+      }
+    }
+    const context = contextWith(receipts)
+    const result = await new UploadedFiles<Enquiry>({
+      storage: undeletable,
+      secret: SECRET,
+      link: async () => ''
+    }).enrich({ name: 'Ada' }, context)
+
+    await (result as { rollback: () => Promise<void> }).rollback()
+
+    expect(context.report).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'storage.delete-failed', details: { keys: [prepared[0]!.objectKey] } })
+    )
+  })
+
   it('deletes every object on rollback', async () => {
     const { enricher, bucket } = setup()
     const { receipts, prepared } = await admit([photo, quote])
