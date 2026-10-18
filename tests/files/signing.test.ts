@@ -9,6 +9,9 @@ const inOneHour = () => Math.floor(Date.now() / 1000) + 3600
 // The opaque token claims (object key + expiry) — never the filename or content-type.
 const token = { objectKey: 'abc-123', exp: inOneHour() }
 
+/** The base64url alphabet, in value order, so a character's index is the six bits it encodes. */
+const BASE64URL_ALPHABET = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_']
+
 // The stored-file descriptor a link builder receives.
 const stored = { objectKey: 'abc-123', filename: 'quote.pdf', contentType: 'application/pdf' }
 
@@ -43,6 +46,24 @@ describe('signFileToken / verifyFileToken', () => {
 
     expect(await verifyFileToken(`${header}.${body}.!!!!`, SECRET)).toBeNull()
     expect(await verifyFileToken(`${header}.${body}.abcde`, SECRET)).toBeNull()
+  })
+
+  it('accepts only the one spelling of a signature the signer produces', async () => {
+    const [header, body, signature] = (await signFileToken(token, SECRET)).split('.') as [string, string, string]
+    const lastCharacter = signature.at(-1)!
+    const sameBits = BASE64URL_ALPHABET.filter(
+      (character) =>
+        character !== lastCharacter &&
+        (BASE64URL_ALPHABET.indexOf(character) & ~0b11) === (BASE64URL_ALPHABET.indexOf(lastCharacter) & ~0b11)
+    )
+
+    for (const respelled of [
+      ...sameBits.map((character) => signature.slice(0, -1) + character),
+      `${signature.slice(0, 10)} ${signature.slice(10)}`,
+      `${signature}=`
+    ]) {
+      expect(await verifyFileToken(`${header}.${body}.${respelled}`, SECRET)).toBeNull()
+    }
   })
 
   it('rejects an authentically-signed but expired token', async () => {

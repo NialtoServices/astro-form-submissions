@@ -103,6 +103,11 @@ export async function verifyClaims(token: string, secret: string): Promise<Recor
   // outright (and verification below is always HMAC, never attacker-chosen).
   if (header !== HEADER) return null
 
+  // The decoder ignores padding bits, whitespace and `=`, so several spellings decode to the same signature;
+  // only the one the signer writes is accepted, so a token's text identifies it. Nothing here depends on the
+  // secret, so the comparison leaks nothing.
+  if (base64urlFromBytes(base64urlToBytes(signature)) !== signature) return null
+
   const key = await importKey(secret, 'verify')
 
   // crypto.subtle.verify is a constant-time comparison — do not hand-roll a string compare.
