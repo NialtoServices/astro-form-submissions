@@ -4,7 +4,8 @@ import { expect } from 'vitest'
 /**
  * Pieces of a filename that the naming rules treat specially, weighted in alongside arbitrary text so the
  * generator reaches them far more often than chance would: separators and trailing characters Windows drops,
- * header and attribute breakers, bidirectional controls, a lone surrogate, and extensions a script runs under.
+ * header and attribute breakers, percent escapes, bidirectional controls, a lone surrogate, and extensions
+ * a script runs under.
  */
 const FILENAME_PIECES = [
   '.',
@@ -19,6 +20,8 @@ const FILENAME_PIECES = [
   '\u001B',
   '\u0085',
   '"',
+  '%',
+  '%41',
   '\u202E',
   '\u2066',
   '\u200F',

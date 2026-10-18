@@ -1,5 +1,11 @@
 import { attachmentDisposition } from '#content-disposition.js'
+import { parse } from 'content-disposition'
+import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
+import { browserFilename } from './support/filenames.js'
+
+/** Any filename at all: the shapes uploads produce, and arbitrary text including lone surrogates. */
+const anyFilename = fc.oneof(browserFilename, fc.string({ unit: 'binary' }))
 
 describe('attachmentDisposition', () => {
   it('always marks the response as an attachment', () => {
@@ -43,5 +49,36 @@ describe('attachmentDisposition', () => {
 
     // U+FFFD (the replacement char) percent-encodes to %EF%BF%BD.
     expect(value).toContain('%EF%BF%BD')
+  })
+
+  it('gives a value the runtime accepts as a header for any filename', () => {
+    fc.assert(
+      fc.property(anyFilename, (name) => {
+        expect(() => new Headers({ 'Content-Disposition': attachmentDisposition(name) })).not.toThrow()
+      })
+    )
+  })
+
+  it('reads back as the name without its control characters, or `download`, under an RFC 6266 parser', () => {
+    fc.assert(
+      fc.property(anyFilename, (name) => {
+        const parsed = parse(attachmentDisposition(name))
+
+        expect(parsed.type).toBe('attachment')
+        expect(parsed.parameters.filename).toBe(name.toWellFormed().replace(/\p{Cc}/gu, '') || 'download')
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  it('keeps the ASCII fallback printable, without quotes, backslashes or percent signs', () => {
+    fc.assert(
+      fc.property(anyFilename, (name) => {
+        const fallback = /filename="([^"]*)"/.exec(attachmentDisposition(name))?.[1]
+
+        expect(fallback).toMatch(/^[\x20-\x7e]+$/)
+        expect(fallback).not.toMatch(/["\\%]/)
+      })
+    )
   })
 })
