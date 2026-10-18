@@ -92,7 +92,7 @@ describe('PostmarkTransport', () => {
     expect(failure).toMatchObject({ destination: 'Postmark', cause: { name: 'AbortError' } })
   })
 
-  it.each([Number.NaN, 0, -1])('refuses a `timeoutSeconds` of %s', (timeoutSeconds) => {
+  it.each([Number.NaN, 0, -1, 3_000_000])('refuses a `timeoutSeconds` of %s', (timeoutSeconds) => {
     expect(() => new PostmarkTransport({ token: 'tok', timeoutSeconds })).toThrow('PostmarkTransport `timeoutSeconds`')
   })
 

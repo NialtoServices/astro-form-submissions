@@ -54,6 +54,9 @@
  */
 const DEFAULT_SUBMIT_TIMEOUT_MS = 30_000
 
+/** The longest delay a timer honours; browsers wrap a longer one, and Node clamps it, so it fires at once. */
+const MAX_TIMER_DELAY_MS = 2_147_483_647
+
 /**
  * A refreshed Turnstile widget usually issues a new token within a second or two; past this, the
  * submission goes ahead and the server's verification error explains the failure.
@@ -409,12 +412,14 @@ function networkErrorCopy(messages: FormBinding['messages']): string {
   return messages.networkError ?? messages.genericError ?? ''
 }
 
-/** Resolve the per-form request timeout, keeping the default for a non-positive or non-finite override. */
+/** Resolve the per-form request timeout, keeping the default for an override no timer can honour. */
 function resolveSubmitTimeout(formElement: HTMLFormElement): number {
-  // A negative or non-finite override would clamp to an immediate abort, so anything but a finite
-  // positive number falls back to the default rather than breaking submission.
+  // A negative, non-finite or over-long override would fire at once and abort every request, so anything
+  // outside what a timer can hold falls back to the default rather than breaking submission.
   const configured = Number(formElement.dataset.astroFormSubmitTimeout)
-  return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SUBMIT_TIMEOUT_MS
+  return Number.isFinite(configured) && configured > 0 && configured <= MAX_TIMER_DELAY_MS
+    ? configured
+    : DEFAULT_SUBMIT_TIMEOUT_MS
 }
 
 /**

@@ -35,7 +35,8 @@ export class PostmarkTransport implements EmailTransport {
    * @param options - The transport options, including the token, message stream, and timeout.
    */
   constructor(private readonly options: PostmarkTransportOptions) {
-    assertPositiveNumberOption('PostmarkTransport `timeoutSeconds`', options.timeoutSeconds)
+    // A timer fires at once past 2^31 - 1 ms, which would abort every send.
+    assertPositiveNumberOption('PostmarkTransport `timeoutSeconds`', options.timeoutSeconds, { maximum: 2_147_483 })
   }
 
   // MARK: - Transport API

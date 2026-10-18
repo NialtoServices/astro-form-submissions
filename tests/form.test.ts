@@ -357,18 +357,22 @@ describe('form script failure handling', () => {
     expect(form.dataset.astroFormSubmitting).toBeUndefined()
   })
 
-  it.each(['-5', 'NaN', '0'])(
-    'ignores a non-positive/non-finite timeout override (%s) and submits normally',
+  it.each(['-5', 'NaN', '0', '3000000000'])(
+    'ignores a timeout override no timer can honour (%s) and submits normally',
     async (badTimeout) => {
       const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+      const timerSpy = vi.spyOn(globalThis, 'setTimeout')
       const { form, status, submit } = mountForm()
       form.dataset.astroFormSubmitTimeout = badTimeout
 
       submit()
 
-      // A -5/NaN/0 timeout would abort immediately; falling back to the default keeps the request alive.
+      // Each would fire at once and abort the request (browsers wrap a delay past 2^31 - 1 ms), so the
+      // default must be used instead.
       await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
       expect(fetchSpy).toHaveBeenCalledOnce()
+      expect(timerSpy.mock.calls.map(([, delay]) => delay)).toContain(30_000)
+      expect(timerSpy.mock.calls.every(([, delay]) => (delay ?? 0) <= 2_147_483_647)).toBe(true)
     }
   )
 
