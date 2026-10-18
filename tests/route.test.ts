@@ -10,6 +10,7 @@ import type { FormSubmission } from '#pipeline.js'
 import { REPORTER_TIMEOUT_MS } from '#reporting.js'
 import {
   createFormRoute,
+  DEFAULT_ERROR_COPY,
   DEFAULT_MAX_BODY_BYTES,
   DEFAULT_MAX_TEXT_BODY_BYTES,
   defineLazyRoute,
@@ -17,9 +18,13 @@ import {
   type FormRouteConfig
 } from '#route.js'
 import { validationFailed } from '#schema.js'
+import { SubmissionVerdictError } from '#submission-verdict-error.js'
 import type { APIRoute } from 'astro'
+import fc from 'fast-check'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { contentTypeHeader } from './support/content-types.js'
 import { makeRouteContext, verdictReport } from './support/harness.js'
+import { hostileRequest } from './support/hostile-requests.js'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -717,6 +722,29 @@ describe('createFormRoute body limit', () => {
       expect((await createFormRoute(baseConfig)(urlencoded(body))).status).toBe(200)
       expect((await createFormRoute({ ...baseConfig, maxTextBodyBytes: 500 })(urlencoded(body))).status).toBe(413)
       expect((await createFormRoute({ ...baseConfig, maxBodyBytes: 500 })(urlencoded(body))).status).toBe(413)
+    })
+
+    it('holds a body to the text limit under any Content-Type that the runtime would parse as text', async () => {
+      const route = createFormRoute({ ...baseConfig, maxTextBodyBytes: 1024 })
+
+      /** Whether the runtime's own parser reads a body sent under `contentType` as an urlencoded form. */
+      const runtimeReadsAsText = (contentType: string) =>
+        new Request('https://example.com/', { method: 'POST', headers: { 'Content-Type': contentType }, body: 'a=1' })
+          .formData()
+          .then(
+            (formData) => formData.get('a') === '1',
+            () => false
+          )
+
+      await fc.assert(
+        fc.asyncProperty(contentTypeHeader, async (contentType) => {
+          if (!(await runtimeReadsAsText(contentType))) return
+
+          const response = await route(contextFor('a&'.repeat(1024), { 'Content-Type': contentType }))
+          expect(response.status).toBe(413)
+        }),
+        { numRuns: 1000 }
+      )
     })
   })
 })
@@ -2415,4 +2443,55 @@ describe('createFormRoute without JavaScript', () => {
       expect(() => createFormRoute({ ...baseConfig, successURL })).not.toThrow()
     }
   )
+})
+
+describe('createFormRoute under hostile requests', () => {
+  it('answers any request with a documented response, and reports nothing but verdicts', async () => {
+    const reports: unknown[] = []
+    const route = createFormRoute({
+      ...baseConfig,
+      maxBodyBytes: 16 * 1024,
+      maxTextBodyBytes: 2 * 1024,
+      inspectors: [new HoneypotInspector({ fieldName: 'website' })],
+      enrichers: [
+        new FileUploads({
+          storage: { put: async () => {}, get: async () => null, delete: async () => {} },
+          link: async () => 'https://example.com/files/token/'
+        })
+      ],
+      onError: (error) => void reports.push(error)
+    })
+
+    await fc.assert(
+      fc.asyncProperty(hostileRequest, async ({ body, contentType, accept, contentLength }) => {
+        reports.length = 0
+        const headers: Record<string, string> = {}
+        if (contentType !== undefined) headers['Content-Type'] = contentType
+        if (accept !== undefined) headers['Accept'] = accept
+        if (contentLength !== undefined) headers['Content-Length'] = contentLength
+
+        const response = await route(makeRouteContext({ body, headers }))
+        const text = await response.text()
+        const acceptLowerCase = accept?.toLowerCase() ?? ''
+        const wantsPlain = acceptLowerCase.includes('text/html') && !acceptLowerCase.includes('application/json')
+
+        expect([200, 400, 413]).toContain(response.status)
+        expect(response.headers.get('Cache-Control')).toBe('no-store')
+        if (wantsPlain) {
+          expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8')
+          expect(text.split('\n').at(-1)).toBe(
+            response.status === 200 ? DEFAULT_ERROR_COPY.plainSubmitted : DEFAULT_ERROR_COPY.plainRetry
+          )
+        } else {
+          const json = JSON.parse(text) as { ok?: unknown; error?: unknown; fieldErrors?: Record<string, unknown> }
+          if (response.status === 200) expect(json).toEqual({ ok: true })
+          else expect(typeof json.error).toBe('string')
+          for (const message of Object.values(json.fieldErrors ?? {})) expect(typeof message).toBe('string')
+        }
+
+        for (const report of reports) expect(report).toBeInstanceOf(SubmissionVerdictError)
+      }),
+      { numRuns: 300 }
+    )
+  })
 })

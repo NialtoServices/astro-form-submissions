@@ -1,7 +1,9 @@
 import type { EnrichmentContext } from '#enrichers/enricher.js'
 import { FileUploads } from '#enrichers/file-uploads.js'
 import type { FileStorage } from '#storage/storage.js'
+import fc from 'fast-check'
 import { describe, expect, it, vi } from 'vitest'
+import { browserFilename, expectSafeStoredName } from '../support/filenames.js'
 
 const PNG_HEADER = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 const PDF_HEADER = [0x25, 0x50, 0x44, 0x46, 0x2d]
@@ -187,6 +189,38 @@ describe('FileUploads', () => {
 
     expect(stored).toBe(`${'a'.repeat(196)}.pdf`)
     expect((again.put.mock.calls[0]![2] as { filename: string }).filename).toBe(stored)
+  })
+
+  it("stores and links a safe name for any filename a browser reports, ending in the checked type's extension", async () => {
+    await fc.assert(
+      fc.asyncProperty(browserFilename, async (name) => {
+        const { storage, put } = stubStorage()
+        const result = await uploader(storage).enrich({ name: 'Ada' }, contextWith([upload(name, PDF_HEADER)]))
+        const stored = (put.mock.calls[0]![2] as { filename: string }).filename
+
+        expectSafeStoredName(stored)
+        expect(stored.toLowerCase().endsWith('.pdf')).toBe(true)
+        expect('provide' in result && result.provide?.files[0]?.name).toBe(stored)
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  it('names a re-upload of a stored file exactly as it was stored', async () => {
+    const storedName = async (name: string) => {
+      const { storage, put } = stubStorage()
+      await uploader(storage).enrich({ name: 'Ada' }, contextWith([upload(name, PDF_HEADER)]))
+      return (put.mock.calls[0]![2] as { filename: string }).filename
+    }
+
+    await fc.assert(
+      fc.asyncProperty(browserFilename, async (name) => {
+        const stored = await storedName(name)
+
+        expect(await storedName(stored)).toBe(stored)
+      }),
+      { numRuns: 1000 }
+    )
   })
 
   it('rolls back its own uploads and rejects `send` when a later upload fails', async () => {

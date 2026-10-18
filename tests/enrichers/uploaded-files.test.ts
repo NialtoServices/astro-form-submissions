@@ -7,7 +7,9 @@ import type { FileStorage } from '#storage/storage.js'
 import { createUploadRoute } from '#uploads/upload-route.js'
 import type { PendingUpload, UploadTarget } from '#uploads/upload-target.js'
 import { WorkerUploadTarget } from '#uploads/worker-upload-target.js'
+import fc from 'fast-check'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { browserFilename, expectSafeStoredName } from '../support/filenames.js'
 import { makeRouteContext } from '../support/harness.js'
 import { MemoryBucket } from '../support/memory-bucket.js'
 
@@ -161,6 +163,28 @@ describe('UploadedFiles', () => {
     const result = await enricher.enrich({ name: 'Ada' }, contextWith(receipts))
 
     expect(result).toMatchObject({ reject: { key: 'fileType' }, code: 'uploaded-files.extension-mismatch' })
+  })
+
+  it('for any name, refuses opaque bytes or links them under a safe name with no extension', async () => {
+    await fc.assert(
+      fc.asyncProperty(browserFilename, async (name) => {
+        const { enricher, bucket } = setup()
+        const opaque = { ...photo, name, type: '' }
+        const { receipts, prepared } = await admit([opaque])
+        store(bucket, prepared, [opaque])
+
+        const result = await enricher.enrich({ name: 'Ada' }, contextWith(receipts))
+        if ('reject' in result) {
+          expect(result).toMatchObject({ code: 'uploaded-files.extension-mismatch' })
+          return
+        }
+
+        const linked = (result.provide as { files: { name: string }[] }).files[0]!.name
+        expectSafeStoredName(linked)
+        expect(linked).not.toContain('.')
+      }),
+      { numRuns: 1000 }
+    )
   })
 
   it('accepts opaque bytes whose name carries no extension at all', async () => {

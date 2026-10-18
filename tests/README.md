@@ -32,5 +32,23 @@ refactor that preserves behaviour breaks a spec, the spec was wrong.
 - Mocking a module when the wire is observable.
 - Snapshot tests and assertions on internal iteration/merge mechanics.
 
+## Properties
+
+Some promises hold for every input, not just the ones an example names: a stored filename is at most
+200 characters whatever the browser sent, a body the runtime would parse as text is held to the text limit
+whatever its `Content-Type` says. Those are stated as **fast-check** properties.
+
+- A property goes through the same public entry point as the examples, in that entry point's spec file.
+  Its generators live in `support/` and weight in the inputs that matter (separators, length caps, odd
+  headers), which pure chance would rarely reach.
+- Before trusting a new property, reintroduce a bug it should catch and check that it fails, and check that
+  its cases reach the paths it claims to cover. A property that passes because its inputs never get past the
+  first refusal proves nothing.
+- Runs are random. A failure prints its counterexample and seed; replay it with
+  `fc.assert(property, { seed, path })`. Once fixed, the counterexample becomes an example test beside the
+  property, so it is checked on every run whatever the generator draws.
+- Keep each property's `numRuns` affordable: raise it only where a measured bug needs more cases to be
+  found reliably.
+
 msw-based files start their own `setupServer`. A file that also stubs `global.fetch` restores the
 msw-intercepted `fetch` after each such test, so the two approaches never overlap within a test.
