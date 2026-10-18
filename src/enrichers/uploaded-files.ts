@@ -1,5 +1,6 @@
 import type { Enricher, EnrichmentContext, EnrichmentResult } from '#enrichers/enricher.js'
 import {
+  checkedLink,
   DEFAULT_MAX_FILE_BYTES,
   DEFAULT_MAX_FILES,
   DEFAULT_MAX_TOTAL_BYTES,
@@ -47,7 +48,10 @@ export interface UploadedFilesOptions<E extends FormSubmission = FormSubmission,
   /** Permitted content-type matchers, checked against the stored bytes. Default {@link ALL_TYPES}. */
   accept?: FileMatcher[]
 
-  /** Turns a stored object into a download URL (e.g. {@link signedLink}). */
+  /**
+   * Turns a stored object into an absolute http(s) download URL (e.g. {@link signedLink}). Any other result
+   * fails the submission with `file-link.invalid-url`, since the built-in emails would leave it out.
+   */
   link: (stored: FilePayload, context: EnrichmentContext<E>) => Promise<string>
 }
 
@@ -199,9 +203,8 @@ export class UploadedFiles<
           return refuse(FileUploads.errors.fileType, 'uploaded-files.extension-mismatch')
         }
 
-        const url = await this.options.link(
-          { objectKey: upload.objectKey, filename: upload.filename, contentType },
-          context
+        const url = checkedLink(
+          await this.options.link({ objectKey: upload.objectKey, filename: upload.filename, contentType }, context)
         )
         links.push({ name: upload.filename, url, size: upload.size })
       }

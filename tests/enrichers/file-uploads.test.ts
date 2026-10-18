@@ -232,6 +232,21 @@ describe('FileUploads', () => {
     expect(deleteObject).toHaveBeenCalledTimes(2)
   })
 
+  it.each(['/files/token/', 'javascript:alert(1)', ''])(
+    'fails the upload, rolling back, when the link builder returns %j',
+    async (relative) => {
+      const { storage, put } = stubStorage()
+      const context = contextWith([upload('quote.pdf', PDF_HEADER)])
+
+      const result = await uploader(storage, { link: async () => relative }).enrich({ name: 'Ada' }, context)
+
+      expect(result).toMatchObject({ reject: { key: 'send' }, code: 'file-uploads.store-failed' })
+      expect(context.report).toHaveBeenCalledWith(expect.objectContaining({ code: 'file-link.invalid-url' }))
+      expect(put).toHaveBeenCalledOnce()
+      expect(storage.delete).toHaveBeenCalledOnce()
+    }
+  )
+
   it('reads files from a custom field name', async () => {
     const { storage, put } = stubStorage()
     const result = await uploader(storage, { field: 'attachment' }).enrich(

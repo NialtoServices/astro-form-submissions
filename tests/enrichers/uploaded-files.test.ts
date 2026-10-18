@@ -208,7 +208,7 @@ describe('UploadedFiles', () => {
     const result = await new UploadedFiles<Enquiry>({
       storage: undeletable,
       secret: SECRET,
-      link: async () => ''
+      link: async () => 'https://example.com/files/token/'
     }).enrich({ name: 'Ada' }, context)
 
     await (result as { rollback: () => Promise<void> }).rollback()
@@ -216,6 +216,19 @@ describe('UploadedFiles', () => {
     expect(context.report).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'storage.delete-failed', details: { keys: [prepared[0]!.objectKey] } })
     )
+  })
+
+  it('fails closed, deleting what it claimed, when the link builder returns a relative URL', async () => {
+    const { enricher, bucket } = setup({ link: async () => '/files/token/' })
+    const { receipts, prepared } = await admit([photo])
+    store(bucket, prepared, [photo])
+    const context = contextWith(receipts)
+
+    const result = await enricher.enrich({ name: 'Ada' }, context)
+
+    expect(result).toMatchObject({ code: 'uploaded-files.verify-failed' })
+    expect(context.report).toHaveBeenCalledWith(expect.objectContaining({ code: 'file-link.invalid-url' }))
+    expect(bucket.fileKeys()).toEqual([])
   })
 
   it('deletes every object on rollback', async () => {

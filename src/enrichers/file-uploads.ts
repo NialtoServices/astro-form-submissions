@@ -59,8 +59,28 @@ export interface FileUploadsOptions<E extends FormSubmission = FormSubmission, K
   /** Permitted content-type matchers, checked by magic bytes (never the client MIME). Default {@link ALL_TYPES}. */
   accept?: FileMatcher[]
 
-  /** Turns a stored object into a download URL (e.g. {@link signedLink}). */
+  /**
+   * Turns a stored object into an absolute http(s) download URL (e.g. {@link signedLink}). Any other result
+   * fails the upload with `file-link.invalid-url`, since the built-in emails would leave it out.
+   */
   link: (stored: FilePayload, context: EnrichmentContext<E>) => Promise<string>
+}
+
+/**
+ * Checks a `link` builder's result before it reaches a dispatcher. The built-in emails leave out any link that
+ * isn't an absolute http(s) URL, so one that slipped through would keep files nobody was sent.
+ *
+ * @param url - What the builder returned.
+ * @returns The URL, unchanged.
+ * @throws {@link OperationalError} `file-link.invalid-url` for anything else.
+ */
+export function checkedLink(url: string): string {
+  const protocol = URL.canParse(url) ? new URL(url).protocol : undefined
+  if (protocol !== 'https:' && protocol !== 'http:') {
+    throw new OperationalError('file-link.invalid-url', 'A `link` builder must return an absolute http(s) URL.')
+  }
+
+  return url
 }
 
 /**
@@ -168,7 +188,7 @@ export class FileUploads<
         storedKeys.push(objectKey)
         await this.options.storage.put(objectKey, file, { contentType, filename })
 
-        const url = await this.options.link({ objectKey, filename, contentType }, context)
+        const url = checkedLink(await this.options.link({ objectKey, filename, contentType }, context))
         links.push({ name: filename, url, size: file.size })
       }
 
