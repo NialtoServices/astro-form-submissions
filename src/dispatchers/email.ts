@@ -47,6 +47,9 @@ export interface EmailTemplates<E extends FormSubmission = FormSubmission, A = o
   readonly exposesResources?: boolean
 }
 
+/** Runs of control characters, any of which could end a header line in a transport that writes raw headers. */
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]+/g
+
 /**
  * Renders a submission into email content using the site's templates.
  *
@@ -63,7 +66,7 @@ export function renderEmail<E extends FormSubmission, A>(
   return {
     // A subject can interpolate sender-typed fields, and a line break in a header lets a transport that writes
     // raw headers be told to add more, so every control character becomes a space.
-    subject: templates.subject(submission, context).replace(/[\u0000-\u001f\u007f]+/g, ' '),
+    subject: templates.subject(submission, context).replace(CONTROL_CHARACTERS, ' '),
     text: templates.text(submission, context),
     html: templates.html(submission, context)
   }
@@ -202,10 +205,13 @@ export class EmailDispatcher<E extends FormSubmission = FormSubmission, A = obje
       throw new EmailRecipientError('replyTo')
     }
 
+    // A resolved sender can carry the visitor's name, so it loses control characters as the subject does.
+    const sender = typeof from === 'function' ? from(submission).replace(CONTROL_CHARACTERS, ' ') : from
+
     const content = renderEmail(this.options.templates, submission, context)
     await this.options.transport.deliver({
       ...content,
-      from: typeof from === 'function' ? from(submission) : from,
+      from: sender,
       to: recipient,
 
       // Omit the header entirely when the reply-to resolves empty, rather than sending a blank one.

@@ -169,6 +169,18 @@ describe('EmailDispatcher', () => {
     expect(deliveredMessage(deliver)).toMatchObject({ to: address, replyTo: address })
   })
 
+  it('turns line breaks in a resolved `from` into spaces', async () => {
+    const deliver = vi.fn()
+    await new EmailDispatcher({
+      transport: { deliver },
+      templates,
+      from: (submission) => `${submission.name as string} via Example <forms@example.com>`,
+      to: 'owner@acme.test'
+    }).dispatch({ name: 'Ada\r\nBcc: eve@example.org' }, dispatchContext())
+
+    expect(deliveredMessage(deliver).from).toBe('Ada Bcc: eve@example.org via Example <forms@example.com>')
+  })
+
   it('turns line breaks in a rendered subject into spaces', () => {
     const content = renderEmail(
       { subject: () => 'Thanks Ada\r\nBcc: eve@example.com', text: () => '', html: () => '' },
