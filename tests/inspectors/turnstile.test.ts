@@ -237,10 +237,10 @@ describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () =
   it('accepts a token solved on any host in the allowlist', async () => {
     const inspector = new TurnstileInspector({
       secretKey: 'secret',
-      verifyHostname: ['example.com', 'my-site.nialto.workers.dev']
+      verifyHostname: ['example.com', 'my-site.example.workers.dev']
     })
 
-    mockSiteverify(JSON.stringify({ success: true, hostname: 'my-site.nialto.workers.dev' }))
+    mockSiteverify(JSON.stringify({ success: true, hostname: 'my-site.example.workers.dev' }))
     expect(await inspector.inspect(contextFor('token'))).toEqual({ action: 'accept' })
 
     mockSiteverify(JSON.stringify({ success: true, hostname: 'example.com' }))
@@ -251,11 +251,11 @@ describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () =
     mockSiteverify(JSON.stringify({ success: true, hostname: 'attacker.example' }))
     const inspector = new TurnstileInspector({
       secretKey: 'secret',
-      verifyHostname: ['example.com', 'my-site.nialto.workers.dev']
+      verifyHostname: ['example.com', 'my-site.example.workers.dev']
     })
     expect(await inspector.inspect(contextFor('token'))).toEqual(
       rejected('turnstile.hostname-mismatch', {
-        expected: ['example.com', 'my-site.nialto.workers.dev'],
+        expected: ['example.com', 'my-site.example.workers.dev'],
         solved: 'attacker.example'
       })
     )
