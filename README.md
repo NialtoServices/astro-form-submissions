@@ -1243,8 +1243,9 @@ Two optional protections need **extra markup in your form** — nothing is auto-
   ```
 
 - **Turnstile.** Add Cloudflare's loader to the page `<head>`, render the widget container **inside
-  your form**, and add the `TurnstileInspector` server-side. If the loader is absent the form still
-  submits — the widget reset is simply skipped.
+  your form**, and add the `TurnstileInspector` server-side. If the loader is absent (omitted, or blocked
+  by a content blocker) the form still submits, after allowing the loader two seconds to arrive, and the
+  widget reset is simply skipped.
 
   ```html
   <!-- in <head> -->

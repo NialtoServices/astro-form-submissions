@@ -669,6 +669,38 @@ describe('form script Turnstile wait', () => {
     expect(fetchSpy).toHaveBeenCalledOnce()
   })
 
+  it('stops waiting soon when the container never rendered a widget and no loader arrived', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { form, submit } = mountForm()
+    form.querySelector('.cf-turnstile')!.replaceChildren()
+
+    submit()
+    await vi.advanceTimersByTimeAsync(1_900)
+    expect(fetchSpy).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(200)
+    expect(fetchSpy).toHaveBeenCalledOnce()
+  })
+
+  it('keeps waiting for a widget the loader is still rendering', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] })
+    ;(window as { turnstile?: { reset: () => void } }).turnstile = { reset: () => {} }
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { form, submit } = mountForm()
+    const widgetElement = form.querySelector('.cf-turnstile')!
+    widgetElement.replaceChildren()
+
+    submit()
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(fetchSpy).not.toHaveBeenCalled()
+
+    widgetElement.innerHTML = '<input type="hidden" name="cf-turnstile-response" value="rendered-token" />'
+    await vi.advanceTimersByTimeAsync(200)
+    expect(fetchSpy).toHaveBeenCalledOnce()
+    expect((fetchSpy.mock.calls[0]![1]!.body as FormData).get('cf-turnstile-response')).toBe('rendered-token')
+  })
+
   it('submits at once without a widget', async () => {
     const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
     const { form, submit } = mountForm()

@@ -59,6 +59,10 @@ const DEFAULT_SUBMIT_TIMEOUT_MS = 30_000
 const TURNSTILE_TOKEN_TIMEOUT_MS = 30_000
 const TURNSTILE_POLL_INTERVAL_MS = 100
 
+// The loader is usually `async defer`, so it gets a moment to arrive. Past this, a container with no
+// rendered widget and no loader means the loader was blocked or omitted, and no token is coming.
+const TURNSTILE_LOADER_GRACE_MS = 2_000
+
 const DEFAULT_DESCRIPTOR_FIELD = 'uploads'
 const DEFAULT_RECEIPT_FIELD = 'upload'
 
@@ -249,19 +253,25 @@ function applyTurnstileTokens(formElement: HTMLFormElement, formData: FormData):
 
 /**
  * Resolves once every Turnstile widget in this form holds a token, or after
- * {@link TURNSTILE_TOKEN_TIMEOUT_MS}. Resolves at once for a form without a widget. Reads the hidden
- * response inputs the widgets render.
+ * {@link TURNSTILE_TOKEN_TIMEOUT_MS}. Resolves at once for a form without a widget, and after
+ * {@link TURNSTILE_LOADER_GRACE_MS} when no widget has rendered and the loader never arrived. Reads the
+ * hidden response inputs the widgets render.
  */
 function waitForTurnstileToken(formElement: HTMLFormElement): Promise<void> {
   if (!formElement.querySelector('.cf-turnstile')) return Promise.resolve()
 
-  const deadline = Date.now() + TURNSTILE_TOKEN_TIMEOUT_MS
+  const startedAt = Date.now()
+  const deadline = startedAt + TURNSTILE_TOKEN_TIMEOUT_MS
   return new Promise((resolve) => {
     const poll = () => {
       const tokenInputElements = turnstileTokenInputs(formElement)
       const issued =
         tokenInputElements.length > 0 && tokenInputElements.every((tokenInputElement) => tokenInputElement.value !== '')
-      if (issued || Date.now() >= deadline) {
+      const loaderMissing =
+        tokenInputElements.length === 0 &&
+        (window as { turnstile?: unknown }).turnstile === undefined &&
+        Date.now() - startedAt >= TURNSTILE_LOADER_GRACE_MS
+      if (issued || loaderMissing || Date.now() >= deadline) {
         resolve()
         return
       }
