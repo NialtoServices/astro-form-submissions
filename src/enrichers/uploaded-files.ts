@@ -107,10 +107,23 @@ export class UploadedFiles<
     const field = this.options.field ?? 'upload'
     const attachTo = this.options.attachTo ?? 'files'
 
-    const receipts = context.data
-      .getAll(field)
-      .filter((entry): entry is string => typeof entry === 'string' && entry !== '')
+    const receipts = [
+      ...new Set(
+        context.data.getAll(field).filter((entry): entry is string => typeof entry === 'string' && entry !== '')
+      )
+    ]
     if (receipts.length === 0) return {}
+
+    // Each receipt costs an HMAC verification, so a sender could otherwise make one request verify as many as
+    // the body holds. Nothing is claimed yet, so this refusal has nothing to delete.
+    const maxFiles = this.options.maxFiles ?? DEFAULT_MAX_FILES
+    if (receipts.length > maxFiles) {
+      return {
+        reject: FileUploads.errors.tooManyFiles,
+        code: 'uploaded-files.too-many',
+        details: { count: receipts.length, limit: maxFiles }
+      }
+    }
 
     const verified = await Promise.all(
       receipts.map((receipt) => verifyUploadClaims('receipt', receipt, this.options.secret))

@@ -138,6 +138,28 @@ describe('UploadedFiles', () => {
     expect(link.mock.calls[0]![0].contentType).toBe('image/jpeg')
   })
 
+  it('refuses more receipts than maxFiles before verifying any of them', async () => {
+    const { enricher, bucket } = setup({ maxFiles: 2 })
+    const { receipts, prepared } = await admit([photo])
+    store(bucket, prepared, [photo])
+    const forged = ['forged-1', 'forged-2', 'forged-3']
+
+    const result = await enricher.enrich({ name: 'Ada' }, contextWith([receipts[0]!, ...forged]))
+
+    expect(result).toMatchObject({ code: 'uploaded-files.too-many', details: { count: 4, limit: 2 } })
+    expect(bucket.fileKeys()).toEqual([`uploads/${prepared[0]!.objectKey}`])
+  })
+
+  it('counts a receipt sent several times once against maxFiles', async () => {
+    const { enricher, bucket } = setup({ maxFiles: 1 })
+    const { receipts, prepared } = await admit([photo])
+    store(bucket, prepared, [photo])
+
+    const result = await enricher.enrich({ name: 'Ada' }, contextWith([receipts[0]!, receipts[0]!, receipts[0]!]))
+
+    expect(result).toHaveProperty('provide')
+  })
+
   it('links a file named by duplicate receipts once', async () => {
     const { enricher, bucket } = setup()
     const { receipts, prepared } = await admit([photo])
@@ -369,26 +391,29 @@ describe('UploadedFiles', () => {
       )
     })
 
-    it('re-checks the count and size limits against the receipts', async () => {
-      const tooMany = setup({ maxFiles: 1 })
+    it('re-checks the size limits against the receipts', async () => {
       const tooLarge = setup({ maxTotalBytes: JPEG.length + 1 })
-      const first = await admit([photo, quote])
-      const second = await admit([photo, quote])
-      store(tooMany.bucket, first.prepared, [photo, quote])
-      store(tooLarge.bucket, second.prepared, [photo, quote])
+      const { receipts, prepared } = await admit([photo, quote])
+      store(tooLarge.bucket, prepared, [photo, quote])
 
       await expectRefused(
-        await tooMany.enricher.enrich({ name: 'Ada' }, contextWith(first.receipts)),
-        'tooManyFiles',
-        'uploaded-files.too-many',
-        tooMany.bucket
-      )
-      await expectRefused(
-        await tooLarge.enricher.enrich({ name: 'Ada' }, contextWith(second.receipts)),
+        await tooLarge.enricher.enrich({ name: 'Ada' }, contextWith(receipts)),
         'fileTooLarge',
         'uploaded-files.total-too-large',
         tooLarge.bucket
       )
+    })
+
+    it('re-checks the count before claiming anything, leaving the files to the lifecycle rule', async () => {
+      const tooMany = setup({ maxFiles: 1 })
+      const { receipts, prepared } = await admit([photo, quote])
+      store(tooMany.bucket, prepared, [photo, quote])
+
+      const result = await tooMany.enricher.enrich({ name: 'Ada' }, contextWith(receipts))
+
+      expect(result).toMatchObject({ reject: { key: 'tooManyFiles' }, code: 'uploaded-files.too-many' })
+      expect(tooMany.bucket.fileKeys()).toHaveLength(2)
+      expect(await tooMany.storage.claim(prepared[0]!.objectKey)).toBe(true)
     })
 
     it('reports a storage failure, cleans up, and fails with the send error', async () => {
