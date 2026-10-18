@@ -9,9 +9,7 @@ export class EmailRecipientError extends Error {
   // MARK: - Object Lifecycle
 
   constructor(readonly field: 'to' | 'replyTo' = 'to') {
-    super(
-      `A \`${field}\` resolver must return a single address, but returned one containing "," or ";" or a control character.`
-    )
+    super(`A \`${field}\` resolver must return a single address, but returned more than one, or a control character.`)
     this.name = 'EmailRecipientError'
   }
 }

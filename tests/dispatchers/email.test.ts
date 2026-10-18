@@ -118,7 +118,9 @@ describe('EmailDispatcher', () => {
     'ada@example.com\r\nBcc: eve@example.com',
     '"Ada" <ada@example.com>, eve@example.com',
     '"Lovelace, Ada <ada@example.com>, eve@example.com',
-    '"Ada\r\nBcc: eve@example.com" <ada@example.com>'
+    '"Ada\r\nBcc: eve@example.com" <ada@example.com>',
+    'ada@example.com eve@example.com',
+    'Ada <ada@example.com> <eve@example.com>'
   ])('refuses a `to` function that resolves to several addresses or a header break (%j)', async (address) => {
     const deliver = vi.fn()
     const dispatcher = new EmailDispatcher({
@@ -132,31 +134,33 @@ describe('EmailDispatcher', () => {
     expect(deliver).not.toHaveBeenCalled()
   })
 
-  it.each(['ada@example.com, eve@example.com', 'ada@example.com\nBcc: eve@example.com'])(
-    'refuses a `replyTo` function that resolves to several addresses or a header break (%j)',
-    async (address) => {
-      const deliver = vi.fn()
-      const dispatcher = new EmailDispatcher({
-        transport: { deliver },
-        templates,
-        from: 'noreply@acme.test',
-        to: 'owner@acme.test',
-        replyTo: (submission) => submission.email as string
-      })
+  it.each([
+    'ada@example.com, eve@example.com',
+    'ada@example.com\nBcc: eve@example.com',
+    'ada@example.com eve@example.com'
+  ])('refuses a `replyTo` function that resolves to several addresses or a header break (%j)', async (address) => {
+    const deliver = vi.fn()
+    const dispatcher = new EmailDispatcher({
+      transport: { deliver },
+      templates,
+      from: 'noreply@acme.test',
+      to: 'owner@acme.test',
+      replyTo: (submission) => submission.email as string
+    })
 
-      await expect(dispatcher.dispatch({ email: address }, dispatchContext())).rejects.toMatchObject({
-        name: 'EmailRecipientError',
-        field: 'replyTo'
-      })
-      expect(deliver).not.toHaveBeenCalled()
-    }
-  )
+    await expect(dispatcher.dispatch({ email: address }, dispatchContext())).rejects.toMatchObject({
+      name: 'EmailRecipientError',
+      field: 'replyTo'
+    })
+    expect(deliver).not.toHaveBeenCalled()
+  })
 
   it.each([
     '"Lovelace, Ada" <ada@example.com>',
     '"Ada; Byron" <ada@example.com>',
-    '"Ada \\"A, L\\"" <ada@example.com>'
-  ])('accepts a comma or semicolon inside a quoted display name (%j)', async (address) => {
+    '"Ada \\"A, L\\"" <ada@example.com>',
+    '"ada@home" <ada@example.com>'
+  ])('accepts a comma, semicolon or @ inside a quoted display name (%j)', async (address) => {
     const deliver = vi.fn()
     await new EmailDispatcher({
       transport: { deliver },

@@ -77,10 +77,12 @@ const QUOTED_STRING = /"(?:[^"\\]|\\.)*"/g
 
 /**
  * Whether a resolved address names one recipient and holds no control character that could end a header line.
- * A comma or semicolon separates recipients only outside a quoted display name (`"Lovelace, Ada" <…>`).
+ * Outside a quoted display name (`"Lovelace, Ada" <…>`), a comma or semicolon separates recipients, and a
+ * second `@` is a second address that a lenient parser could split off.
  */
 function isSingleAddress(address: string): boolean {
-  return !/[\u0000-\u001f\u007f]/.test(address) && !/[,;]/.test(address.replace(QUOTED_STRING, ''))
+  const unquoted = address.replace(QUOTED_STRING, '')
+  return !/[\u0000-\u001f\u007f]/.test(address) && !/[,;]/.test(unquoted) && unquoted.split('@').length <= 2
 }
 
 /**
