@@ -671,6 +671,44 @@ describe('createFormRoute body limit', () => {
       expect(performance.now() - startedAt).toBeLessThan(1_000)
     })
 
+    it('holds a body to the text limit when its type joins multipart with another', async () => {
+      const route = createFormRoute({ ...baseConfig, enrichers: [fileUploads(50 * 1024 * 1024)] })
+      const startedAt = performance.now()
+
+      const response = await route(
+        contextFor(new TextEncoder().encode('a&'.repeat(DEFAULT_MAX_TEXT_BODY_BYTES)), {
+          'Content-Type': 'multipart/form-data, application/x-www-form-urlencoded'
+        })
+      )
+
+      expect(response.status).toBe(413)
+      expect(performance.now() - startedAt).toBeLessThan(1_000)
+    })
+
+    it('reads a multipart body under the multipart limit whatever the header case, or a quoted comma', async () => {
+      const route = createFormRoute({ ...baseConfig, enrichers: [fileUploads(3 * 1024 * 1024)] })
+      const encoded = new Response(formWithFile(2 * 1024 * 1024))
+      const contentType = encoded.headers.get('content-type') ?? ''
+      const body = new Uint8Array(await encoded.arrayBuffer())
+      const boundary = contentType.slice(contentType.indexOf('boundary=') + 'boundary='.length)
+      const quoted = new TextDecoder().decode(body).replaceAll(boundary, 'a,b')
+
+      expect(
+        (
+          await route(
+            contextFor(body, { 'Content-Type': contentType.toUpperCase().replace(boundary.toUpperCase(), boundary) })
+          )
+        ).status
+      ).toBe(200)
+      expect(
+        (
+          await route(
+            contextFor(new TextEncoder().encode(quoted), { 'Content-Type': 'multipart/form-data; boundary="a,b"' })
+          )
+        ).status
+      ).toBe(200)
+    })
+
     it("honours the site's own text limit, and never exceeds maxBodyBytes", async () => {
       const body = `name=Ada&email=ada%40example.com&message=${'x'.repeat(1_000)}`
 

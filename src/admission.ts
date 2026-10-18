@@ -51,9 +51,16 @@ export const DEFAULT_MAX_BODY_BYTES = 1024 * 1024
  */
 export const DEFAULT_MAX_TEXT_BODY_BYTES = 64 * 1024
 
-/** Whether the request declares a multipart body, the only kind that can carry files. */
+/**
+ * Whether the request declares a multipart body, the only kind that can carry files. A `Content-Type` that
+ * joins several types with commas never qualifies: the parser reads the last of them, so a header that opens
+ * with `multipart/form-data` could still have its body parsed as urlencoded under the larger limit. A comma
+ * inside a quoted parameter, such as a quoted boundary, doesn't count.
+ */
 function isMultipart(request: Request): boolean {
-  return (request.headers.get('content-type') ?? '').toLowerCase().startsWith('multipart/form-data')
+  const contentType = (request.headers.get('content-type') ?? '').toLowerCase()
+  const unquoted = contentType.replace(/"(?:[^"\\]|\\.)*"/g, '')
+  return contentType.startsWith('multipart/form-data') && !unquoted.includes(',')
 }
 
 /**
