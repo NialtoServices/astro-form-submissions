@@ -79,7 +79,9 @@ export interface SubmissionAcknowledgementTemplatesOptions<
 
   /**
    * Mustache source overriding the subject line, rendered against the submission (plus the resolved
-   * view values). Default: `We've received your submission`.
+   * view values). Default: `We've received your submission`. Every submission field it names is the
+   * sender's own text, sent to an address the sender chose, and inbox lists show the subject first, so keep
+   * it fixed or name only fields the schema constrains.
    */
   subject?: string
 
@@ -114,8 +116,8 @@ export interface SubmissionAcknowledgementTemplatesOptions<
  *
  * That address is whatever the sender typed, so this email goes wherever an attacker points it. Keep it
  * inert: run Turnstile and a rate-limit guard on the route, copy back only fields the schema constrains
- * (never free text such as a message, nor a name in the `greeting`), and leave `attachments` unset, which
- * would otherwise send links to files the poster uploaded.
+ * (never free text such as a message, nor a name in the `greeting` or `subject`), and leave `attachments`
+ * unset, which would otherwise send links to files the poster uploaded.
  *
  * The footer links the site URL from Astro `site`; without it, the link is left out rather than taken from the
  * request, whose host the sender may control.

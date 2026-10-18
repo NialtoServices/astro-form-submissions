@@ -815,9 +815,10 @@ they sent.
 >
 > - **Protect the route first** with [Turnstile](#extras-honeypot-and-turnstile) and a
 >   [rate-limit guard](#guards). Without them, the form is a free relay.
-> - **Don't copy back free text.** A `message` field, or the sender's name in the `greeting`, lets an
->   attacker write the email; HTML is escaped, but mail clients still link bare URLs. Copy back only
->   fields your schema constrains (a choice, a date), or none.
+> - **Don't copy back free text.** A `message` field, or the sender's name in the `greeting` or the
+>   `subject` (`'Thanks {{name}}'`), lets an attacker write the email, and inbox lists show the subject
+>   first; HTML is escaped, but mail clients still link bare URLs. Copy back only fields your schema
+>   constrains (a choice, a date), or none.
 > - **Leave `attachments` unset.** It would send links to files the poster uploaded, served from your
 >   domain.
 >
