@@ -122,6 +122,68 @@ describe('createUploadPutRoute', () => {
     expect(onError).not.toHaveBeenCalled()
   })
 
+  describe('on the Workers runtime, where FixedLengthStream enforces the declared length', () => {
+    /** Stands in for the Workers global: passes exactly `expectedLength` bytes and errors on any other count. */
+    class FixedLengthStreamStandIn extends TransformStream<Uint8Array, Uint8Array> {
+      constructor(expectedLength: number) {
+        let receivedBytes = 0
+        super({
+          transform(chunk, controller) {
+            receivedBytes += chunk.byteLength
+            if (receivedBytes > expectedLength) {
+              controller.error(new TypeError('The stream is longer than its declared length.'))
+              return
+            }
+
+            controller.enqueue(chunk)
+          },
+          flush(controller) {
+            if (receivedBytes < expectedLength) {
+              controller.error(new TypeError('The stream is shorter than its declared length.'))
+            }
+          }
+        })
+      }
+    }
+
+    afterEach(() => {
+      vi.unstubAllGlobals()
+    })
+
+    /** PUTs `body` under a fresh grant while declaring the admitted length. */
+    async function putDeclaringAdmittedLength(body: Uint8Array<ArrayBuffer>) {
+      vi.stubGlobal('FixedLengthStream', FixedLengthStreamStandIn)
+      const { bucket, target, route } = setup()
+      const token = tokenOf((await target.prepare(upload)).url)
+      const response = await put(route, token, {
+        body,
+        headers: {
+          'Content-Length': String(bytes.length),
+          'Content-Type': 'application/pdf',
+          'x-amz-meta-filename-uri': encodeURIComponent(upload.filename)
+        }
+      })
+      return { response, stored: bucket.objects.get(`uploads/${upload.objectKey}`) }
+    }
+
+    it('stores a body of exactly the declared length', async () => {
+      const { response, stored } = await putDeclaringAdmittedLength(bytes)
+
+      expect(response.status).toBe(200)
+      expect(stored?.bytes).toEqual(bytes)
+    })
+
+    it('answers 502 and stores nothing when the bytes run short or long of the declared length', async () => {
+      const short = await putDeclaringAdmittedLength(bytes.slice(0, -1))
+      const long = await putDeclaringAdmittedLength(new Uint8Array([...bytes, 0x20]))
+
+      expect(short.response.status).toBe(502)
+      expect(short.stored).toBeUndefined()
+      expect(long.response.status).toBe(502)
+      expect(long.stored).toBeUndefined()
+    })
+  })
+
   it('answers 404 for a tampered, foreign or expired grant, and stores nothing', async () => {
     const { bucket, target, route } = setup()
     const token = tokenOf((await target.prepare(upload)).url)
