@@ -2196,27 +2196,39 @@ describe('createFormRoute report wiring', () => {
     })
   })
 
-  it('rolls back on an unexpected throw after delivery when nothing exposed the files', async () => {
-    const rolledBack: string[] = []
-    const enricher = {
-      enrich: async () => ({ provide: { files: [] }, rollback: async () => void rolledBack.push('files') })
-    }
+  it("keeps a delivered submission a success when a dispatcher's quarantine flag can't be read afterwards", async () => {
     const notifier: Dispatcher = {
-      exposesResources: false,
       get acceptsQuarantined(): boolean {
         throw new Error('hostile getter')
       },
-      dispatch: async () => {}
+      dispatch: vi.fn(async () => {})
+    }
+
+    const response = await createFormRoute({ ...baseConfig, dispatchers: [notifier] })(contextFor(validForm()))
+
+    expect(response.status).toBe(200)
+    expect(notifier.dispatch).toHaveBeenCalledOnce()
+  })
+
+  it("counts a quarantined submission's delivery as failed when the dispatcher's flag can't be read", async () => {
+    const notifier: Dispatcher = {
+      get acceptsQuarantined(): boolean {
+        throw new Error('hostile getter')
+      },
+      dispatch: vi.fn(async () => {})
     }
     const onError = vi.fn()
 
-    const response = await createFormRoute({ ...baseConfig, enrichers: [enricher], dispatchers: [notifier], onError })(
-      contextFor(validForm())
-    )
+    const response = await createFormRoute({
+      ...baseConfig,
+      guards: [{ guard: async () => ({ action: 'quarantine' as const }) }],
+      dispatchers: [notifier],
+      onError
+    })(contextFor(validForm()))
 
-    expect(response.status).toBe(500)
-    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'unexpected' })
-    expect(rolledBack).toEqual(['files'])
+    expect(response.status).toBe(502)
+    expect(notifier.dispatch).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'hostile getter' }), { stage: 'delivery' })
   })
 
   it('rolls back the files when the only exposing delivery skips the submission', async () => {

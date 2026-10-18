@@ -396,8 +396,16 @@ export function createFormRoute<
 
       // A quarantined submission with nowhere to go is a silent 200 with zero delivery. Computed from
       // the configured dispatchers so it still fires when the array is empty.
+      // Deliveries may have landed by now, so a dispatcher that throws reading the flag must not turn them into a
+      // 500 the sender would retry; it counts as not accepting quarantine.
       const acceptsQuarantine = dispatchGroups.some((group) =>
-        group.some((dispatcher) => dispatcher.acceptsQuarantined === true)
+        group.some((dispatcher) => {
+          try {
+            return dispatcher.acceptsQuarantined === true
+          } catch {
+            return false
+          }
+        })
       )
       if (quarantined && !acceptsQuarantine) {
         await report(
