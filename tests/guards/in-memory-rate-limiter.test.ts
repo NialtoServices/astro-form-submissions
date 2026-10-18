@@ -59,6 +59,24 @@ describe('InMemoryRateLimiter', () => {
     expect(await limiter.limit({ key: 'a' })).toEqual({ success: false })
   })
 
+  it('sweeps elapsed windows before inserting, so a live window is never evicted in their place', async () => {
+    vi.useFakeTimers()
+    const limiter = new InMemoryRateLimiter({ limit: 1, windowSeconds: 60, maxKeys: 3 })
+    await limiter.limit({ key: 'a' })
+    await limiter.limit({ key: 'b' })
+
+    // 'a' starts a fresh window but keeps its place as the oldest key; 'b' lapses beside it.
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(await limiter.limit({ key: 'a' })).toEqual({ success: true })
+
+    // Without the sweep, the lapsed 'b' would still fill a slot, and 'd' would evict the live 'a'.
+    await vi.advanceTimersByTimeAsync(1_000)
+    await limiter.limit({ key: 'c' })
+    await limiter.limit({ key: 'd' })
+
+    expect(await limiter.limit({ key: 'a' })).toEqual({ success: false })
+  })
+
   it('resets the count once the window elapses', async () => {
     vi.useFakeTimers()
     const limiter = new InMemoryRateLimiter({ limit: 1, windowSeconds: 60 })
