@@ -1,7 +1,7 @@
 import type { R2BucketLike } from '#storage/r2.js'
 
 /** One object held by {@link MemoryBucket}, as R2 would store it. */
-export interface MemoryObject {
+interface MemoryObject {
   bytes: Uint8Array<ArrayBuffer>
   httpMetadata: { contentType?: string; contentDisposition?: string }
   customMetadata: Record<string, string>
