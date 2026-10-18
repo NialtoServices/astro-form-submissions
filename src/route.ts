@@ -27,9 +27,10 @@ export { DEFAULT_MAX_BODY_BYTES, DEFAULT_MAX_TEXT_BODY_BYTES, ERRORS, type FormE
 
 /**
  * The default copy for every {@link ToolkitErrorKey}, read from the live {@link FormError} each key's
- * raiser owns — so it can never drift from the actual defaults. It is a **reference/checklist** (a
- * localised site translates against it, and can see which keys exist and their wording), not an input:
- * omitting `errors` already yields these, and overriding is still per-key via `config.errors`.
+ * raiser owns, or for the two no-JavaScript lines from the copy that adds them, so it can never drift from
+ * the actual defaults. It is a **reference/checklist** (a localised site translates against it, and can see
+ * which keys exist and their wording), not an input: omitting `errors` already yields these, and overriding
+ * is still per-key via `config.errors`.
  */
 export const DEFAULT_ERROR_COPY: Record<ToolkitErrorKey, string> = {
   invalidForm: ERRORS.invalidForm.message,
@@ -151,8 +152,8 @@ export interface FormRouteConfig<
   /**
    * Called with each failure the route handles itself (a skipped guard or inspector, a rolled-back
    * enricher, a failed delivery, an unexpected throw), and with each refused, dropped or quarantined
-   * submission as a {@link SubmissionVerdictError}. May be async; contained, so it can never change the response, and a
-   * request waits for its calls for at most 5 seconds in all.
+   * submission as a {@link SubmissionVerdictError}. May be async; contained, so it can never change the
+   * response, and a request waits for its calls for at most 5 seconds in all.
    *
    * The default, {@link defaultErrorReporter}, writes one **PII-safe line** per call: verdicts on
    * `console.warn`, failures on `console.error`, with the stage, error class, codes and safe details, never

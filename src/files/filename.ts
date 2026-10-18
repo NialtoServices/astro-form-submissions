@@ -35,8 +35,9 @@ function shortened(name: string): string {
  * UTF-16 surrogate becomes U+FFFD, since `encodeURIComponent` throws on one), without CR, LF or `"`, which
  * would break a header or a quoted attribute, without bidirectional text controls, without trailing dots or
  * whitespace, which Windows drops when saving (so `invoice.js.` would be saved as `invoice.js`), and no longer
- * than {@link MAX_FILENAME_LENGTH} characters, keeping its extension; or `upload` when nothing is left. With `extensions`, the name also ends in one of them. Shared by both upload
- * paths so a file is named the same way whichever one it took.
+ * than {@link MAX_FILENAME_LENGTH} characters, keeping its extension; or `upload` when nothing is left. With
+ * `extensions`, the name also ends in one of them. Shared by both upload paths so a file is named the same way
+ * whichever one it took.
  *
  * @param name - The filename the browser reported.
  * @param extensions - The extensions the file's checked type is saved under, if known.

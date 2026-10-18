@@ -555,6 +555,7 @@ An inspector that **throws** is treated as unexpected: it's reported via `onErro
 fail closed on its _own expected_ failures — like `TurnstileInspector` — catches them and returns
 `{ reject }`. One whose threat model can't tolerate being skipped on a _bug_ sets `failClosed: true`,
 so an unexpected throw fails the request (`500 unavailable`) rather than silently skipping the check.
+`TurnstileInspector` sets it, since an anti-bot check must never wave a submission through unverified.
 
 <details>
 <summary><strong>Design note: failure modes by stage</strong></summary>
@@ -618,7 +619,8 @@ The only sanctioned built-in defaults are protocol-level, not business fields �
 A field that exists only for the inspector, such as a token or a trap field, belongs in its `controlFields`.
 The route then leaves it out of what the schema validates, so a schema that keeps undeclared fields can't
 carry it into the submission and on to an email; the inspector still reads it from `context.data`. The
-Turnstile token and the honeypot field are handled this way already.
+Turnstile token and the honeypot field are handled this way already, so leave them out of the schema: one
+that requires the token refuses every submission.
 
 ## Dispatchers
 

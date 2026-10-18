@@ -20,9 +20,9 @@ export interface CreateUploadPutRouteConfig {
 
   /**
    * Called (stage `upload`) with a failed write before the 502 is returned, and with each refused upload as a
-   * {@link SubmissionVerdictError}. Contained, so a reporter that throws or stalls can't change the
-   * response, and a request waits for its calls for at most 5 seconds in all. The same contract as the form route's `onError`; default
-   * {@link defaultErrorReporter}.
+   * {@link SubmissionVerdictError}. Contained, so a reporter that throws or stalls can't change the response,
+   * and a request waits for its calls for at most 5 seconds in all. The same contract as the form route's
+   * `onError`; default {@link defaultErrorReporter}.
    */
   onError?: ErrorReporter
 }
