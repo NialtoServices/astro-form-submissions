@@ -8,8 +8,11 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 /** Mount a standard enhanced form and return handles to interact with it. */
-function mountForm({ successPanel = false, successPanelTabindex = true } = {}) {
+function mountForm({ successPanel = false, successPanelTabindex = true, networkErrorCopy = true } = {}) {
   const panelTabindex = successPanelTabindex ? ' tabindex="-1"' : ''
+  const networkErrorAttribute = networkErrorCopy
+    ? 'data-astro-form-message-network-error="Could not reach the server."'
+    : ''
   document.body.innerHTML = `
     <form data-astro-form action="/api/contact" method="POST">
       <input type="text" name="name" />
@@ -20,7 +23,7 @@ function mountForm({ successPanel = false, successPanelTabindex = true } = {}) {
         data-astro-form-message-sending="Sending…"
         data-astro-form-message-success="Thanks — we'll be in touch."
         data-astro-form-message-generic-error="Something went wrong."
-        data-astro-form-message-network-error="Could not reach the server."
+        ${networkErrorAttribute}
       ></p>
     </form>${successPanel ? `<div data-astro-form-success role="status"${panelTabindex} hidden><h2>Thanks!</h2></div>` : ''}`
   initializeForms()
@@ -83,6 +86,18 @@ describe('form script', () => {
 
     submit()
     await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('error'))
+  })
+
+  it('falls back to the generic-error copy for a failed request when the markup sets no network-error copy', async () => {
+    stubFetch(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    const { status, submit } = mountForm({ networkErrorCopy: false })
+
+    submit()
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('error'))
+
+    expect(status.textContent).toBe('Something went wrong.')
   })
 
   it('shows the network-error copy when the request fails outright', async () => {

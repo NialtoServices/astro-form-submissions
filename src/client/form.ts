@@ -401,6 +401,14 @@ interface FormBinding {
   }
 }
 
+/**
+ * The copy for a request that never completed: the network-error copy, else the generic error copy, so a form
+ * whose markup sets only the latter still says something rather than leaving the status empty.
+ */
+function networkErrorCopy(messages: FormBinding['messages']): string {
+  return messages.networkError ?? messages.genericError ?? ''
+}
+
 /** Resolve the per-form request timeout, keeping the default for a non-positive or non-finite override. */
 function resolveSubmitTimeout(formElement: HTMLFormElement): number {
   // A negative or non-finite override would clamp to an immediate abort, so anything but a finite
@@ -554,7 +562,7 @@ type PostOutcome =
 async function postForm(binding: FormBinding, url: string, formData: FormData): Promise<PostOutcome> {
   const { formElement, messages } = binding
   const request = await sendRequest(url, formData, resolveSubmitTimeout(formElement))
-  if (!request) return { ok: false, error: messages.networkError ?? '' }
+  if (!request) return { ok: false, error: networkErrorCopy(messages) }
 
   // Success is the documented `{ ok: true }` contract — any other parseable 2xx body
   // (a proxy page, misrouting, a future endpoint) must not trigger the success UI.
@@ -621,7 +629,7 @@ async function submitWithUploads(
 
     onProgress(0)
     const stored = await uploadFile(upload, file, resolveSubmitTimeout(formElement), onProgress)
-    if (!stored) return { ok: false, error: messages.networkError ?? '' }
+    if (!stored) return { ok: false, error: networkErrorCopy(messages) }
 
     bytesBefore += file.size
   }

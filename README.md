@@ -1222,7 +1222,7 @@ attribute you add to your own markup:
 The `data-astro-form-message-*` copy is a **different layer** from the server's `FormError` copy:
 these are client transport states the server never sees — sending (in-flight), success (delivery
 confirmed), generic-error (the fallback when the server body carries no `error` string), network-error
-(the request never completed). A business rejection's copy comes from the server's `FormError`
+(the request never completed; without it, generic-error is shown). A business rejection's copy comes from the server's `FormError`
 (`error`, and per-field `fieldErrors`); the client prefers it and only falls back to the message
 attributes. Don't conflate the two.
 
