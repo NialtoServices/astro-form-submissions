@@ -75,7 +75,7 @@ export class R2PresignedUploadTarget implements UploadTarget {
     this.endpoint = new URL(options.endpoint ?? `https://${options.accountId}.r2.cloudflarestorage.com`)
   }
 
-  // MARK: - UploadTarget
+  // MARK: - UploadTarget API
 
   async prepare(upload: PendingUpload): Promise<UploadInstruction> {
     const objectURL = new URL(this.endpoint)

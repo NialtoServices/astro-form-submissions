@@ -42,11 +42,11 @@ interface Window {
  * attacker who varies the key faster than windows expire.
  */
 export class InMemoryRateLimiter implements RateLimiter {
-  // MARK: - Object Lifecycle
-
   private readonly windows = new Map<string, Window>()
   private readonly maxKeys: number
   private lastSweepAt = 0
+
+  // MARK: - Object Lifecycle
 
   /**
    * Creates an in-memory rate limiter.
@@ -62,7 +62,7 @@ export class InMemoryRateLimiter implements RateLimiter {
     this.maxKeys = options.maxKeys ?? DEFAULT_MAX_KEYS
   }
 
-  // MARK: - RateLimiter
+  // MARK: - RateLimiter API
 
   async limit({ key }: { key: string }): Promise<{ success: boolean }> {
     const now = Date.now()

@@ -37,7 +37,7 @@ export const DEFAULT_ERROR_COPY: Record<ToolkitErrorKey, string> = {
   uploadMissing: UploadedFiles.errors.uploadMissing.message
 }
 
-// MARK: - Resource inference
+// MARK: - Resource Inference
 
 /** Distributes a union into an intersection — used to merge each enricher's provided resource. */
 type UnionToIntersection<U> = (U extends unknown ? (arg: U) => void : never) extends (arg: infer I) => void ? I : never
@@ -418,7 +418,7 @@ export function createFormRoute<
   }
 }
 
-// MARK: - Lazy construction
+// MARK: - Lazy Construction
 
 /** Options for {@link defineLazyRoute}. */
 export interface LazyRouteOptions {

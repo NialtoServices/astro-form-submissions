@@ -66,7 +66,7 @@ const TURNSTILE_LOADER_GRACE_MS = 2_000
 const DEFAULT_DESCRIPTOR_FIELD = 'uploads'
 const DEFAULT_RECEIPT_FIELD = 'upload'
 
-// MARK: - Response parsing
+// MARK: - Response Parsing
 
 /** Parse a response body as JSON, treating any malformed payload as "no result". */
 function parseJSON(text: string): unknown {
@@ -93,7 +93,7 @@ function readFieldErrors(result: unknown): Record<string, string> {
   return fieldErrors
 }
 
-// MARK: - Field-error presentation
+// MARK: - Field-Error Presentation
 
 // Holds the slot id the script added to an input's `aria-describedby`, so clearing removes exactly that
 // token and leaves any author-set ones (a hint, say) in place.
@@ -282,7 +282,7 @@ function waitForTurnstileToken(formElement: HTMLFormElement): Promise<void> {
   })
 }
 
-// MARK: - Direct uploads
+// MARK: - Direct Uploads
 
 /** Where and how to upload one file, and the receipt proving it was admitted, as the upload route grants them. */
 interface GrantedUpload {
@@ -379,7 +379,7 @@ function formatUploadingMessage(template: string, current: number, total: number
     .replaceAll('{percent}', String(percent))
 }
 
-// MARK: - Form enhancement
+// MARK: - Form Enhancement
 
 /** The per-form elements and copy resolved once at enhancement time and shared by both handlers. */
 interface FormBinding {

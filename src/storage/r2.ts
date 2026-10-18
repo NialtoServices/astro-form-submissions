@@ -89,7 +89,7 @@ export class R2Storage implements FileStorage {
    */
   constructor(private readonly options: R2StorageOptions) {}
 
-  // MARK: - FileStorage
+  // MARK: - FileStorage API
 
   async put(key: string, file: File, options: PutOptions): Promise<void> {
     await this.options.bucket.put(this.prefixed(key), file, this.metadata(options))
@@ -150,7 +150,7 @@ export class R2Storage implements FileStorage {
     return this.options.bucket.delete(this.prefixed(key))
   }
 
-  // MARK: - Keys and metadata
+  // MARK: - Keys and Metadata
 
   private metadata(options: PutOptions) {
     return {

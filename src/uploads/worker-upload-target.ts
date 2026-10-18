@@ -54,7 +54,7 @@ export class WorkerUploadTarget implements UploadTarget {
     this.basePath = options.basePath.replace(/\/+$/, '')
   }
 
-  // MARK: - UploadTarget
+  // MARK: - UploadTarget API
 
   async prepare(upload: PendingUpload): Promise<UploadInstruction> {
     const token = await signUploadClaims(

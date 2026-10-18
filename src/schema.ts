@@ -17,7 +17,7 @@ export const validationFailed: FormError = formError(
   'Please correct the errors and try again.'
 )
 
-// MARK: - Schema input
+// MARK: - Schema Input
 
 /**
  * Context handed to a `schema` factory to build a request-specific validator — the i18n hook: read
@@ -79,7 +79,7 @@ export function resolveValidator(schema: SchemaInput, context: SchemaContext): S
   return '~standard' in schema ? schema : schema(context)
 }
 
-// MARK: - Form data flattening
+// MARK: - Form Data Flattening
 
 /**
  * Flatten form data into the trimmed plain object the schema validates: one value per field name,
@@ -110,7 +110,7 @@ export function formDataToObject(data: FormData): Record<string, string> {
   return object
 }
 
-// MARK: - Issue mapping
+// MARK: - Issue Mapping
 
 /** Normalize a Standard Schema issue path's first segment to the form field name. */
 function fieldName(path: StandardSchemaV1.Issue['path']): string | undefined {
