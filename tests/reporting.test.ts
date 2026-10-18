@@ -9,6 +9,7 @@ import {
   type FormErrorStage
 } from '#reporting.js'
 import { SubmissionVerdictError } from '#submission-verdict-error.js'
+import fc from 'fast-check'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 afterEach(() => {
@@ -273,4 +274,77 @@ describe('withReportingBudget', () => {
 
     expect(settled).toEqual(['first', 'second'])
   })
+
+  it('for any schedule of reports, waits no more than one timeout in all, and abandons none before then', async () => {
+    await fc.assert(
+      fc.asyncProperty(reportSchedule, async (schedule) => {
+        vi.useFakeTimers()
+        const origin = Date.now()
+        const startedAt: number[] = []
+        const settledAt: number[] = []
+        const hookCalls: number[] = []
+        const report = withReportingBudget(
+          containedReporter((error) => {
+            const index = error as number
+            hookCalls.push(index)
+            return hookFinishingAfter(schedule[index]!.hookMs)
+          })
+        )
+
+        schedule.forEach((entry, index) =>
+          setTimeout(() => {
+            startedAt[index] = Date.now() - origin
+            void report(index, 'delivery').then(() => {
+              settledAt[index] = Date.now() - origin
+            })
+          }, entry.startAfterMs)
+        )
+        await vi.advanceTimersByTimeAsync(60_000)
+        vi.useRealTimers()
+
+        const pending = schedule.map((_, index): [number, number] => [startedAt[index]!, settledAt[index]!])
+        expect(hookCalls.toSorted()).toEqual(schedule.map((_, index) => index))
+        expect(settledAt.filter((time) => time !== undefined)).toHaveLength(schedule.length)
+        expect(pendingTime(pending, Number.POSITIVE_INFINITY)).toBeLessThanOrEqual(REPORTER_TIMEOUT_MS)
+        schedule.forEach((entry, index) => {
+          if (settledAt[index]! >= startedAt[index]! + entry.hookMs) return
+
+          expect(pendingTime(pending, settledAt[index]!)).toBe(REPORTER_TIMEOUT_MS)
+        })
+      })
+    )
+  })
 })
+
+/** Up to five reports, each made at some point in a slow request, with a hook that may take a while or never finish. */
+const reportSchedule = fc.array(
+  fc.record({
+    startAfterMs: fc.nat({ max: 12_000 }),
+    hookMs: fc.oneof(fc.nat({ max: 7_000 }), fc.constant(Number.POSITIVE_INFINITY))
+  }),
+  { minLength: 1, maxLength: 5 }
+)
+
+/** A hook's promise, settling after `hookMs`, or never when it's infinite. */
+function hookFinishingAfter(hookMs: number): Promise<void> {
+  if (!Number.isFinite(hookMs)) return new Promise<void>(() => {})
+
+  return new Promise<void>((resolve) => setTimeout(resolve, hookMs))
+}
+
+/** How long at least one report was pending, up to `until`, given each report's pending interval. */
+function pendingTime(intervals: [number, number][], until: number): number {
+  const clipped = intervals
+    .map(([start, end]): [number, number] => [start, Math.min(end, until)])
+    .filter(([start, end]) => end > start)
+    .toSorted(([first], [second]) => first - second)
+
+  let total = 0
+  let coveredUntil = Number.NEGATIVE_INFINITY
+  for (const [start, end] of clipped) {
+    total += Math.max(0, end - Math.max(start, coveredUntil))
+    coveredUntil = Math.max(coveredUntil, end)
+  }
+
+  return total
+}
