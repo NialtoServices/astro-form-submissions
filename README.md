@@ -648,7 +648,7 @@ the trusted `context.siteURL`.
   An exposing delivery whose outcome is unknown (its destination timed out or couldn't be reached, a
   `DestinationUnreachableError`) may still have landed, so it keeps the files too and reports that it
   did; the submission still fails, and a retry uploads afresh.
-  For `EmailDispatcher` this now **derives from the templates**: the built-in
+  For `EmailDispatcher` this **derives from the templates**: the built-in
   `submissionNotificationTemplates` / `submissionAcknowledgementTemplates` mark themselves as exposing
   resources exactly when you give them an `attachments` field to render — so a plain acknowledgement with
   no `attachments` is `false` and never orphans files, while a notification that lists uploads is `true`,
@@ -878,7 +878,8 @@ multiple />`. The enhancement already submits multipart, and the route already r
 what's left is to store them and expose download links to the dispatchers. That's an **enricher**: it
 runs after the inspectors (so an unverified/bot caller never triggers an upload), validates the
 files, moves them to storage, and exposes the resulting links on `context.resources` — with
-**rollback**, so if delivery later fails the stored objects are deleted rather than orphaned.
+**rollback**, so files no delivery sent are deleted rather than orphaned (`exposesResources` under
+[Dispatchers](#dispatchers) gives the rule).
 
 > **Storage today is Cloudflare R2.** `R2Storage` is the only shipped `FileStorage` adapter, so the
 > examples below use a Cloudflare R2 binding — `env` is the request-time binding from

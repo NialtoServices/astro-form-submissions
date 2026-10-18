@@ -54,8 +54,9 @@ export interface Dispatcher<E extends FormSubmission = FormSubmission, A = objec
 
   /**
    * Whether this delivery carries the enrichers' acquired resources (e.g. upload links) to a recipient.
-   * Files survive if any exposing delivery succeeds, else roll back; set `false` for a notification that
-   * doesn't carry them. Default per-implementation — `EmailDispatcher` derives it from its templates
+   * Files survive if any exposing delivery succeeds, or fails with a {@link DestinationUnreachableError}
+   * (throw one when the outcome is unknown, such as a timeout), else roll back; set `false` for a
+   * notification that doesn't carry them. Default per-implementation — `EmailDispatcher` derives it from its templates
    * (explicit option → the template's `attachments`-derived marker → exposes).
    */
   readonly exposesResources?: boolean

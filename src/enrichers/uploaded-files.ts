@@ -55,8 +55,8 @@ export interface UploadedFilesOptions<E extends FormSubmission = FormSubmission,
  * {@link createUploadRoute}). The submission carries a signed receipt per file instead of its bytes; this
  * verifies each receipt, confirms the stored object exists at the admitted size, sniffs its leading bytes
  * against `accept`, and exposes signed download links under `context.resources[attachTo]` — with the same
- * rollback as {@link FileUploads}: the objects are kept once a resource-exposing delivery succeeds, and
- * deleted otherwise.
+ * rollback as {@link FileUploads}: the objects are kept once a resource-exposing delivery succeeds or may have
+ * landed, and deleted otherwise.
  *
  * Each receipt works once: the first submission to present it claims its object through the storage's
  * `claim`, and only claimed objects are ever deleted. A refused submission deletes the objects it claimed, so

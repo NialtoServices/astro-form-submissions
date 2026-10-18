@@ -67,9 +67,10 @@ export interface FileUploadsOptions<E extends FormSubmission = FormSubmission, K
  * An enricher that validates uploaded files (count, size, magic-byte type), moves them to storage,
  * and exposes the resulting download links to the dispatchers under `context.resources[attachTo]` —
  * with rollback keyed on delivery: the route **keeps** the stored objects when a resource-exposing
- * delivery succeeds (deleting them would dangle a recipient's links, even if a required sibling
- * dispatcher later fails), and **deletes** them otherwise — a later enricher rejects, every delivery
- * fails, or only non-exposing deliveries succeed.
+ * delivery succeeds or may have landed (it failed with a `DestinationUnreachableError`, so its outcome is
+ * unknown), since deleting them would dangle a recipient's links even if a required sibling dispatcher later
+ * fails; it **deletes** them otherwise — a later enricher rejects, every exposing delivery definitely fails,
+ * or only non-exposing deliveries succeed.
  *
  * Validation failures are clean client refusals (`tooManyFiles` / `fileTooLarge` / `fileType`). A
  * storage failure fails the request with `send` (502) — the same key the email dispatcher uses, so

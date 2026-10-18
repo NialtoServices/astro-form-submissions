@@ -390,9 +390,10 @@ export function createFormRoute<
         )
       }
 
-      // Roll back acquired resources unless a delivery that *carries* them succeeded: deleting files
-      // whose links a recipient already received would leave dead links. Files no exposing delivery sent
-      // (all failed, all skipped, or only non-exposing notifications succeeded) are orphans.
+      // Roll back acquired resources unless a delivery that *carries* them succeeded or may have landed:
+      // deleting files whose links a recipient already received would leave dead links. Files no exposing
+      // delivery sent (all definitely failed, all skipped, or only non-exposing notifications succeeded)
+      // are orphans.
       if (!resourcesExposed && rollbacks.length > 0) await runRollbacks()
 
       // A `required` failure always fails the request; beyond that, if every *attempted* delivery
