@@ -16,9 +16,9 @@ export interface CreateUploadPutRouteConfig {
   tokenParam?: string
 
   /**
-   * Called with a failed write (stage `upload`) before the 502 is returned. Awaited and contained, so a
-   * reporter that throws can't change the response. The same contract as the form route's `onError`;
-   * default {@link defaultErrorReporter}.
+   * Called with a failed write (stage `upload`) before the 502 is returned. Awaited for up to 5 seconds and
+   * contained, so a reporter that throws or stalls can't change the response.
+   * The same contract as the form route's `onError`; default {@link defaultErrorReporter}.
    */
   onError?: ErrorReporter
 }

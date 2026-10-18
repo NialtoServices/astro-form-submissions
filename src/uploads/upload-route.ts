@@ -55,7 +55,10 @@ export interface UploadRouteConfig<S extends SchemaInput> extends AdmissionConfi
    */
   accept?: FileMatcher[]
 
-  /** Called when an error would otherwise be swallowed. The same contract as the form route's `onError`. */
+  /**
+   * Called with each failure the route handles itself and each refused, dropped or quarantined request. The
+   * same contract as the form route's `onError`.
+   */
   onError?: ErrorReporter
 }
 

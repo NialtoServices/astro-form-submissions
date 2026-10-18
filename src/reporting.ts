@@ -2,15 +2,18 @@ import { OperationalError } from '#operational-error.js'
 import { SubmissionVerdictError, VERDICT_PAST_TENSE } from '#submission-verdict-error.js'
 
 /**
- * Which swallowed failure an `onError` call describes; `build` is a failed {@link defineLazyRoute}
- * build, reported through {@link LazyRouteOptions.onError}. `validation` is a body that won't parse or a
- * schema refusal, and `upload` a failed write on {@link createUploadPutRoute} or a refusal on
- * {@link createUploadRoute}.
+ * The stage an `onError` call comes from: where a handled failure happened, or which stage turned a submission
+ * away. `build` is a failed {@link defineLazyRoute} build, reported through {@link LazyRouteOptions.onError}.
+ * `validation` is a body that won't parse or a schema refusal, and `upload` a failed write on
+ * {@link createUploadPutRoute} or a refusal on {@link createUploadRoute}.
  */
 export type FormErrorStage =
   'build' | 'guard' | 'validation' | 'inspection' | 'enrichment' | 'delivery' | 'upload' | 'unexpected'
 
-/** A route's error hook: called with each swallowed failure and the stage it happened in. */
+/**
+ * A route's error hook: called with each failure the route handles itself, and with each refused, dropped or
+ * quarantined submission as a {@link SubmissionVerdictError}, together with the stage it came from.
+ */
 export type ErrorReporter = (error: unknown, context: { stage: FormErrorStage }) => void | Promise<void>
 
 // A bounded machine-identifier shape for `error.code`: short, and free of the spaces/`@`/`=` that

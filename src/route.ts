@@ -115,13 +115,15 @@ export interface FormRouteConfig<
   errors?: FormErrors
 
   /**
-   * Called when an error would otherwise be swallowed (a skipped guard/inspector, a rolled-back
-   * enricher, a failed delivery, an unexpected throw). May be async; contained, so it can never change
-   * the response.
+   * Called with each failure the route handles itself (a skipped guard or inspector, a rolled-back
+   * enricher, a failed delivery, an unexpected throw), and with each refused, dropped or quarantined
+   * submission as a {@link SubmissionVerdictError}. May be async; awaited for up to 5 seconds and
+   * contained, so it can never change or hold up the response.
    *
-   * The default logs a **PII-safe summary** (stage, error class, any `code`/`status`) — never the
-   * message or object, which can quote submission data. Override it to log the full error where your
-   * pipeline can hold that PII.
+   * The default, {@link defaultErrorReporter}, writes one **PII-safe line** per call: verdicts on
+   * `console.warn`, failures on `console.error`, with the stage, error class, codes and safe details, never
+   * a message, which can quote submission data. Override it to log the full error where your pipeline can
+   * hold that PII.
    */
   onError?: ErrorReporter
 }
