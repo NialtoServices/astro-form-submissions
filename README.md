@@ -744,7 +744,7 @@ entirely:
 templates: submissionNotificationTemplates<ContactEnquiry>({
   fields: ['name', 'email', 'phone', 'company', 'message'], // a free-text field is just a field
   formName: 'Contact form', // the email's title; also appears in the subject and preview
-  brandName: 'Acme Ltd' // optional wordmark above the card (replyTo/from/to live on the EmailDispatcher)
+  brandName: 'Example Ltd' // optional wordmark above the card (replyTo/from/to live on the EmailDispatcher)
   // subject: 'New enquiry from {{name}}'  — default mentions formName and Astro `site`'s host (left out without it)
   // submittedAt: (submission, context) => …  — meta-line timestamp; defaults to the submission's arrival time (stamped once per request and shared by every stage, so all emails for one submission agree), formatted in UTC
   // attachments: 'files'  — renders the FileLink[] a FileUploads enricher exposed on context.resources.files (needs <ContactEnquiry, 'files'>)
@@ -834,7 +834,7 @@ new EmailDispatcher({
     formName: 'Contact form',
     greeting: () => 'Hello,', // optional; avoid interpolating free text such as the sender's name
     message: "Thanks — we'll reply within one working day.", // optional; overrides the default line
-    contact: { email: 'support@acme.com', address: '1 High St, London' } // optional in-card contact details
+    contact: { email: 'support@example.com', address: '1 High St, London' } // optional in-card contact details
   }),
   from: process.env.POSTMARK_FROM!,
   to: (submission) => submission.email, // ← the sender (schema-validated), via the `to` resolver

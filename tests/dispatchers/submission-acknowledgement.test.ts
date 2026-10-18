@@ -137,13 +137,13 @@ describe('submissionAcknowledgementTemplates', () => {
     const minimalSubmission = { name: 'Ada' }
     const withContact = submissionAcknowledgementTemplates({
       message: 'Thanks!',
-      contact: { email: 'support@acme.test', phone: '+44 20 1234 5678', address: '1 High St, London' }
+      contact: { email: 'support@acme.test', phone: '+44 20 7946 0000', address: '1 High St, London' }
     })
     const html = withContact.html(minimalSubmission, DEFAULT_CONTEXT)
 
     expect(html).toContain('mailto:support@acme.test')
-    expect(html).toContain('href="tel:+442012345678"')
-    expect(html).toContain('+44 20 1234 5678')
+    expect(html).toContain('href="tel:+442079460000"')
+    expect(html).toContain('+44 20 7946 0000')
     expect(html).toContain('1 High St, London')
     expect(withContact.text(minimalSubmission, DEFAULT_CONTEXT)).toContain('support@acme.test')
     expect(withContact.text(minimalSubmission, DEFAULT_CONTEXT)).toContain('1 High St, London')

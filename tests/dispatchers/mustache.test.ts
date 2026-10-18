@@ -54,7 +54,7 @@ describe('mustacheTemplates', () => {
       text: '{{#phone}}Phone: {{phone}}{{/phone}}',
       html: '-'
     })
-    expect(templates.text({ ...submission, phone: '01234 567890' }, dispatchContext())).toBe('Phone: 01234 567890')
+    expect(templates.text({ ...submission, phone: '01632 960000' }, dispatchContext())).toBe('Phone: 01632 960000')
   })
 
   it('renders through the view transform when provided', () => {
