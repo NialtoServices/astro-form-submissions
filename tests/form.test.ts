@@ -8,7 +8,8 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 /** Mount a standard enhanced form and return handles to interact with it. */
-function mountForm({ successPanel = false } = {}) {
+function mountForm({ successPanel = false, successPanelTabindex = true } = {}) {
+  const panelTabindex = successPanelTabindex ? ' tabindex="-1"' : ''
   document.body.innerHTML = `
     <form data-astro-form action="/api/contact" method="POST">
       <input type="text" name="name" />
@@ -21,7 +22,7 @@ function mountForm({ successPanel = false } = {}) {
         data-astro-form-message-generic-error="Something went wrong."
         data-astro-form-message-network-error="Could not reach the server."
       ></p>
-    </form>${successPanel ? '<div data-astro-form-success role="status" tabindex="-1" hidden><h2>Thanks!</h2></div>' : ''}`
+    </form>${successPanel ? `<div data-astro-form-success role="status"${panelTabindex} hidden><h2>Thanks!</h2></div>` : ''}`
   initializeForms()
 
   const form = document.querySelector<HTMLFormElement>('form[data-astro-form]')!
@@ -707,6 +708,18 @@ describe('form script success panel', () => {
     expect(document.contains(form)).toBe(false)
     expect(document.activeElement).toBe(panel)
     expect(panel.textContent).toBe('Thanks!')
+  })
+
+  it('focuses a panel the site gave no tabindex', async () => {
+    stubFetch(async () => jsonResponse({ ok: true }))
+    const { submit } = mountForm({ successPanel: true, successPanelTabindex: false })
+    const panel = document.querySelector<HTMLElement>('[data-astro-form-success]')!
+
+    submit()
+    await vi.waitFor(() => expect(panel.hidden).toBe(false))
+
+    expect(panel.getAttribute('tabindex')).toBe('-1')
+    expect(document.activeElement).toBe(panel)
   })
 
   it('keeps the inline status behaviour when no panel is present', async () => {

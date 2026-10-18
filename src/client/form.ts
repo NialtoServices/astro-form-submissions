@@ -468,7 +468,9 @@ function showSuccess(binding: FormBinding): void {
       successElement.hidden = false
       formElement.replaceWith(successElement)
 
-      // The status live-region left with the form; focusing the panel announces it instead.
+      // The status live-region left with the form; focusing the panel announces it instead. A
+      // non-interactive panel needs a tabindex to take that focus; a site-supplied one is left alone.
+      if (!successElement.hasAttribute('tabindex')) successElement.setAttribute('tabindex', '-1')
       successElement.focus()
     } else {
       statusElement.textContent = messages.success ?? ''

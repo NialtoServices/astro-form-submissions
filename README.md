@@ -1265,7 +1265,8 @@ Two optional protections need **extra markup in your form** — nothing is auto-
 By default a successful submission shows the success copy in the status element and resets the form.
 To replace the form entirely instead, add an element carrying `data-astro-form-success` **immediately
 after** the form — keep it hidden — and on success the whole `<form>` is swapped out for it (and
-focused, so screen readers announce it):
+focused, so screen readers announce it; a panel without a `tabindex` is given `tabindex='-1'` so it can
+take focus):
 
 ```astro
 <form data-astro-form action='/api/contact' method='POST'>
