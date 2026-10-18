@@ -4,8 +4,8 @@ import { getViteConfig } from 'astro/config'
 
 const SRC_DIR = fileURLToPath(new URL('./src', import.meta.url))
 
-// getViteConfig reuses Astro's Vite resolution so tests run against the same module graph the
-// consuming site's build would produce.
+// getViteConfig gives the tests Astro's own Vite setup, as a consuming site's build has. The modules under
+// test are the TypeScript source; vitest.dist.config.ts runs the same suite against the compiled package.
 export default getViteConfig({
   resolve: {
     // The package.json "imports" map resolves "#*" to ./dist for consumers; tests must instead run
