@@ -11,7 +11,8 @@
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
-    "types": []
+    "types": [],
+    "customConditions": ["astro-form-submissions:source"]
   },
   "include": ["src", "tests", "vitest.config.ts", "vitest.dist.config.ts"]
 }

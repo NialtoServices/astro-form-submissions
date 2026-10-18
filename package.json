@@ -24,7 +24,7 @@
   },
   "imports": {
     "#*": {
-      "types": "./src/*",
+      "astro-form-submissions:source": "./src/*",
       "default": "./dist/*"
     }
   },
