@@ -717,12 +717,20 @@ async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<voi
 
 /**
  * Resolve one form's status/success elements and copy, set the accessibility defaults, and bind its input
- * and submit handlers. Returns without marking the form bound when the required `[data-astro-form-status]`
- * element is absent, so a later call retries it.
+ * and submit handlers. Warns and returns without marking the form bound when the required
+ * `[data-astro-form-status]` element is absent, so a later call retries it.
  */
 function enhanceForm(formElement: HTMLFormElement): void {
   const statusElement = formElement.querySelector<HTMLElement>('[data-astro-form-status]')
-  if (!statusElement) return
+  if (!statusElement) {
+    // Unenhanced, the form posts natively and the visitor lands on the route's raw JSON, so the cause has to
+    // surface somewhere a developer will look.
+    console.warn(
+      '[astro-form-submissions] Not enhancing a form with no [data-astro-form-status] element inside it',
+      formElement
+    )
+    return
+  }
 
   // An element carrying `data-astro-form-success` immediately after the form is the (hidden) panel a
   // successful submission swaps the whole <form> out for.

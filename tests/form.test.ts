@@ -128,6 +128,25 @@ describe('form script', () => {
     await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
   })
 
+  it('warns and leaves a form unenhanced when it has no status element', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    document.body.innerHTML = `
+      <form data-astro-form action="/api/contact" method="POST">
+        <input type="text" name="name" value="Ada" />
+        <button type="submit">Send</button>
+      </form>`
+    const form = document.querySelector<HTMLFormElement>('form')!
+
+    initializeForms()
+    const submitted = form.dispatchEvent(new Event('submit', { cancelable: true }))
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('[data-astro-form-status]'), form)
+    expect(form.dataset.astroFormBound).toBeUndefined()
+    expect(submitted).toBe(true)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
   it('marks the status element as a polite live region when the markup omits it', () => {
     const { status } = mountForm()
     expect(status.getAttribute('role')).toBe('status')
