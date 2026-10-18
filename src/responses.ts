@@ -1,6 +1,6 @@
 import { resolveCopy, type CopyContext, type FormError, type FormErrors, type ValidationFailure } from '#errors.js'
 
-// `no-store` so a proxy/CDN never caches a per-submission success or error response.
+/** `no-store` so a proxy/CDN never caches a per-submission success or error response. */
 const JSON_HEADERS = {
   'Cache-Control': 'no-store',
   'Content-Type': 'application/json'

@@ -5,9 +5,11 @@ import { resolveField, type FieldSpec } from '#dispatchers/fields.js'
 import type { FormSubmission } from '#pipeline.js'
 import { clamp } from '#strings.js'
 
-// Discord's embed limits. Exceeding any one rejects the whole embed with a 400, so every user-controlled component is
-// clamped instead.
-// => https://discord.com/developers/docs/resources/message#embed-object-embed-limits
+/**
+ * Discord's embed limits. Exceeding any one rejects the whole embed with a 400, so every user-controlled component is
+ * clamped instead.
+ * => https://discord.com/developers/docs/resources/message#embed-object-embed-limits
+ */
 const TITLE_LIMIT = 256
 const DESCRIPTION_LIMIT = 4096
 const FIELDS_LIMIT = 25

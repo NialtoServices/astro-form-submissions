@@ -59,7 +59,7 @@ function base64urlToBytes(value: string): Uint8Array<ArrayBuffer> {
   return bytes
 }
 
-// Encode strings as UTF-8 bytes before base64url so non-ASCII claim values survive the round trip.
+/** Encode strings as UTF-8 bytes before base64url so non-ASCII claim values survive the round trip. */
 const base64urlFromString = (value: string) => base64urlFromBytes(encoder.encode(value))
 const base64urlToString = (value: string) => decoder.decode(base64urlToBytes(value))
 

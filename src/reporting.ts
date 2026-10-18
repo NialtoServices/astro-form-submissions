@@ -16,9 +16,11 @@ export type FormErrorStage =
  */
 export type ErrorReporter = (error: unknown, context: { stage: FormErrorStage }) => void | Promise<void>
 
-// A bounded machine-identifier shape for `error.code`: short, and free of the spaces/`@`/`=` that
-// free-text or interpolated submission data would carry. Provider `code`s aren't guaranteed PII-free
-// (one set `code = 'recipient=ada@example.com'`), so anything outside this is dropped.
+/**
+ * A bounded machine-identifier shape for `error.code`: short, and free of the spaces/`@`/`=` that
+ * free-text or interpolated submission data would carry. Provider `code`s aren't guaranteed PII-free
+ * (one set `code = 'recipient=ada@example.com'`), so anything outside this is dropped.
+ */
 const SAFE_ERROR_CODE = /^[A-Za-z0-9_.:-]{1,64}$/
 
 /** Whether a value can be logged as a machine identifier: a number, or a string of {@link SAFE_ERROR_CODE} shape. */

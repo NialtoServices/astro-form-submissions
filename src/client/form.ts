@@ -1,66 +1,70 @@
-/**
- * Progressive-enhancement submit handling for a form the site owns entirely.
- *
- * The package ships no markup: you write your own `<form>` (and its honeypot input, status element,
- * and any Turnstile container), mark it with the data attributes below, and call
- * {@link initializeForms} to enhance it. The markup is yours, so ordinary scoped styles reach it; the
- * only contract is the `data-astro-form-*` hooks, which are behavioural, not styling handles.
- *
- * Import it from a `<script>` on the page and re-run it on Astro View Transitions:
- *
- * ```ts
- * import { initializeForms } from '@nialto-services/astro-form-submissions/form'
- * initializeForms()
- * document.addEventListener('astro:page-load', initializeForms)
- * ```
- *
- * ## The contract
- *
- * - `[data-astro-form]` — the `<form>` to enhance (required).
- * - `[data-astro-form-status]` — a live-region element inside the form for status copy (required).
- *   Carries the copy as `data-astro-form-message-{sending,success,generic-error,network-error}`, and
- *   receives `data-astro-form-state` of `pending` / `success` / `error` while submitting.
- * - `[data-astro-form-success]` — an optional element immediately after the form; when present, a
- *   successful submission swaps the whole `<form>` out for it (and focuses it).
- * - `[data-astro-form-field-error-for="<name>"]` — an optional co-located slot the script fills with
- *   that field's message and links via `aria-describedby`.
- * - `[data-astro-form-field-error-summary]` — an optional element the script fills with a list of
- *   every field's message, each linking to its field.
- * - `data-astro-form-submit-timeout` — optional per-form request timeout override, in milliseconds
- *   (a non-positive or non-finite value is ignored in favour of the default). A direct upload uses it as
- *   an idle deadline: it fails once that long passes with no progress.
- * - `.cf-turnstile` — an optional Turnstile widget container (Cloudflare's own convention); the
- *   script refreshes it after each attempt so a retry never resubmits a spent token.
- *
- * ## Direct uploads (opt-in)
- *
- * - `data-astro-form-upload-action` on the `<form>` — the upload route (see `createUploadRoute`). With it,
- *   file inputs marked `data-astro-form-upload` never join a submission; when any of them holds files, a
- *   submit first asks the upload route where to send each one, uploads them with progress, refreshes
- *   Turnstile, then posts the form with one receipt per file.
- * - `data-astro-form-upload-field` on the `<form>` — the field the file descriptors are posted to the upload
- *   route under. Default `uploads`, matching `createUploadRoute`'s `field`.
- * - `data-astro-form-upload-receipt-field` on the `<form>` — the field the receipts are posted under.
- *   Default `upload`, matching the `UploadedFiles` enricher.
- * - `data-astro-form-message-uploading` on the status element — the copy shown while files upload, with
- *   `{current}`, `{total}` and `{percent}` filled in.
- * - `astro-form:upload-progress` — emitted on the form as bytes go up, with
- *   `{ current, total, loaded, size, percent }`.
- */
+// Progressive-enhancement submit handling for a form the site owns entirely.
+//
+// The package ships no markup: you write your own `<form>` (and its honeypot input, status element,
+// and any Turnstile container), mark it with the data attributes below, and call
+// `initializeForms` to enhance it. The markup is yours, so ordinary scoped styles reach it; the
+// only contract is the `data-astro-form-*` hooks, which are behavioural, not styling handles.
+//
+// Import it from a `<script>` on the page and re-run it on Astro View Transitions:
+//
+// ```ts
+// import { initializeForms } from '@nialto-services/astro-form-submissions/form'
+// initializeForms()
+// document.addEventListener('astro:page-load', initializeForms)
+// ```
+//
+// ## The contract
+//
+// - `[data-astro-form]` — the `<form>` to enhance (required).
+// - `[data-astro-form-status]` — a live-region element inside the form for status copy (required).
+//   Carries the copy as `data-astro-form-message-{sending,success,generic-error,network-error}`, and
+//   receives `data-astro-form-state` of `pending` / `success` / `error` while submitting.
+// - `[data-astro-form-success]` — an optional element immediately after the form; when present, a
+//   successful submission swaps the whole `<form>` out for it (and focuses it).
+// - `[data-astro-form-field-error-for="<name>"]` — an optional co-located slot the script fills with
+//   that field's message and links via `aria-describedby`.
+// - `[data-astro-form-field-error-summary]` — an optional element the script fills with a list of
+//   every field's message, each linking to its field.
+// - `data-astro-form-submit-timeout` — optional per-form request timeout override, in milliseconds
+//   (a non-positive or non-finite value is ignored in favour of the default). A direct upload uses it as
+//   an idle deadline: it fails once that long passes with no progress.
+// - `.cf-turnstile` — an optional Turnstile widget container (Cloudflare's own convention); the
+//   script refreshes it after each attempt so a retry never resubmits a spent token.
+//
+// ## Direct uploads (opt-in)
+//
+// - `data-astro-form-upload-action` on the `<form>` — the upload route (see `createUploadRoute`). With it,
+//   file inputs marked `data-astro-form-upload` never join a submission; when any of them holds files, a
+//   submit first asks the upload route where to send each one, uploads them with progress, refreshes
+//   Turnstile, then posts the form with one receipt per file.
+// - `data-astro-form-upload-field` on the `<form>` — the field the file descriptors are posted to the upload
+//   route under. Default `uploads`, matching `createUploadRoute`'s `field`.
+// - `data-astro-form-upload-receipt-field` on the `<form>` — the field the receipts are posted under.
+//   Default `upload`, matching the `UploadedFiles` enricher.
+// - `data-astro-form-message-uploading` on the status element — the copy shown while files upload, with
+//   `{current}`, `{total}` and `{percent}` filled in.
+// - `astro-form:upload-progress` — emitted on the form as bytes go up, with
+//   `{ current, total, loaded, size, percent }`.
 
 // MARK: - Configuration
 
-// Browsers provide no application deadline of their own: a stalled connection would otherwise
-// leave the form pending for the page lifetime. Override per form via `data-astro-form-submit-timeout` (ms).
+/**
+ * Browsers provide no application deadline of their own: a stalled connection would otherwise
+ * leave the form pending for the page lifetime. Override per form via `data-astro-form-submit-timeout` (ms).
+ */
 const DEFAULT_SUBMIT_TIMEOUT_MS = 30_000
 
-// A refreshed Turnstile widget usually issues a new token within a second or two; past this, the
-// submission goes ahead and the server's verification error explains the failure.
+/**
+ * A refreshed Turnstile widget usually issues a new token within a second or two; past this, the
+ * submission goes ahead and the server's verification error explains the failure.
+ */
 const TURNSTILE_TOKEN_TIMEOUT_MS = 30_000
 const TURNSTILE_POLL_INTERVAL_MS = 100
 
-// The loader is usually `async defer`, so it gets a moment to arrive. Past this, a container with no
-// rendered widget and no loader means the loader was blocked or omitted, and no token is coming.
+/**
+ * The loader is usually `async defer`, so it gets a moment to arrive. Past this, a container with no
+ * rendered widget and no loader means the loader was blocked or omitted, and no token is coming.
+ */
 const TURNSTILE_LOADER_GRACE_MS = 2_000
 
 const DEFAULT_DESCRIPTOR_FIELD = 'uploads'
@@ -95,8 +99,10 @@ function readFieldErrors(result: unknown): Record<string, string> {
 
 // MARK: - Field-Error Presentation
 
-// Holds the slot id the script added to an input's `aria-describedby`, so clearing removes exactly that
-// token and leaves any author-set ones (a hint, say) in place.
+/**
+ * Holds the slot id the script added to an input's `aria-describedby`, so clearing removes exactly that
+ * token and leaves any author-set ones (a hint, say) in place.
+ */
 const DESCRIBED_MARKER = 'astroFormDescribed'
 
 /** The ids in an input's `aria-describedby`. */

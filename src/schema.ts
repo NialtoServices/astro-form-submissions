@@ -2,8 +2,10 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { formError, resolveCopy, type FormError, type FormErrors, type ValidationFailure } from '#errors.js'
 import type { FormSubmission } from '#pipeline.js'
 
-// A form field literally named `__proto__` (etc.) must not reach the validated object's prototype;
-// the same keys are skipped when mapping field errors below.
+/**
+ * A form field literally named `__proto__` (etc.) must not reach the validated object's prototype;
+ * the same keys are skipped when mapping field errors below.
+ */
 const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
 /**
