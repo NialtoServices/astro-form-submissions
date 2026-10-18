@@ -2,18 +2,31 @@
 const FALLBACK_FILENAME = 'upload'
 
 /**
+ * The bidirectional text controls, which can make a name read as something it isn't (`invoice[U+202E]fdp.js`
+ * shows as `invoicesj.pdf`). Other invisible format characters, such as the joiners in emoji sequences and in
+ * Persian and Kurdish words, are kept.
+ */
+const BIDI_CONTROLS = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu
+
+/**
  * The filename stored with an upload and shown in its link: the browser's name made well-formed (a lone
  * UTF-16 surrogate becomes U+FFFD, since `encodeURIComponent` throws on one), without CR, LF or `"`, which
- * would break a header or a quoted attribute, and without invisible format characters such as U+202E, which
- * can make a name read as something it isn't, or `upload` when nothing is left. With `extensions`, the name
- * also ends in one of them. Shared by both upload paths so a file is named the same way whichever one it took.
+ * would break a header or a quoted attribute, without bidirectional text controls, and without trailing dots
+ * or whitespace, which Windows drops when saving (so `invoice.js.` would be saved as `invoice.js`); or
+ * `upload` when nothing is left. With `extensions`, the name also ends in one of them. Shared by both upload
+ * paths so a file is named the same way whichever one it took.
  *
  * @param name - The filename the browser reported.
  * @param extensions - The extensions the file's checked type is saved under, if known.
  * @returns The name to store.
  */
 export function storedFilename(name: string, extensions?: readonly string[]): string {
-  const cleaned = name.toWellFormed().replace(/[\r\n"\p{Cf}]/gu, '') || FALLBACK_FILENAME
+  const cleaned =
+    name
+      .toWellFormed()
+      .replace(/[\r\n"]/g, '')
+      .replace(BIDI_CONTROLS, '')
+      .replace(/[.\s]+$/u, '') || FALLBACK_FILENAME
   const preferred = extensions?.[0]
   if (preferred === undefined || hasExtension(cleaned, extensions)) return cleaned
 
@@ -21,26 +34,27 @@ export function storedFilename(name: string, extensions?: readonly string[]): st
 }
 
 /**
- * Whether a filename ends in one of `extensions`, ignoring case.
+ * Whether a filename ends in one of `extensions`, ignoring case on both sides.
  *
  * @param name - The filename to check.
  * @param extensions - The accepted extensions, without the dot.
  * @returns `true` when the name's last extension is among them.
  */
 export function hasExtension(name: string, extensions: readonly string[] | undefined): boolean {
-  const dot = name.lastIndexOf('.')
-  if (dot <= 0 || !extensions) return false
+  const dotIndex = name.lastIndexOf('.')
+  if (dotIndex < 0 || !extensions) return false
 
-  return extensions.includes(name.slice(dot + 1).toLowerCase())
+  const extension = name.slice(dotIndex + 1).toLowerCase()
+  return extensions.some((candidate) => candidate.toLowerCase() === extension)
 }
 
 /**
- * Whether a filename carries any extension at all.
+ * Whether a filename carries any extension at all. A leading dot counts, since Windows opens `.js` as a script.
  *
  * @param name - The filename to check.
- * @returns `true` when something follows a dot that isn't the first or last character.
+ * @returns `true` when something follows the last dot.
  */
 export function hasAnyExtension(name: string): boolean {
-  const dot = name.lastIndexOf('.')
-  return dot > 0 && dot < name.length - 1
+  const dotIndex = name.lastIndexOf('.')
+  return dotIndex >= 0 && dotIndex < name.length - 1
 }

@@ -942,8 +942,9 @@ they drift. The package also exports the enricher's own defaults (`DEFAULT_MAX_F
 
 Files are **content-sniffed by magic bytes** (never the client MIME), and a file whose name doesn't end
 in its checked type's extension has it appended, so `invoice.js` that is really a GIF is stored and linked as
-`invoice.js.gif` and opens as an image when saved. Invisible formatting characters that can disguise a name
-are removed. Validation failures return `tooManyFiles` / `fileTooLarge` / `fileType`. The links are
+`invoice.js.gif` and opens as an image when saved. Bidirectional text controls that can disguise a name are
+removed, as are trailing dots and spaces, which Windows drops when saving. A matcher of your own needs an
+`extensions` list for this; without one, names are kept as given. Validation failures return `tooManyFiles` / `fileTooLarge` / `fileType`. The links are
 signed, tamper-proof, and non-guessable — serve them from a companion route (`defineLazyRoute` handles
 the Cloudflare request-time binding, as for the form route):
 

@@ -138,16 +138,19 @@ describe('UploadedFiles', () => {
     ])
   })
 
-  it('refuses opaque bytes whose name claims another type, since the stored name is final', async () => {
-    const { enricher, bucket } = setup()
-    const disguised = { ...photo, name: 'invoice.js', type: '' }
-    const { receipts, prepared } = await admit([disguised])
-    store(bucket, prepared, [disguised])
+  it.each(['invoice.js', 'invoice.js.', 'invoice.hta. ', '.js'])(
+    'refuses opaque bytes named %j for another type, since the stored name is final',
+    async (name) => {
+      const { enricher, bucket } = setup()
+      const disguised = { ...photo, name, type: '' }
+      const { receipts, prepared } = await admit([disguised])
+      store(bucket, prepared, [disguised])
 
-    const result = await enricher.enrich({ name: 'Ada' }, contextWith(receipts))
+      const result = await enricher.enrich({ name: 'Ada' }, contextWith(receipts))
 
-    expect(result).toMatchObject({ reject: { key: 'fileType' }, code: 'uploaded-files.extension-mismatch' })
-  })
+      expect(result).toMatchObject({ reject: { key: 'fileType' }, code: 'uploaded-files.extension-mismatch' })
+    }
+  )
 
   it('accepts opaque bytes whose name carries no extension at all', async () => {
     const { enricher, bucket } = setup()

@@ -20,9 +20,9 @@ export interface FileMatcher {
   contentType: string
 
   /**
-   * The extensions a file of this type is saved under, without the dot, most common first. A stored name
-   * that doesn't end in one of them gets the first appended, so the saved file opens as the type its bytes
-   * were checked against. Omit it to keep names as given.
+   * The extensions a file of this type is saved under, without the dot, most common first; case doesn't
+   * matter. A stored name that doesn't end in one of them gets the first appended, so the saved file opens
+   * as the type its bytes were checked against. Omit it to keep names as given.
    */
   extensions?: readonly string[]
 
