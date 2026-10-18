@@ -12,6 +12,30 @@ const PLAIN_HEADERS = {
   'Content-Type': 'text/plain; charset=utf-8'
 } as const
 
+/** Any http(s) origin, to resolve a relative `successURL` against; only the resulting protocol is read. */
+const PLACEHOLDER_BASE_URL = 'https://example.com/'
+
+/**
+ * Whether a `successURL` can be sent as a redirect: a non-blank value the runtime accepts as a header, which
+ * resolves to an http(s) page. A value that fails here would otherwise fail building the response, after the
+ * submission was delivered, and the sender's retry would deliver it again.
+ *
+ * @param value - The configured success URL.
+ * @returns `true` when a browser can be redirected to it.
+ */
+export function isRedirectTarget(value: string): boolean {
+  if (value.trim() === '' || !URL.canParse(value, PLACEHOLDER_BASE_URL)) return false
+
+  try {
+    new Headers({ Location: value })
+  } catch {
+    return false
+  }
+
+  const { protocol } = new URL(value, PLACEHOLDER_BASE_URL)
+  return protocol === 'https:' || protocol === 'http:'
+}
+
 /**
  * Whether a request is a form the browser posted itself, without JavaScript. A browser's own form post asks
  * for `text/html`; the toolkit's script asks for `application/json`, and `fetch()` accepts any type unless told

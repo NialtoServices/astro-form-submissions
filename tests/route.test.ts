@@ -2402,7 +2402,17 @@ describe('createFormRoute without JavaScript', () => {
     expect(await dropped.text()).toBe(welsh.plainSubmitted)
   })
 
-  it('refuses a success URL that is not a URL or a path', () => {
-    expect(() => createFormRoute({ ...baseConfig, successURL: 'http://' })).toThrow('successURL')
-  })
+  it.each(['http://', '', ' ', 'javascript:alert(1)', 'mailto:ada@example.com', '/thank-you/\nSet-Cookie: a=b'])(
+    'refuses a success URL that a browser could not be redirected to (%j)',
+    (successURL) => {
+      expect(() => createFormRoute({ ...baseConfig, successURL })).toThrow('successURL')
+    }
+  )
+
+  it.each(['/thank-you/', 'https://example.com/thanks', '?sent=1', 'thank-you/'])(
+    'accepts a success URL that is an http(s) URL or a path (%j)',
+    (successURL) => {
+      expect(() => createFormRoute({ ...baseConfig, successURL })).not.toThrow()
+    }
+  )
 })

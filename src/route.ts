@@ -14,7 +14,7 @@ import { TurnstileInspector, type Inspector } from '#inspectors/index.js'
 import { assertPositiveNumberOption } from '#numeric-options.js'
 import { OperationalError } from '#operational-error.js'
 import type { FormSubmission } from '#pipeline.js'
-import { PLAIN_COPY, plainResponse, wantsPlainResponse } from '#plain-responses.js'
+import { isRedirectTarget, PLAIN_COPY, plainResponse, wantsPlainResponse } from '#plain-responses.js'
 import { containedReporter, withReportingBudget, type ErrorReporter, type FormErrorStage } from '#reporting.js'
 import { jsonFormError, jsonOk } from '#responses.js'
 import type { SchemaInput, Submission } from '#schema.js'
@@ -143,8 +143,8 @@ export interface FormRouteConfig<
 
   /**
    * Where to send the browser once a form posted without JavaScript succeeds (a 303), such as a thank-you page
-   * or the home page. Without it, such a post gets a plain-text confirmation. A post from the toolkit's script,
-   * or any other `fetch()`, always gets JSON.
+   * or the home page: an http(s) URL, or a path. Without it, such a post gets a plain-text confirmation. A post
+   * from the toolkit's script, or a `fetch()` that doesn't ask for HTML, gets JSON.
    */
   successURL?: string
 
@@ -203,8 +203,8 @@ export function createFormRoute<
 >(config: FormRouteConfig<S, Es>): APIRoute {
   assertPositiveNumberOption('createFormRoute `maxBodyBytes`', config.maxBodyBytes)
   assertPositiveNumberOption('createFormRoute `maxTextBodyBytes`', config.maxTextBodyBytes)
-  if (config.successURL !== undefined && !URL.canParse(config.successURL, 'https://example.com/')) {
-    throw new Error('createFormRoute `successURL` must be a URL or a path.')
+  if (config.successURL !== undefined && !isRedirectTarget(config.successURL)) {
+    throw new Error('createFormRoute `successURL` must be an http(s) URL or a path.')
   }
 
   const reporter = containedReporter(config.onError)
