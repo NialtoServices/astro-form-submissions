@@ -326,7 +326,11 @@ export function createFormRoute<
 
               // A destination that couldn't be reached or timed out may still have accepted the message,
               // so its links may be out; deleting the files could leave a recipient with dead links.
-              if (dispatcher.exposesResources !== false && error instanceof DestinationUnreachableError) {
+              if (
+                rollbacks.length > 0 &&
+                dispatcher.exposesResources !== false &&
+                error instanceof DestinationUnreachableError
+              ) {
                 resourcesExposed = true
                 await report(
                   new OperationalError(

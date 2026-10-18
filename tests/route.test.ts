@@ -673,6 +673,22 @@ describe('createFormRoute enrichers', () => {
     )
   })
 
+  it('says nothing about kept files when the submission stored none', async () => {
+    const failing = stubDispatcher({
+      required: true,
+      failWith: new DestinationUnreachableError('Postmark', { cause: new TypeError('fetch failed') })
+    })
+    const onError = vi.fn()
+
+    const response = await createFormRoute({ ...baseConfig, dispatchers: [failing.dispatcher], onError })(
+      contextFor(validForm())
+    )
+
+    expect(response.status).toBe(502)
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError).toHaveBeenCalledWith(expect.any(DestinationUnreachableError), { stage: 'delivery' })
+  })
+
   it('still rolls back when an unreachable delivery never carried the files', async () => {
     const { enricher, rolledBack } = stubEnricher({ provide: { files: [] } })
     const failing = stubDispatcher({
