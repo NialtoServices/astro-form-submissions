@@ -140,7 +140,9 @@ describe('the composed form pipeline', () => {
     expect(discordRequests).toHaveLength(1)
     const embed = discordRequests[0]!.embeds[0]!
     expect(embed.title).toBe('New enquiry from Ada')
-    expect(embed.fields).toEqual([{ name: 'Email', value: 'ada@example.com', inline: true }])
+
+    // Escaped as markdown on the wire; Discord shows it as typed.
+    expect(embed.fields).toEqual([{ name: 'Email', value: 'ada\\@example.com', inline: true }])
   })
 
   it('withholds the email but still pings Discord when an inspector quarantines spam', async () => {

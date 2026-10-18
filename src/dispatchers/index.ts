@@ -2,6 +2,7 @@ export { DestinationUnreachableError } from '#dispatchers/destination-unreachabl
 export { DiscordDeliveryError } from '#dispatchers/discord-delivery-error.js'
 export {
   DiscordDispatcher,
+  escapeDiscordMarkdown,
   type DiscordDispatcherOptions,
   type DiscordDispatcherSettings,
   type DiscordField,

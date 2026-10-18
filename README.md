@@ -883,6 +883,12 @@ can surface the quarantine disposition (`context.quarantined` / `context.quarant
 request/site info however the site likes. Embed limits (title/field/total lengths, field count) are
 clamped automatically so an oversize submission can never make Discord reject the notification.
 
+Discord renders embed text as markdown, so values resolved from keys and specs are escaped to show exactly
+as typed: a submission can't add bold text, headings, masked links (`[Verify payment](https://…)`) or
+mentions to your channel. Pass `escapeMarkdown: false` only when every such value is markdown you wrote. A
+`title`, `description` or `fields` builder is posted as given, so wrap any submission text it includes in
+the exported `escapeDiscordMarkdown`.
+
 ## File uploads
 
 A form takes files by adding a file input to your form — `<input type="file" name="file"

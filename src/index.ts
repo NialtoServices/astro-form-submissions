@@ -85,6 +85,7 @@ export {
   DestinationUnreachableError,
   DiscordDeliveryError,
   DiscordDispatcher,
+  escapeDiscordMarkdown,
   EmailDispatcher,
   EmailRecipientError,
   mustacheTemplates,

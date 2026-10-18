@@ -17,6 +17,21 @@ const FIELD_NAME_LIMIT = 256
 const FIELD_VALUE_LIMIT = 1024
 const EMBED_TOTAL_LIMIT = 6000
 
+/** Characters Discord reads in embed text as formatting, headings, quotes, masked links or mentions. */
+const MARKDOWN_CHARACTERS = /[\\*_~`|>#\-[\]()<@]/g
+
+/**
+ * Escapes text so Discord shows it as written: no formatting, headings, masked links (`[text](url)`) or
+ * mentions. The dispatcher applies it to every value it resolves from `fields` specs and keys; use it on
+ * submission text that a `title`, `description` or `fields` builder of your own puts in the embed.
+ *
+ * @param text - The text to show literally.
+ * @returns The text with each markdown character backslash-escaped.
+ */
+export function escapeDiscordMarkdown(text: string): string {
+  return text.replace(MARKDOWN_CHARACTERS, '\\$&')
+}
+
 const DISCORD_TIMEOUT_MS = 5000
 
 const DEFAULT_EMBED_COLOR = 0xffde00
@@ -83,7 +98,10 @@ export interface DiscordDispatcherSettings<E extends FormSubmission = FormSubmis
   /** Embed title. Defaults to a generic label; build one from the site's own fields or the context to customise. */
   title?: (submission: E, context: DispatchContext) => string
 
-  /** Optional embed description (e.g. a free-text `message` field the site pulls off the submission). */
+  /**
+   * Optional embed description (e.g. a free-text `message` field the site pulls off the submission). Posted
+   * as markdown, so pass submission text through {@link escapeDiscordMarkdown}.
+   */
   description?: (submission: E, context: DispatchContext) => string | undefined
 
   /**
@@ -95,6 +113,13 @@ export interface DiscordDispatcherSettings<E extends FormSubmission = FormSubmis
 
   /** Embed accent colour as an integer. Defaults to {@link DEFAULT_EMBED_COLOR}. */
   color?: number
+
+  /**
+   * Whether values resolved from `fields` keys and specs are escaped with {@link escapeDiscordMarkdown}, so a
+   * submission can't put formatting, masked links or mentions in the channel. Default `true`; set `false` only
+   * when every such value is markdown you wrote. A `fields` builder's values are posted as given.
+   */
+  escapeMarkdown?: boolean
 
   /**
    * Whether this webhook receives quarantined submissions. Default false; set true on an ops channel
@@ -205,7 +230,8 @@ export class DiscordDispatcher<E extends FormSubmission = FormSubmission> implem
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ embeds: [embed] }),
+        // Mentions in an embed never notify; this keeps any mention inert even if the payload ever carries `content`.
+        body: JSON.stringify({ embeds: [embed], allowed_mentions: { parse: [] } }),
         signal: controller.signal
       })
     } catch (error) {
@@ -250,9 +276,10 @@ export class DiscordDispatcher<E extends FormSubmission = FormSubmission> implem
       if (!resolved) continue
 
       const inline = typeof input === 'string' ? true : (input.inline ?? true)
+      const value = (this.options.escapeMarkdown ?? true) ? escapeDiscordMarkdown(resolved.value) : resolved.value
       fields.push({
         name: clamp(resolved.label, FIELD_NAME_LIMIT),
-        value: clamp(resolved.value, FIELD_VALUE_LIMIT),
+        value: clamp(value, FIELD_VALUE_LIMIT),
         inline
       })
     }

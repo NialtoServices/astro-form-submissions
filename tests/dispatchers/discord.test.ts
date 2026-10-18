@@ -1,5 +1,10 @@
 import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
-import { DiscordDispatcher, type DiscordDispatcherSettings, type DiscordFieldInput } from '#dispatchers/discord.js'
+import {
+  DiscordDispatcher,
+  escapeDiscordMarkdown,
+  type DiscordDispatcherSettings,
+  type DiscordFieldInput
+} from '#dispatchers/discord.js'
 import type { FormSubmission } from '#pipeline.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { dispatchContext } from '../dispatch-context.js'
@@ -201,5 +206,48 @@ describe('DiscordDispatcher webhook option', () => {
 
   it('refuses to construct without a webhook', () => {
     expect(() => new DiscordDispatcher({ webhookURL: '', fields: [] })).toThrow('`webhookURL`')
+  })
+})
+
+describe('DiscordDispatcher markdown', () => {
+  const hostile = '[Verify payment](https://evil.example) @everyone <@&123>\n# Urgent **now**'
+
+  it('escapes submission values so they show as written', async () => {
+    const embed = await capture({ ...base, message: hostile }, { fields: ['message'] })
+
+    expect(embed.fields[0]!.value).toBe(escapeDiscordMarkdown(hostile))
+    expect(embed.fields[0]!.value).toBe(
+      '\\[Verify payment\\]\\(https://evil.example\\) \\@everyone \\<\\@&123\\>\n\\# Urgent \\*\\*now\\*\\*'
+    )
+  })
+
+  it('escapes computed spec values too', async () => {
+    const embed = await capture(
+      { ...base, message: hostile },
+      { fields: [{ label: 'Note', value: (submission) => `${submission.message}` }] }
+    )
+
+    expect(embed.fields[0]!.value).toBe(escapeDiscordMarkdown(hostile))
+  })
+
+  it('posts values as given when the site opts out', async () => {
+    const embed = await capture({ ...base, message: '**bold**' }, { fields: ['message'], escapeMarkdown: false })
+
+    expect(embed.fields[0]!.value).toBe('**bold**')
+  })
+
+  it('asks Discord to parse no mentions', async () => {
+    let payload: Record<string, unknown> | undefined
+    stubFetch((_requestURL, requestInit) => {
+      payload = JSON.parse(requestInit?.body as string)
+      return new Response('', { status: 200 })
+    })
+
+    await new DiscordDispatcher({ webhookURL: 'https://discord.test/hook', fields: [] }).dispatch(
+      base,
+      dispatchContext()
+    )
+
+    expect(payload?.allowed_mentions).toEqual({ parse: [] })
   })
 })
