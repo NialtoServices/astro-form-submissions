@@ -279,12 +279,12 @@ export function createFormRoute<
           registerReport
         }
       )
+      admitted.formData = admission.formData
       if (admission.outcome === 'respond') return admission.response
       if (admission.outcome === 'drop') return jsonOk()
 
       const { formData, submission, quarantined, quarantineReasons } = admission
       admittedFormData = formData
-      admitted.formData = formData
 
       const enrichmentContext: EnrichmentContext<Submission<S>> = {
         submission,

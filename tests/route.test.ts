@@ -2381,14 +2381,25 @@ describe('createFormRoute without JavaScript', () => {
     expect(await fromFetch.json()).toEqual({ ok: true })
   })
 
-  it('lets a site replace either line, reading the form data to localise it', async () => {
-    const response = await createFormRoute({
+  it('lets a site replace either line, reading the form data to localise it at every stage', async () => {
+    const welsh: Record<string, string> = {
+      plainSubmitted: "Wedi'i gyflwyno.",
+      plainRetry: 'Ewch yn ôl a rhowch gynnig arall arni.'
+    }
+    const route = createFormRoute({
       ...baseConfig,
-      errors: (key, fallback, { data }) =>
-        key === 'plainSubmitted' && data?.get('lang') === 'cy' ? "Wedi'i gyflwyno." : undefined
-    })(browserPost(validForm({ lang: 'cy' })))
+      inspectors: [new HoneypotInspector({ fieldName: 'website' }), new TurnstileInspector({ secretKey: 'secret' })],
+      errors: (key, fallback, { data }) => (data?.get('lang') === 'cy' ? welsh[key] : undefined)
+    })
+    const lastLine = async (response: Response) => (await response.text()).split('\n').at(-1)
 
-    expect(await response.text()).toBe("Wedi'i gyflwyno.")
+    const invalid = await route(browserPost(validForm({ lang: 'cy', email: 'not-an-email' })))
+    const unverified = await route(browserPost(validForm({ lang: 'cy' })))
+    const dropped = await route(browserPost(validForm({ lang: 'cy', website: 'https://example.org/' })))
+
+    expect(await lastLine(invalid)).toBe(welsh.plainRetry)
+    expect(await lastLine(unverified)).toBe(welsh.plainRetry)
+    expect(await dropped.text()).toBe(welsh.plainSubmitted)
   })
 
   it('refuses a success URL that is not a URL or a path', () => {

@@ -322,8 +322,8 @@ errors: (key, _default, { data }) => strings(data?.get('lang')).errors[key]
 
 The resolver applies uniformly to every toolkit-owned error (route / Turnstile / uploads /
 `validationFailed`) — **not** to your schema's own field messages (localise those inside the schema,
-via a factory). One caveat: pre-body guard errors (rate-limit) reject before the body is
-read, so the resolver receives no `data` and falls back to default-locale copy.
+via a factory). One caveat: a refusal that comes before the body is parsed (a rate limit, or a body too large
+or malformed to read) reaches the resolver with no `data`, so it falls back to default-locale copy.
 
 ### Options
 

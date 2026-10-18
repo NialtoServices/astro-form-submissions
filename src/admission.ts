@@ -171,11 +171,12 @@ interface AdmissionRequest {
 
 /**
  * Admission's outcome: a response to return as-is (a refusal), a silent `drop`, or an admitted
- * submission, possibly quarantined.
+ * submission, possibly quarantined. A refusal or drop after the body was parsed carries its form data too,
+ * for copy the route resolves afterwards.
  */
 type Admission<S extends SchemaInput> =
-  | { outcome: 'respond'; response: Response }
-  | { outcome: 'drop' }
+  | { outcome: 'respond'; response: Response; formData?: FormData }
+  | { outcome: 'drop'; formData?: FormData }
   | {
       outcome: 'admitted'
       formData: FormData
@@ -212,7 +213,8 @@ export async function admit<S extends SchemaInput>(
   // their copy falls back to the default locale (there's no body to read a `lang` field from yet).
   const fail = (error: FormError, data?: FormData): Admission<S> => ({
     outcome: 'respond',
-    response: jsonFormError(error, config.errors, { data })
+    response: jsonFormError(error, config.errors, { data }),
+    formData: data
   })
 
   // A quarantine verdict from any guard or inspector accumulates here (non-terminal, so later
@@ -301,7 +303,11 @@ export async function admit<S extends SchemaInput>(
       new SubmissionVerdictError('reject', 'schema.invalid', { fields: issueFields(validation.issues) }),
       'validation'
     )
-    return { outcome: 'respond', response: jsonValidationError(mapIssues(validation.issues, config.errors, formData)) }
+    return {
+      outcome: 'respond',
+      response: jsonValidationError(mapIssues(validation.issues, config.errors, formData)),
+      formData
+    }
   }
 
   // A conformant success carries `value`; a result with neither issues nor value is non-conformant,
@@ -357,7 +363,7 @@ export async function admit<S extends SchemaInput>(
     if (inspectionVerdict) registerReport(inspectionVerdict, 'inspection')
 
     if (result.action === 'reject') return fail(result.error, formData)
-    if (result.action === 'drop') return { outcome: 'drop' }
+    if (result.action === 'drop') return { outcome: 'drop', formData }
 
     // Non-terminal: record and keep going. A later drop/reject still short-circuits and wins.
     if (result.action === 'quarantine') {
