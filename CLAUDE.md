@@ -27,3 +27,10 @@ examples use reserved placeholders such as `example.com`, `ada@example.com` and 
 
 Explain a change by what it does and the general shape of the problem it handles, never by who needed it or where it
 came up. A comment, test name or commit message says "cap the request body", not "fix the crash a site reported".
+
+## Releasing
+
+Releases publish from CI, never from a workstation: bump `version` in `package.json`, commit, tag the commit
+`v<version>` and push the tag. The `publish` job in `.github/workflows/ci.yml` runs only after `verify` passes for
+that tag, and publishes through npm trusted publishing, which needs no npm token and attaches provenance. The owner
+cuts releases; don't tag or publish unless asked.
