@@ -8,6 +8,9 @@ const FALLBACK_FILENAME = 'upload'
  */
 const BIDI_CONTROLS = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu
 
+/** Trailing dots and whitespace, which Windows drops when saving a file. */
+const TRAILING_DOTS_AND_WHITESPACE = /[.\s]+$/u
+
 /**
  * The longest name stored, in characters. Percent-encoded, a name can take twelve bytes a character, and R2
  * refuses an object whose custom metadata passes 8 KB, so an unbounded name would fail the store.
@@ -40,14 +43,14 @@ function shortened(name: string): string {
  * @returns The name to store.
  */
 export function storedFilename(name: string, extensions?: readonly string[]): string {
-  const cleaned =
-    shortened(
-      name
-        .toWellFormed()
-        .replace(/[\r\n"]/g, '')
-        .replace(BIDI_CONTROLS, '')
-        .replace(/[.\s]+$/u, '')
-    ) || FALLBACK_FILENAME
+  const trimmed = name
+    .toWellFormed()
+    .replace(/[\r\n"]/g, '')
+    .replace(BIDI_CONTROLS, '')
+    .replace(TRAILING_DOTS_AND_WHITESPACE, '')
+
+  // Shortening can cut a name just after a dot or a space, so its result is trimmed the same way.
+  const cleaned = shortened(trimmed).replace(TRAILING_DOTS_AND_WHITESPACE, '') || FALLBACK_FILENAME
   const preferred = extensions?.[0]
   if (preferred === undefined || hasExtension(cleaned, extensions)) return cleaned
 

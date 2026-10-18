@@ -152,6 +152,17 @@ describe('UploadedFiles', () => {
     }
   )
 
+  it('refuses opaque bytes whose long name is cut just after an extension', async () => {
+    const { enricher, bucket } = setup()
+    const disguised = { ...photo, name: `${'a'.repeat(196)}.js.${'b'.repeat(30)}`, type: '' }
+    const { receipts, prepared } = await admit([disguised])
+    store(bucket, prepared, [disguised])
+
+    const result = await enricher.enrich({ name: 'Ada' }, contextWith(receipts))
+
+    expect(result).toMatchObject({ reject: { key: 'fileType' }, code: 'uploaded-files.extension-mismatch' })
+  })
+
   it('accepts opaque bytes whose name carries no extension at all', async () => {
     const { enricher, bucket } = setup()
     const bare = { ...photo, name: 'IMG_1234', type: '' }

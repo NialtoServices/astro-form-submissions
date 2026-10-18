@@ -42,6 +42,11 @@ describe('storedFilename', () => {
     expect([...storedFilename('a'.repeat(300))]).toHaveLength(200)
   })
 
+  it('drops a trailing dot the shortening leaves, so the cut name shows its real extension', () => {
+    expect(storedFilename(`${'a'.repeat(196)}.js.${'b'.repeat(30)}`)).toBe(`${'a'.repeat(196)}.js`)
+    expect(storedFilename(`${'a'.repeat(199)} ${'b'.repeat(30)}`)).toBe('a'.repeat(199))
+  })
+
   it('keeps the name as given when the type names no extensions', () => {
     expect(storedFilename('invoice.js')).toBe('invoice.js')
     expect(storedFilename('invoice.js', [])).toBe('invoice.js')
