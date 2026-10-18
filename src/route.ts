@@ -344,14 +344,21 @@ export function createFormRoute<
       for (const group of dispatchGroups) {
         await Promise.all(
           group.map(async (dispatcher) => {
-            // A quarantined submission is withheld from every destination that hasn't opted in. The skip
-            // is a no-op — not a success or failure — so a fully quarantined submission still returns 200.
-            if (quarantined && !dispatcher.acceptsQuarantined) return
-
+            // Every read of the dispatcher happens inside the try, so none can reject the group while a
+            // sibling is still sending. One whose `required` can't be read counts as required: failing the
+            // request is safer than reporting a delivery that may matter as sent.
+            let required = true
+            let exposesResources: boolean | undefined
             try {
-              // A per-submission opt-out (e.g. no acknowledgement without a recipient). Evaluated inside
-              // the try so a throwing predicate is a delivery failure, not an uncaught rejection; a `false`
-              // verdict is a no-op skip — the early return counts as neither delivered nor failed.
+              required = Boolean(dispatcher.required)
+              exposesResources = dispatcher.exposesResources
+
+              // A quarantined submission is withheld from every destination that hasn't opted in. The skip
+              // is a no-op — not a success or failure — so a fully quarantined submission still returns 200.
+              if (quarantined && !dispatcher.acceptsQuarantined) return
+
+              // A per-submission opt-out (e.g. no acknowledgement without a recipient); a `false` verdict is
+              // a no-op skip — the early return counts as neither delivered nor failed.
               if (dispatcher.deliverWhen && !dispatcher.deliverWhen(submission, dispatchContext)) return
 
               await dispatcher.dispatch(submission, dispatchContext)
@@ -359,19 +366,15 @@ export function createFormRoute<
 
               // A resolved dispatch is a real delivery; unless it declares it doesn't carry the acquired
               // resources, treat it as having exposed them to a recipient.
-              if (dispatcher.exposesResources !== false) resourcesExposed = true
+              if (exposesResources !== false) resourcesExposed = true
             } catch (error) {
               await report(error, 'delivery')
               failed += 1
-              if (dispatcher.required) requiredFailed = true
+              if (required) requiredFailed = true
 
               // A destination that couldn't be reached or timed out may still have accepted the message,
               // so its links may be out; deleting the files could leave a recipient with dead links.
-              if (
-                rollbacks.length > 0 &&
-                dispatcher.exposesResources !== false &&
-                error instanceof DestinationUnreachableError
-              ) {
+              if (rollbacks.length > 0 && exposesResources !== false && error instanceof DestinationUnreachableError) {
                 resourcesExposed = true
                 await report(
                   new OperationalError(
@@ -422,8 +425,8 @@ export function createFormRoute<
       await report(error, 'unexpected')
 
       // An unexpected throw after enrichment acquired resources that no exposing delivery kept must not
-      // strand them. The per-enricher paths handle their own; `runRollbacks` drains, so this is a no-op
-      // once they have already run.
+      // strand them. No delivery is still sending here, since a group's deliveries never reject. The
+      // per-enricher paths handle their own; `runRollbacks` drains, so this is a no-op once they have run.
       if (!resourcesExposed && rollbacks.length > 0) await runRollbacks()
       return fail(ERRORS.unavailable, admittedFormData)
     } finally {

@@ -847,6 +847,37 @@ describe('createFormRoute enrichers', () => {
     expect(onError).toHaveBeenCalledWith(expect.any(DestinationUnreachableError), { stage: 'delivery' })
   })
 
+  it('waits for a sibling delivery when another dispatcher throws from a property, keeping what it sent', async () => {
+    const { enricher, rolledBack } = stubEnricher({ provide: { files: [] } })
+    const events: string[] = []
+    const email: Dispatcher = {
+      exposesResources: true,
+      dispatch: () =>
+        new Promise<void>((resolve) =>
+          setTimeout(() => {
+            events.push('email delivered')
+            resolve()
+          }, 20)
+        )
+    }
+    const webhook: Dispatcher = {
+      get required(): boolean {
+        throw new Error('hostile getter')
+      },
+      dispatch: async () => {
+        throw new Error('webhook down')
+      }
+    }
+
+    const response = await createFormRoute({ ...baseConfig, enrichers: [enricher], dispatchers: [email, webhook] })(
+      contextFor(validForm())
+    )
+
+    expect(events).toEqual(['email delivered'])
+    expect(rolledBack).toEqual([])
+    expect(response.status).toBe(502)
+  })
+
   it('still rolls back when an unreachable delivery never carried the files', async () => {
     const { enricher, rolledBack } = stubEnricher({ provide: { files: [] } })
     const failing = stubDispatcher({
