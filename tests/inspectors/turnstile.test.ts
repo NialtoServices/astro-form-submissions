@@ -61,6 +61,24 @@ describe('TurnstileInspector', () => {
     expect(context.report).not.toHaveBeenCalled()
   })
 
+  it('refuses a token longer than Cloudflare issues without calling Siteverify', async () => {
+    const fetchSpy = stubFetch(() => new Response(JSON.stringify({ success: true, hostname: 'example.com' })))
+
+    const result = await new TurnstileInspector({ secretKey: 'secret' }).inspect(contextFor('t'.repeat(2049)))
+
+    expect(result).toEqual(rejected('turnstile.token-too-long', { length: 2049, limit: 2048 }))
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('forwards a token of the longest length Cloudflare issues', async () => {
+    const fetchSpy = stubFetch(() => new Response(JSON.stringify({ success: true, hostname: 'example.com' })))
+
+    const result = await new TurnstileInspector({ secretKey: 'secret' }).inspect(contextFor('t'.repeat(2048)))
+
+    expect(result).toEqual({ action: 'accept' })
+    expect(fetchSpy).toHaveBeenCalledOnce()
+  })
+
   it('rejects when verification is unsuccessful', async () => {
     mockSiteverify(JSON.stringify({ success: false }))
     const result = await new TurnstileInspector({ secretKey: 'secret' }).inspect(contextFor('token'))

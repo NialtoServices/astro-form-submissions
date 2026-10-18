@@ -8,6 +8,12 @@ const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/sit
 const TURNSTILE_TIMEOUT_MS = 5000
 
 /**
+ * The longest token Cloudflare issues. Siteverify refuses anything longer, so a longer token is never genuine,
+ * and forwarding it would let the sender choose the size of the request sent to Siteverify.
+ */
+const MAX_TOKEN_LENGTH = 2048
+
+/**
  * Siteverify error codes worth an operator's attention (our configuration or Cloudflare itself). Token-level codes
  * (`invalid-input-response`, `timeout-or-duplicate`, etc) are expected sender behaviour and stay silent.
  */
@@ -141,6 +147,9 @@ export class TurnstileInspector implements Inspector {
 
     // A missing token is expected sender/bot behaviour, not an operational event — no report.
     if (!token) return this.reject('turnstile.missing-token', { field: tokenField })
+    if (token.length > MAX_TOKEN_LENGTH) {
+      return this.reject('turnstile.token-too-long', { length: token.length, limit: MAX_TOKEN_LENGTH })
+    }
 
     // `remoteip` is optional to Siteverify and a personal-data transfer, so it's gated by `sendRemoteIP`.
     const sendRemoteIP = this.options.sendRemoteIP ?? true
