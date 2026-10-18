@@ -26,8 +26,10 @@ describe('attachmentDisposition', () => {
     expect(attachmentDisposition('a"b\\c.pdf')).toContain('filename="a_b_c.pdf"')
   })
 
-  it('falls back to `download` when every character is stripped as a control char', () => {
-    expect(attachmentDisposition('\r\n\t')).toContain('filename="download"')
+  it('names the file `download` in both forms when the name is empty or only control characters', () => {
+    for (const name of ['', '\r\n\t']) {
+      expect(attachmentDisposition(name)).toBe('attachment; filename="download"; filename*=UTF-8\'\'download')
+    }
   })
 
   it('does not throw on a lone UTF-16 surrogate (a hostile direct custom-storage call)', () => {

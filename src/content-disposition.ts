@@ -1,3 +1,6 @@
+/** The name a download takes when the stored one is empty or nothing but stripped characters. */
+const FALLBACK_FILENAME = 'download'
+
 /**
  * Build an RFC 6266 `attachment` `Content-Disposition` value that survives any filename.
  *
@@ -17,24 +20,24 @@ export function attachmentDisposition(filename: string): string {
   const PRINTABLE_ASCII_FLOOR = 0x20
   const PRINTABLE_ASCII_CEILING = 0x7e
 
-  const cleaned = [...filename.toWellFormed()]
-    .filter((character) => {
-      const code = character.charCodeAt(0)
-      return code > CONTROL_CEILING && code !== DELETE
-    })
-    .join('')
+  const cleaned =
+    [...filename.toWellFormed()]
+      .filter((character) => {
+        const code = character.charCodeAt(0)
+        return code > CONTROL_CEILING && code !== DELETE
+      })
+      .join('') || FALLBACK_FILENAME
 
   // A quoted-string fallback that is always valid: quotes and backslashes can't be escaped portably
   // across clients, and non-ASCII bytes aren't allowed here at all, so replace them all with `_`.
-  const asciiFallback =
-    [...cleaned]
-      .map((character) => {
-        if (character === '"' || character === '\\') return '_'
+  const asciiFallback = [...cleaned]
+    .map((character) => {
+      if (character === '"' || character === '\\') return '_'
 
-        const code = character.charCodeAt(0)
-        return code >= PRINTABLE_ASCII_FLOOR && code <= PRINTABLE_ASCII_CEILING ? character : '_'
-      })
-      .join('') || 'download'
+      const code = character.charCodeAt(0)
+      return code >= PRINTABLE_ASCII_FLOOR && code <= PRINTABLE_ASCII_CEILING ? character : '_'
+    })
+    .join('')
 
   // RFC 5987 ext-value: percent-encode as UTF-8. `encodeURIComponent` leaves `!'()*~-_.` unescaped;
   // of those `'()*` are not RFC 5987 attr-chars, so encode them too.
