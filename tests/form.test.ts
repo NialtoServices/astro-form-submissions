@@ -774,6 +774,18 @@ describe('form script success panel', () => {
     expect(document.activeElement).toBe(panel)
   })
 
+  it("leaves a panel's own tabindex in place", async () => {
+    stubFetch(async () => jsonResponse({ ok: true }))
+    const { submit } = mountForm({ successPanel: true })
+    const panel = document.querySelector<HTMLElement>('[data-astro-form-success]')!
+    panel.setAttribute('tabindex', '0')
+
+    submit()
+    await vi.waitFor(() => expect(panel.hidden).toBe(false))
+
+    expect(panel.getAttribute('tabindex')).toBe('0')
+  })
+
   it('keeps the inline status behaviour when no panel is present', async () => {
     stubFetch(async () => jsonResponse({ ok: true }))
     const { form, status, submit } = mountForm()
