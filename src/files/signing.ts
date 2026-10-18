@@ -7,6 +7,7 @@
 // independently of storage; rotating the secret invalidates every issued link at once.
 
 import type { EnrichmentContext } from '#enrichers/enricher.js'
+import { OperationalError } from '#operational-error.js'
 import type { FormSubmission } from '#pipeline.js'
 import { assertValidSigningSecret, signClaims, tokenToPathSegment, verifyClaims } from '#tokens.js'
 
@@ -94,7 +95,8 @@ export interface SignedLinkOptions {
  * `trailingSlash: 'always'` (a dot in the final path segment 404s — Astro #16140); the matching
  * {@link createFileRoute} swaps them back.
  *
- * Fails closed (throws) when no trusted base is available — set Astro `site` or the `baseURL` option.
+ * Fails closed (throws an {@link OperationalError} coded `signed-link.no-base-url`) when no trusted base is
+ * available — set Astro `site` or the `baseURL` option.
  *
  * @param options - The signing secret, trusted base URL, and optional base path.
  * @returns An async link builder for {@link FileUploadsOptions.link}.
@@ -113,7 +115,8 @@ export function signedLink<E extends FormSubmission = FormSubmission>(
   return async (stored, context) => {
     const base = options.baseURL ?? context.siteURL
     if (!base) {
-      throw new Error(
+      throw new OperationalError(
+        'signed-link.no-base-url',
         'signedLink has no trusted base URL — set the `baseURL` option or Astro `site`. ' +
           'The request host is deliberately not used, since it can be spoofed on some adapters.'
       )

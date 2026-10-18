@@ -933,6 +933,12 @@ or your host's secret store) of **at least 32 characters** — `signedLink` and 
 a shorter one at construction, since HS256's safety rests entirely on it; rotating it invalidates every
 issued link.
 
+**Links are absolute, so they need a trusted origin.** `signedLink` builds each link against Astro's `site`
+(set it in `astro.config`), or against its `baseURL` option when downloads are served from another
+origin; `basePath` (default `/files`) must match where the download route is mounted. It never falls back to
+the request's own host, which some adapters let a sender choose, so with neither set every submission that
+carries a file fails with `uploadFailed`, and the log names `signed-link.no-base-url`.
+
 **Retention.** Tokens are **opaque** — they carry only the storage key and an expiry, never the
 filename or content-type (a JWT body is base64url, decodable by anyone holding the URL); the download
 route reads the filename/type back from stored metadata. Two independent lifetimes bound exposure, and

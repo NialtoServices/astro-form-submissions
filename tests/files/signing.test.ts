@@ -1,5 +1,6 @@
 import type { EnrichmentContext } from '#enrichers/enricher.js'
 import { signedLink, signFileToken, verifyFileToken } from '#files/signing.js'
+import { OperationalError } from '#operational-error.js'
 import { describe, expect, it } from 'vitest'
 
 const SECRET = 'a-sufficiently-long-signing-secret'
@@ -64,6 +65,13 @@ describe('signedLink', () => {
 
   it('fails closed when no trusted base is available (no site, no baseURL)', async () => {
     await expect(signedLink({ secret: SECRET })(stored, noSite)).rejects.toThrow(/trusted base URL/)
+  })
+
+  it('names a missing base URL by code, so the default log says which setting is absent', async () => {
+    const error = await signedLink({ secret: SECRET })(stored, noSite).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(OperationalError)
+    expect((error as OperationalError).code).toBe('signed-link.no-base-url')
   })
 
   it('uses an explicit baseURL over the configured site host', async () => {
