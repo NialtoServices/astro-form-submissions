@@ -185,14 +185,20 @@ describe('FileUploads', () => {
 
   it('reports the keys it could not delete during rollback', async () => {
     const deleteObject = vi.fn().mockRejectedValue(new Error('R2 unavailable'))
-    const storage: FileStorage = { put: vi.fn(async () => {}), get: vi.fn(async () => null), delete: deleteObject }
+    const put = vi.fn(async () => {})
+    const storage: FileStorage = { put, get: vi.fn(async () => null), delete: deleteObject }
     const context = contextWith([upload('a.pdf', PDF_HEADER)])
     const result = await uploader(storage).enrich({ name: 'Ada' }, context)
 
     if (!('rollback' in result) || !result.rollback) throw new Error('expected a rollback')
     await result.rollback()
+    const storedKey = (put.mock.calls[0] as unknown[])[0]
     expect(context.report).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining('Failed to delete') })
+      expect.objectContaining({
+        code: 'storage.delete-failed',
+        message: expect.stringContaining('Failed to delete'),
+        details: { keys: [storedKey] }
+      })
     )
   })
 

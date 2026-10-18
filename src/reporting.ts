@@ -1,3 +1,4 @@
+import { OperationalError } from '#operational-error.js'
 import { SubmissionVerdictError, VERDICT_PAST_TENSE } from '#submission-verdict-error.js'
 
 /**
@@ -24,8 +25,9 @@ function isSafeIdentifier(value: unknown): value is number | string {
 
 /**
  * A PII-safe one-line description of a thrown value for the default reporter: its class, a numeric
- * `status`, a `code` and `destination` only when they match a bounded machine-identifier, and the class
- * of its `cause` — never a message or body, and never free text, since those can quote submission data.
+ * `status`, a `code` and `destination` only when they match a bounded machine-identifier, an
+ * {@link OperationalError}'s safe details, and the class of its `cause` — never a message or body, and never
+ * free text, since those can quote submission data.
  */
 function summarizeError(error: unknown): string {
   if (!(error instanceof Error)) return `non-error ${typeof error}`
@@ -35,6 +37,7 @@ function summarizeError(error: unknown): string {
   if (isSafeIdentifier(destination)) parts.push(`destination=${destination}`)
   if (isSafeIdentifier(code)) parts.push(`code=${code}`)
   if (typeof status === 'number') parts.push(`status=${status}`)
+  if (error instanceof OperationalError) parts.push(...formatDetails(error.details))
   if (error.cause instanceof Error) parts.push(`cause=${error.cause.name}`)
   return parts.join(' ')
 }
@@ -49,18 +52,15 @@ function formatDetail(value: unknown): string | undefined {
 }
 
 /**
- * A PII-safe one-line description of a reported verdict: its code (`unspecified` when absent or free text)
- * and each detail whose key and value are bounded identifiers, numbers or booleans. An array prints only
- * when every item does, so a partly-filtered list never reads as the whole.
+ * Each detail whose key and value are bounded identifiers, numbers or booleans, as `key=value`. An array
+ * prints only when every item does, so a partly-filtered list never reads as the whole.
  */
-function summarizeVerdict(verdict: SubmissionVerdictError): string {
-  const parts = [isSafeIdentifier(verdict.code) ? String(verdict.code) : 'unspecified']
-
+function formatDetails(details: unknown): string[] {
   // An untyped stage can hand over a string or an array, whose entries are its characters or items under
   // index keys that pass the identifier check, so only a plain record is read.
-  const { details } = verdict
-  if (typeof details !== 'object' || details === null || Array.isArray(details)) return parts.join(' ')
+  if (typeof details !== 'object' || details === null || Array.isArray(details)) return []
 
+  const parts: string[] = []
   for (const [key, value] of Object.entries(details)) {
     if (!SAFE_ERROR_CODE.test(key)) continue
 
@@ -68,7 +68,13 @@ function summarizeVerdict(verdict: SubmissionVerdictError): string {
     if (formatted !== undefined) parts.push(`${key}=${formatted}`)
   }
 
-  return parts.join(' ')
+  return parts
+}
+
+/** A PII-safe one-line description of a reported verdict: its code (`unspecified` when absent or free text) and safe details. */
+function summarizeVerdict(verdict: SubmissionVerdictError): string {
+  const code = isSafeIdentifier(verdict.code) ? String(verdict.code) : 'unspecified'
+  return [code, ...formatDetails(verdict.details)].join(' ')
 }
 
 /**

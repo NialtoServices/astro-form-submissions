@@ -215,7 +215,8 @@ export class UploadedFiles<
       context.report?.(
         new OperationalError(
           'storage.delete-failed',
-          `Failed to delete ${failed.length} uploaded object(s): ${failed.join(', ')}`
+          `Failed to delete ${failed.length} uploaded object(s): ${failed.join(', ')}`,
+          { details: { keys: failed } }
         )
       )
     }

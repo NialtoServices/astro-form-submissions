@@ -60,6 +60,35 @@ async function warnedLine(error: unknown, stage: FormErrorStage = 'inspection'):
   return String(warnSpy.mock.lastCall?.[0])
 }
 
+describe('defaultErrorReporter on an operational error', () => {
+  it('prints the details that locate the failure', async () => {
+    const error = new OperationalError('storage.delete-failed', 'Failed to delete 2 uploaded object(s)', {
+      details: { keys: ['1b4e28ba-2fa1-41d2-883f-0016d3cca427', '6fa459ea-ee8a-4ca4-894e-db77e160355e'] }
+    })
+
+    expect(await loggedLine(error)).toBe(
+      '[astro-form-submissions] delivery error: OperationalError code=storage.delete-failed ' +
+        'keys=[1b4e28ba-2fa1-41d2-883f-0016d3cca427,6fa459ea-ee8a-4ca4-894e-db77e160355e]'
+    )
+  })
+
+  it('drops details that could be free text', async () => {
+    const error = new OperationalError('storage.delete-failed', 'Failed to delete', {
+      details: { keys: ['uploads/ada lovelace.pdf'], note: 'Ada Lovelace <ada@example.com>' }
+    })
+
+    expect(await loggedLine(error)).toBe(
+      '[astro-form-submissions] delivery error: OperationalError code=storage.delete-failed'
+    )
+  })
+
+  it("ignores a `details` property on errors that aren't the toolkit's own", async () => {
+    const error = Object.assign(new Error('provider refused'), { details: { recipient: 'ada' } })
+
+    expect(await loggedLine(error)).toBe('[astro-form-submissions] delivery error: Error')
+  })
+})
+
 describe('defaultErrorReporter on a verdict', () => {
   it('warns with the stage, the action, the code and the details', async () => {
     const error = new SubmissionVerdictError('reject', 'turnstile.hostname-mismatch', {
