@@ -82,6 +82,20 @@ describe('InMemoryRateLimiter', () => {
     expect(await limiter.limit({ key: 'a' })).toEqual({ success: false })
   })
 
+  it('counts an oversized key, storing it at a fixed size', async () => {
+    const limiter = new InMemoryRateLimiter({ limit: 1, windowSeconds: 60 })
+    const spoofed = (filler: string) => `form:${filler.repeat(15_000)}`
+
+    expect(await limiter.limit({ key: spoofed('a') })).toEqual({ success: true })
+    expect(await limiter.limit({ key: spoofed('a') })).toEqual({ success: false })
+    expect(await limiter.limit({ key: spoofed('b') })).toEqual({ success: true })
+
+    // The sender controls the key's length, so what is held per key must not grow with it.
+    const storedKeys = [...(limiter as unknown as { windows: Map<string, unknown> }).windows.keys()]
+    expect(storedKeys).toHaveLength(2)
+    expect(Math.max(...storedKeys.map((storedKey) => storedKey.length))).toBeLessThanOrEqual(128)
+  })
+
   it('resets the count once the window elapses', async () => {
     vi.useFakeTimers()
     const limiter = new InMemoryRateLimiter({ limit: 1, windowSeconds: 60 })

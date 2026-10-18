@@ -4,6 +4,18 @@ import { assertPositiveNumberOption } from '#numeric-options.js'
 /** The default {@link InMemoryRateLimiterOptions.maxKeys} cap when none is supplied. */
 const DEFAULT_MAX_KEYS = 100_000
 
+/**
+ * The longest key stored as given. A key can carry sender-chosen text (an unvalidated forwarded address, say),
+ * so a longer one is stored as its SHA-256 digest, keeping each entry small whatever the sender sends.
+ */
+const MAX_STORED_KEY_LENGTH = 128
+
+/** The fixed-length form a long key is stored under. */
+async function digestKey(key: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key)))
+  return `sha256:${Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('')}`
+}
+
 /** Options for constructing an {@link InMemoryRateLimiter}. */
 export interface InMemoryRateLimiterOptions {
   /** Maximum hits allowed per key within each window. Must be a finite positive number. */
@@ -37,9 +49,10 @@ interface Window {
  * Cloudflare rate-limit binding, or a Durable Object). It is useful under `wrangler dev`, where a
  * Cloudflare rate-limit binding is a no-op, giving real throttling there.
  *
- * **Bounded.** Elapsed windows are swept as keys are seen and the map is capped at
- * {@link InMemoryRateLimiterOptions.maxKeys}, so tracked keys can't grow without limit even under an
- * attacker who varies the key faster than windows expire.
+ * **Bounded.** Elapsed windows are swept as keys are seen, the map is capped at
+ * {@link InMemoryRateLimiterOptions.maxKeys}, and a key over 128 characters is stored as a fixed-length digest,
+ * so memory can't grow without limit even under an attacker who varies the key, or its length, faster than
+ * windows expire.
  */
 export class InMemoryRateLimiter implements RateLimiter {
   private readonly windows = new Map<string, Window>()
@@ -67,13 +80,14 @@ export class InMemoryRateLimiter implements RateLimiter {
   // MARK: - RateLimiter API
 
   async limit({ key }: { key: string }): Promise<{ success: boolean }> {
+    const storedKey = key.length > MAX_STORED_KEY_LENGTH ? await digestKey(key) : key
     const now = Date.now()
-    const existing = this.windows.get(key)
+    const existing = this.windows.get(storedKey)
 
     // Only a new window can grow the map, so this is the one place that needs to reclaim space.
     if (!existing || now >= existing.resetAt) {
       this.reclaim(now)
-      this.windows.set(key, { count: 1, resetAt: now + this.options.windowSeconds * 1000 })
+      this.windows.set(storedKey, { count: 1, resetAt: now + this.options.windowSeconds * 1000 })
       return { success: true }
     }
 

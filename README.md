@@ -470,7 +470,8 @@ dev`, where `InMemoryRateLimiter` still throttles). With the default key and no 
   address it also fails open (rather than throttle every address-less caller against one shared bucket),
   logging `rate-limit.no-client-key` for each such request — pass `key` to throttle those on another
   dimension. Its key map is **bounded** — elapsed windows are
-  swept and the map is capped at `maxKeys` (default 100k) — so a flood of distinct keys (e.g. spoofed
+  swept, the map is capped at `maxKeys` (default 100k), and a key over 128 characters is stored as a
+  fixed-length digest — so a flood of distinct or oversized keys (e.g. spoofed
   addresses) can't grow memory without limit; at the cap the oldest key is evicted, degrading the limit
   gracefully rather than exhausting the isolate.
 
