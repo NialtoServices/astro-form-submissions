@@ -1,5 +1,5 @@
 import { EmailRecipientError } from '#dispatchers/email-recipient-error.js'
-import { EmailDispatcher, type EmailTemplates } from '#dispatchers/email.js'
+import { EmailDispatcher, renderEmail, type EmailTemplates } from '#dispatchers/email.js'
 import { submissionNotificationTemplates } from '#dispatchers/submission-notification.js'
 import { describe, expect, it, vi } from 'vitest'
 import { dispatchContext } from '../dispatch-context.js'
@@ -112,23 +112,52 @@ describe('EmailDispatcher', () => {
     expect(dispatcherWith(vi.fn(), { required: false }).required).toBe(false)
   })
 
-  it.each(['ada@example.com, eve@example.com', 'ada@example.com;eve@example.com'])(
-    'refuses a `to` function that resolves to several addresses (%s)',
+  it.each([
+    'ada@example.com, eve@example.com',
+    'ada@example.com;eve@example.com',
+    'ada@example.com\r\nBcc: eve@example.com'
+  ])('refuses a `to` function that resolves to several addresses or a header break (%j)', async (address) => {
+    const deliver = vi.fn()
+    const dispatcher = new EmailDispatcher({
+      transport: { deliver },
+      templates,
+      from: 'noreply@acme.test',
+      to: (submission) => submission.email as string
+    })
+
+    await expect(dispatcher.dispatch({ email: address }, dispatchContext())).rejects.toBeInstanceOf(EmailRecipientError)
+    expect(deliver).not.toHaveBeenCalled()
+  })
+
+  it.each(['ada@example.com, eve@example.com', 'ada@example.com\nBcc: eve@example.com'])(
+    'refuses a `replyTo` function that resolves to several addresses or a header break (%j)',
     async (address) => {
       const deliver = vi.fn()
       const dispatcher = new EmailDispatcher({
         transport: { deliver },
         templates,
         from: 'noreply@acme.test',
-        to: (submission) => submission.email as string
+        to: 'owner@acme.test',
+        replyTo: (submission) => submission.email as string
       })
 
-      await expect(dispatcher.dispatch({ email: address }, dispatchContext())).rejects.toBeInstanceOf(
-        EmailRecipientError
-      )
+      await expect(dispatcher.dispatch({ email: address }, dispatchContext())).rejects.toMatchObject({
+        name: 'EmailRecipientError',
+        field: 'replyTo'
+      })
       expect(deliver).not.toHaveBeenCalled()
     }
   )
+
+  it('turns line breaks in a rendered subject into spaces', () => {
+    const content = renderEmail(
+      { subject: () => 'Thanks Ada\r\nBcc: eve@example.com', text: () => '', html: () => '' },
+      {},
+      dispatchContext()
+    )
+
+    expect(content.subject).toBe('Thanks Ada Bcc: eve@example.com')
+  })
 
   it('keeps the address out of the recipient error', () => {
     expect(new EmailRecipientError().message).not.toContain('@')

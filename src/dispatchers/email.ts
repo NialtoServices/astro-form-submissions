@@ -61,10 +61,17 @@ export function renderEmail<E extends FormSubmission, A>(
   context: DispatchContext<A>
 ): EmailContent {
   return {
-    subject: templates.subject(submission, context),
+    // A subject can interpolate sender-typed fields, and a line break in a header lets a transport that writes
+    // raw headers be told to add more, so every control character becomes a space.
+    subject: templates.subject(submission, context).replace(/[\u0000-\u001f\u007f]+/g, ' '),
     text: templates.text(submission, context),
     html: templates.html(submission, context)
   }
+}
+
+/** Whether a resolved address names one recipient and holds no control character that could end a header line. */
+function isSingleAddress(address: string): boolean {
+  return !/[,;\u0000-\u001f\u007f]/.test(address)
 }
 
 /**
@@ -176,15 +183,20 @@ export class EmailDispatcher<E extends FormSubmission = FormSubmission, A = obje
    *
    * @param submission - The submission to email.
    * @param context - The dispatch context, threaded into the templates so computed field values can be resolved.
-   * @throws {EmailRecipientError} When a `to` function returns more than one address.
+   * @throws {EmailRecipientError} When a `to` or `replyTo` function returns more than one address, or a control
+   * character.
    */
   async dispatch(submission: E, context: DispatchContext<A>): Promise<void> {
     const { from, to, replyTo } = this.options
     const recipient = typeof to === 'function' ? to(submission) : to
-    if (typeof to === 'function' && /[,;]/.test(recipient)) throw new EmailRecipientError()
+    if (typeof to === 'function' && !isSingleAddress(recipient)) throw new EmailRecipientError('to')
+
+    const resolvedReplyTo = typeof replyTo === 'function' ? replyTo(submission) : replyTo
+    if (typeof replyTo === 'function' && resolvedReplyTo && !isSingleAddress(resolvedReplyTo)) {
+      throw new EmailRecipientError('replyTo')
+    }
 
     const content = renderEmail(this.options.templates, submission, context)
-    const resolvedReplyTo = typeof replyTo === 'function' ? replyTo(submission) : replyTo
     await this.options.transport.deliver({
       ...content,
       from: typeof from === 'function' ? from(submission) : from,
