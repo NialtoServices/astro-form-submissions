@@ -15,6 +15,9 @@ const FILENAME_PIECES = [
   '\u3000',
   '\r',
   '\n',
+  '\u0000',
+  '\u001B',
+  '\u0085',
   '"',
   '\u202E',
   '\u2066',
@@ -58,13 +61,13 @@ const MAX_STORED_FILENAME_LENGTH = 200
 
 /**
  * Asserts the promises every stored filename keeps, whatever the browser sent: present, well-formed, at
- * most 200 characters, free of anything that breaks a header or a quoted attribute or disguises the name,
+ * most 200 characters, free of control characters, quotes and anything else that disguises the name,
  * and without the trailing dots or whitespace Windows drops when saving.
  */
 export function expectSafeStoredName(name: string): void {
   expect(name).not.toBe('')
   expect(name.isWellFormed()).toBe(true)
   expect([...name].length).toBeLessThanOrEqual(MAX_STORED_FILENAME_LENGTH)
-  expect(name).not.toMatch(/[\r\n"\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/u)
+  expect(name).not.toMatch(/[\p{Cc}"\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/u)
   expect(name).not.toMatch(/[.\s]$/u)
 }

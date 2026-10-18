@@ -36,12 +36,12 @@ function shortened(name: string, maxLength: number): string {
 
 /**
  * The filename stored with an upload and shown in its link: the browser's name made well-formed (a lone
- * UTF-16 surrogate becomes U+FFFD, since `encodeURIComponent` throws on one), without CR, LF or `"`, which
- * would break a header or a quoted attribute, without bidirectional text controls, without trailing dots or
- * whitespace, which Windows drops when saving (so `invoice.js.` would be saved as `invoice.js`), and no longer
- * than {@link MAX_FILENAME_LENGTH} characters, keeping its extension; or `upload` when nothing is left. With
- * `extensions`, the name also ends in one of them. Shared by both upload paths so a file is named the same way
- * whichever one it took.
+ * UTF-16 surrogate becomes U+FFFD, since `encodeURIComponent` throws on one), without control characters or
+ * `"`, which could break a header or a quoted attribute, without bidirectional text controls, without
+ * trailing dots or whitespace, which Windows drops when saving (so `invoice.js.` would be saved as
+ * `invoice.js`), and no longer than {@link MAX_FILENAME_LENGTH} characters, keeping its extension; or `upload`
+ * when nothing is left. With `extensions`, the name also ends in one of them. Shared by both upload paths so
+ * a file is named the same way whichever one it took.
  *
  * @param name - The filename the browser reported.
  * @param extensions - The extensions the file's checked type is saved under, if known.
@@ -50,7 +50,7 @@ function shortened(name: string, maxLength: number): string {
 export function storedFilename(name: string, extensions?: readonly string[]): string {
   const trimmed = name
     .toWellFormed()
-    .replace(/[\r\n"]/g, '')
+    .replace(/[\p{Cc}"]/gu, '')
     .replace(BIDI_CONTROLS, '')
     .replace(TRAILING_DOTS_AND_WHITESPACE, '')
   const cleaned = shortened(trimmed, MAX_FILENAME_LENGTH) || FALLBACK_FILENAME
