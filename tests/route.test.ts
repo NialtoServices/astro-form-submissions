@@ -3,10 +3,11 @@ import { DestinationUnreachableError } from '#dispatchers/destination-unreachabl
 import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
 import { formError } from '#errors.js'
 import type { FormSubmission } from '#pipeline.js'
+import { REPORTER_TIMEOUT_MS } from '#reporting.js'
 import { createFormRoute, defineLazyRoute, type FormRouteConfig } from '#route.js'
 import { validationFailed } from '#schema.js'
 import type { APIRoute } from 'astro'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeRouteContext, verdictReport } from './support/harness.js'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -802,6 +803,10 @@ describe('createFormRoute enrichers', () => {
 })
 
 describe('createFormRoute report draining', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('awaits an async onError triggered via an inspector report before responding', async () => {
     let settled = false
     const response = await createFormRoute({
@@ -823,6 +828,18 @@ describe('createFormRoute report draining', () => {
     // The response is only returned after the detached report promise has settled.
     expect(response.status).toBe(200)
     expect(settled).toBe(true)
+  })
+
+  it('still answers when onError never settles', async () => {
+    vi.useFakeTimers()
+    const pending = createFormRoute({
+      ...baseConfig,
+      guards: [{ guard: async () => ({ action: 'reject' as const, error: verificationError }) }],
+      onError: () => new Promise<void>(() => {})
+    })(contextFor(validForm()))
+
+    await vi.advanceTimersByTimeAsync(REPORTER_TIMEOUT_MS)
+    expect((await pending).status).toBe(400)
   })
 })
 

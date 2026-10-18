@@ -1,7 +1,7 @@
 import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 import { PostmarkDeliveryError } from '#dispatchers/postmark-delivery-error.js'
 import { OperationalError } from '#operational-error.js'
-import { defaultErrorReporter, type FormErrorStage } from '#reporting.js'
+import { containedReporter, defaultErrorReporter, REPORTER_TIMEOUT_MS, type FormErrorStage } from '#reporting.js'
 import { SubmissionVerdictError } from '#submission-verdict-error.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -138,5 +138,44 @@ describe('SubmissionVerdictError', () => {
     expect(error.message).toBe('The submission was rejected (spam.blocked).')
     expect(error.name).toBe('SubmissionVerdictError')
     expect(new SubmissionVerdictError('drop').message).toBe('The submission was dropped (no code given).')
+  })
+})
+
+describe('containedReporter', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('abandons a report that never settles once the timeout passes', async () => {
+    vi.useFakeTimers()
+    let settled = false
+    const report = containedReporter(() => new Promise<void>(() => {}))(new Error('outage'), 'delivery').then(() => {
+      settled = true
+    })
+
+    await vi.advanceTimersByTimeAsync(REPORTER_TIMEOUT_MS - 1)
+    expect(settled).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+    await report
+    expect(settled).toBe(true)
+  })
+
+  it('leaves no timer behind once a report settles', async () => {
+    vi.useFakeTimers()
+    await containedReporter(async () => {})(new Error('outage'), 'delivery')
+
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('contains a reporter that rejects after the timeout', async () => {
+    vi.useFakeTimers()
+    const report = containedReporter(
+      () =>
+        new Promise<void>((_resolve, reject) => setTimeout(() => reject(new Error('late')), REPORTER_TIMEOUT_MS * 2))
+    )(new Error('outage'), 'delivery')
+
+    await vi.advanceTimersByTimeAsync(REPORTER_TIMEOUT_MS * 2)
+    await expect(report).resolves.toBeUndefined()
   })
 })

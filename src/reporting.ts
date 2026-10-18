@@ -88,10 +88,14 @@ export function defaultErrorReporter(error: unknown, { stage }: { stage: FormErr
   console.error(`[astro-form-submissions] ${stage} error: ${summarizeError(error)}`)
 }
 
+/** How long a route waits on one report before abandoning it and answering anyway. */
+export const REPORTER_TIMEOUT_MS = 5_000
+
 /**
- * Wraps a reporter so every call is awaited (an async hook can't detach into an unhandled rejection)
- * and contained (a broken reporter can never replace the documented response). Reporter failures are
- * deliberately not re-reported: there is nowhere left to send them.
+ * Wraps a reporter so every call is awaited (an async hook can't detach into an unhandled rejection),
+ * contained (a broken reporter can never replace the documented response) and bounded (a report still
+ * pending after {@link REPORTER_TIMEOUT_MS} is abandoned, so a stalled hook can't hold the response open).
+ * Reporter failures and timeouts are deliberately not re-reported: there is nowhere left to send them.
  *
  * @param onError - The site's reporter, or `undefined` for {@link defaultErrorReporter}.
  * @returns The contained reporter.
@@ -100,10 +104,17 @@ export function containedReporter(onError: ErrorReporter | undefined) {
   const reporter = onError ?? defaultErrorReporter
 
   return async (error: unknown, stage: FormErrorStage): Promise<void> => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, REPORTER_TIMEOUT_MS)
+    })
+
     try {
-      await reporter(error, { stage })
+      await Promise.race([reporter(error, { stage }), timeout])
     } catch {
       /* see above */
+    } finally {
+      clearTimeout(timer)
     }
   }
 }
