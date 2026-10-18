@@ -189,15 +189,27 @@ describe('PostmarkDeliveryError', () => {
   })
 
   it('carries the status alone when the response is not Postmark JSON', async () => {
-    server.use(http.post(POSTMARK_URL, () => new HttpResponse('<html>Bad gateway</html>', { status: 502 })))
+    server.use(http.post(POSTMARK_URL, () => new HttpResponse('<html>Service unavailable</html>', { status: 503 })))
 
     const delivery = new PostmarkTransport({ token: 'tok' }).deliver(message)
 
     await expect(delivery).rejects.toBeInstanceOf(PostmarkDeliveryError)
     await expect(delivery).rejects.toMatchObject({
-      status: 502,
+      status: 503,
       errorCode: undefined,
-      message: 'Postmark refused the message (HTTP 502).'
+      message: 'Postmark refused the message (HTTP 503).'
     })
   })
+
+  it.each([502, 504])(
+    'treats a gateway %i as an unknown outcome, since the message may have been sent',
+    async (status) => {
+      server.use(http.post(POSTMARK_URL, () => new HttpResponse('<html>Gateway</html>', { status })))
+
+      const failure = await new PostmarkTransport({ token: 'tok' }).deliver(message).catch((error: unknown) => error)
+
+      expect(failure).toBeInstanceOf(DestinationUnreachableError)
+      expect((failure as DestinationUnreachableError).cause).toMatchObject({ name: 'PostmarkDeliveryError', status })
+    }
+  )
 })

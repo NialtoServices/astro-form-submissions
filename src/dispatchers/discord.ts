@@ -1,4 +1,4 @@
-import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
+import { DestinationUnreachableError, isGatewayFailure } from '#dispatchers/destination-unreachable-error.js'
 import { DiscordDeliveryError } from '#dispatchers/discord-delivery-error.js'
 import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
 import { resolveField, type FieldSpec } from '#dispatchers/fields.js'
@@ -260,7 +260,10 @@ export class DiscordDispatcher<E extends FormSubmission = FormSubmission> implem
     }
 
     if (!response.ok) {
-      throw new DiscordDeliveryError(response.status)
+      const refused = new DiscordDeliveryError(response.status)
+      if (isGatewayFailure(response.status)) throw new DestinationUnreachableError('Discord', { cause: refused })
+
+      throw refused
     }
   }
 

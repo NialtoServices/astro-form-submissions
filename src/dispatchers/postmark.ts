@@ -1,4 +1,4 @@
-import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
+import { DestinationUnreachableError, isGatewayFailure } from '#dispatchers/destination-unreachable-error.js'
 import type { EmailMessage, EmailTransport } from '#dispatchers/email.js'
 import { PostmarkDeliveryError } from '#dispatchers/postmark-delivery-error.js'
 import { assertPositiveNumberOption } from '#numeric-options.js'
@@ -84,7 +84,10 @@ export class PostmarkTransport implements EmailTransport {
 
     if (response.ok) return
 
-    throw new PostmarkDeliveryError(response.status, refusal?.ErrorCode, refusal?.Message)
+    const refused = new PostmarkDeliveryError(response.status, refusal?.ErrorCode, refusal?.Message)
+    if (isGatewayFailure(response.status)) throw new DestinationUnreachableError('Postmark', { cause: refused })
+
+    throw refused
   }
 }
 

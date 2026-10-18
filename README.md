@@ -657,8 +657,8 @@ built-in templates show the trusted `context.siteURL`'s host and leave it out wh
 - **`exposesResources`** — whether this delivery carries the enrichers' acquired resources (uploaded-file
   links) to a recipient who then needs them to persist. It decides upload rollback: files are kept when
   an exposing delivery succeeds (deleting them would leave dead links) and rolled back when none does.
-  An exposing delivery whose outcome is unknown (its destination timed out or couldn't be reached, a
-  `DestinationUnreachableError`) may still have landed, so it keeps the files too and reports that it
+  An exposing delivery whose outcome is unknown (its destination timed out, couldn't be reached, or sat behind
+  a gateway that answered 502 or 504; a `DestinationUnreachableError`) may still have landed, so it keeps the files too and reports that it
   did; the submission still fails, and a retry uploads afresh.
   For `EmailDispatcher` this **derives from the templates**: the built-in
   `submissionNotificationTemplates` / `submissionAcknowledgementTemplates` mark themselves as exposing

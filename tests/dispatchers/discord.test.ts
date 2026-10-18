@@ -176,6 +176,17 @@ describe('DiscordDispatcher dispatcher contract', () => {
     expect((error as { status?: unknown }).status).toBe(429)
     expect(String(error)).not.toContain('discord.test')
   })
+
+  it.each([502, 504])('treats a gateway %i as an unknown outcome, since the post may have landed', async (status) => {
+    stubFetch(() => new Response('', { status }))
+
+    const error = await new DiscordDispatcher({ webhookURL: 'https://discord.test/hook', fields: [] })
+      .dispatch(base, dispatchContext())
+      .catch((thrown: unknown) => thrown)
+
+    expect(error).toBeInstanceOf(DestinationUnreachableError)
+    expect((error as DestinationUnreachableError).cause).toMatchObject({ name: 'DiscordDeliveryError', status })
+  })
 })
 
 describe('DiscordDispatcher when the webhook cannot be reached', () => {
