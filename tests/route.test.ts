@@ -1419,6 +1419,10 @@ describe('createFormRoute failClosed', () => {
 })
 
 describe('defineLazyRoute', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('builds the route on first request and reuses it for later ones', async () => {
     const inner = vi.fn<APIRoute>(async () => new Response('ok'))
     const build = vi.fn(() => inner)
@@ -1476,6 +1480,22 @@ describe('defineLazyRoute', () => {
 
     await expect(route(contextFor(validForm()))).rejects.toBe(failure)
     expect(onError).toHaveBeenCalledExactlyOnceWith(failure, { stage: 'build' })
+  })
+
+  it('still rejects with the build error when onError never settles', async () => {
+    vi.useFakeTimers()
+    const failure = new Error('POSTMARK_TOKEN missing')
+    const route = defineLazyRoute(
+      () => {
+        throw failure
+      },
+      { onError: () => new Promise<void>(() => {}) }
+    )
+
+    const pending = route(contextFor(validForm()))
+    const settled = expect(pending).rejects.toBe(failure)
+    await vi.advanceTimersByTimeAsync(REPORTER_TIMEOUT_MS)
+    await settled
   })
 
   it("accepts the route's own onError reporter, so one reporter serves both", async () => {

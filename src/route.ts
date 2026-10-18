@@ -127,8 +127,9 @@ export interface FormRouteConfig<
   /**
    * Called with each failure the route handles itself (a skipped guard or inspector, a rolled-back
    * enricher, a failed delivery, an unexpected throw), and with each refused, dropped or quarantined
-   * submission as a {@link SubmissionVerdictError}. May be async; awaited for up to 5 seconds and
-   * contained, so it can never change or hold up the response.
+   * submission as a {@link SubmissionVerdictError}. May be async; each call is awaited for up to 5 seconds
+   * and contained, so it can never change the response, and a stalled one delays it by at most that long
+   * per report.
    *
    * The default, {@link defaultErrorReporter}, writes one **PII-safe line** per call: verdicts on
    * `console.warn`, failures on `console.error`, with the stage, error class, codes and safe details, never
@@ -425,8 +426,8 @@ export interface LazyRouteOptions {
   /**
    * Called once per failed build (however many requests were waiting on it), with `stage: 'build'`, before
    * the error is rethrown. A build fails before the route's own `onError` exists, so this is where it reaches
-   * your reporter; the signature matches the route's, so one reporter can serve both. Awaited and contained:
-   * a reporter that throws cannot replace the build's error.
+   * your reporter; the signature matches the route's, so one reporter can serve both. Awaited for up to 5
+   * seconds and contained: a reporter that throws or stalls cannot replace or hold up the build's error.
    */
   onError?: ErrorReporter
 }
@@ -455,6 +456,8 @@ export interface LazyRouteOptions {
  * never sees it. Pair it with `requireEnv` so a missing secret is reported by name.
  */
 export function defineLazyRoute(build: () => APIRoute | Promise<APIRoute>, options: LazyRouteOptions = {}): APIRoute {
+  const report = options.onError ? containedReporter(options.onError) : undefined
+
   let cached: Promise<APIRoute> | undefined
   return (context) => {
     const pending = (cached ??= Promise.resolve()
@@ -463,11 +466,7 @@ export function defineLazyRoute(build: () => APIRoute | Promise<APIRoute>, optio
         // Clear the slot so a construction failure retries on the next request instead of being cached.
         cached = undefined
 
-        try {
-          await options.onError?.(error, { stage: 'build' })
-        } catch {
-          // Nowhere left to report a broken reporter; the build's own error is what the caller must see.
-        }
+        await report?.(error, 'build')
         throw error
       }))
     return pending.then((route) => route(context))
