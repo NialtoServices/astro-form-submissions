@@ -58,8 +58,8 @@ function isMultipart(request: Request): boolean {
 
 /**
  * Parses the request body as form data, reading no more than `maxBytes` of it. A declared `Content-Length`
- * over the limit is refused before a byte is read; a body that runs past it is cut off there, so memory never
- * holds more than the limit however the length was declared.
+ * over the limit is refused before a byte is read; a body that runs past it is cut off there, so no more than
+ * the limit is read however the length was declared. Parsing then holds roughly two to three times that.
  *
  * @param request - The request whose body to read.
  * @param maxBytes - The most body bytes to read.

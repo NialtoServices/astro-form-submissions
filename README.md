@@ -504,14 +504,17 @@ The resolver feeds every stage, so the rate limit, Turnstile and your own guards
 **The route caps the body it reads.** `maxBodyBytes` (default 1 MiB, plus each `FileUploads` enricher's
 `maxTotalBytes`) bounds what the route parses after the guards have run: a declared `Content-Length` over it
 is refused with `requestTooLarge` (413) before a byte is read, and a body that runs past it is cut off there,
-so memory never holds more than the limit however the length was declared. Raise it for an enricher of your
-own that reads files from the body. A body that isn't multipart, such as an urlencoded form, can't carry files,
-so it is held to `maxTextBodyBytes` (default 64 KiB) instead: on Node, parsing a crafted urlencoded body slows
-quadratically with its size, and takes seconds at 1 MiB. Set a ceiling at your host's edge as well (a Cloudflare request-body limit
-or WAF rule, an Nginx `client_max_body_size`): the route stops reading, but the bytes keep crossing the network
-until the connection closes. **A route that accepts files through `FileUploads` must set one**, since its default
-limit is 50 MiB of files plus 1 MiB, and on Cloudflare Workers two bodies that size at once come close to the
-isolate's 128 MB.
+so the route never reads more than the limit however the length was declared. Parsing then holds roughly two
+to three times what it read, while the raw body and the parsed parts are both in memory. Raise the limit for an
+enricher of your own that reads files from the body. A body that isn't multipart, such as an urlencoded form,
+can't carry files, so it is held to `maxTextBodyBytes` (default 64 KiB) instead: on Node, parsing a crafted
+urlencoded body slows quadratically with its size, and takes seconds at 1 MiB.
+
+Set a ceiling at your host's edge as well (a Cloudflare request-body limit or WAF rule, an Nginx
+`client_max_body_size`): the route stops reading, but the bytes keep crossing the network until the connection
+closes. **A route that accepts files through `FileUploads` must set one.** At its default 50 MiB of files, a
+single submission can need over 100 MB while it is parsed, close to a Cloudflare Worker's 128 MB. On Workers,
+prefer [direct uploads](#direct-uploads) for large files, or keep `maxTotalBytes` to a few MiB.
 
 ## Inspectors
 
