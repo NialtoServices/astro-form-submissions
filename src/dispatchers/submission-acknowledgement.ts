@@ -58,8 +58,9 @@ export interface SubmissionAcknowledgementTemplatesOptions<
   brandName?: string
 
   /**
-   * A greeting line shown above the message (e.g. `(submission) => \`Hi ${submission.name},\``).
-   * Field names are site-specific, so there's no default — omitted unless you provide one.
+   * A greeting line shown above the message (e.g. `() => 'Hello,'`). Keep it fixed rather than built from
+   * the submission: the email goes to whatever address the sender typed, so a name copied into it carries
+   * their text to a stranger. Omitted unless you provide one.
    */
   greeting?: (submission: E) => string | undefined
 
