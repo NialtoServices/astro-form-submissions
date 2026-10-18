@@ -328,6 +328,21 @@ describe('form script submit controls', () => {
 
     expect(document.activeElement).toBe(control)
   })
+
+  it('leaves focus where it is when the submit button never had it', async () => {
+    stubFetch(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    const { form, status } = mountWithControl('<button type="submit">Send</button>')
+    const control = form.querySelector<HTMLButtonElement>('button')!
+    const input = form.querySelector<HTMLInputElement>('input[name="name"]')!
+    input.focus()
+
+    form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, submitter: control }))
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('error'))
+
+    expect(document.activeElement).toBe(input)
+  })
 })
 
 describe('form script failure handling', () => {
@@ -815,7 +830,7 @@ describe('form script success panel', () => {
     expect(panel.textContent).toBe('Thanks!')
   })
 
-  it('never reports an error, inviting a resend, when presenting a delivered success fails', async () => {
+  it('contains a failure presenting a delivered success, raising no error event', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
     const { form, submit } = mountForm({ successPanel: true })
@@ -827,7 +842,12 @@ describe('form script success panel', () => {
     document.addEventListener('astro-form:error', (event) => errors.push(event))
 
     submit()
-    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
+    await vi.waitFor(() =>
+      expect(warn).toHaveBeenCalledWith(
+        '[astro-form-submissions] Failed to present the success state',
+        expect.any(Error)
+      )
+    )
 
     expect(errors).toEqual([])
     expect(fetchSpy).toHaveBeenCalledOnce()
