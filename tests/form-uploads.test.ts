@@ -177,7 +177,7 @@ describe('form script — direct uploads', () => {
     expect(formBody.has('file')).toBe(false)
   })
 
-  it('reports progress across all files in the copy and as events', async () => {
+  it('reports every progress update as an event, and announces it as each file starts and at each quarter', async () => {
     installFakeXHR()
     stubFetch(async (url) =>
       String(url).includes('/uploads/') ? jsonResponse({ ok: true, uploads: grants }) : jsonResponse({ ok: true })
@@ -204,7 +204,7 @@ describe('form script — direct uploads', () => {
     ])
     expect(messages).toEqual([
       'Uploading 1 of 2 (0%)…',
-      'Uploading 1 of 2 (12%)…',
+      'Uploading 1 of 2 (0%)…',
       'Uploading 1 of 2 (25%)…',
       'Uploading 2 of 2 (25%)…',
       'Uploading 2 of 2 (62%)…',

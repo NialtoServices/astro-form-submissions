@@ -42,7 +42,7 @@
 // - `data-astro-form-upload-receipt-field` on the `<form>` — the field the receipts are posted under.
 //   Default `upload`, matching the `UploadedFiles` enricher.
 // - `data-astro-form-message-uploading` on the status element — the copy shown while files upload, with
-//   `{current}`, `{total}` and `{percent}` filled in.
+//   `{current}`, `{total}` and `{percent}` filled in, as each file starts and at each 25%.
 // - `astro-form:upload-progress` — emitted on the form as bytes go up, with
 //   `{ current, total, loaded, size, percent }`.
 
@@ -69,6 +69,9 @@ const TURNSTILE_POLL_INTERVAL_MS = 100
  * rendered widget and no loader means the loader was blocked or omitted, and no token is coming.
  */
 const TURNSTILE_LOADER_GRACE_MS = 2_000
+
+/** How far an upload must advance, in percent, before the status region announces its progress again. */
+const ANNOUNCED_PROGRESS_STEP_PERCENT = 25
 
 const DEFAULT_DESCRIPTOR_FIELD = 'uploads'
 const DEFAULT_RECEIPT_FIELD = 'upload'
@@ -616,14 +619,20 @@ async function submitWithUploads(
 
   const totalBytes = files.reduce((sum, file) => sum + file.size, 0)
   let bytesBefore = 0
+  let announcedStep = -1
   for (const [index, upload] of granted.entries()) {
     const file = files[index]
     if (!file) break
 
     const onProgress = (loaded: number) => {
       const percent = totalBytes > 0 ? Math.min(100, Math.floor(((bytesBefore + loaded) * 100) / totalBytes)) : 100
-      if (messages.uploading) {
+
+      // The status element is a polite live region and progress arrives every few dozen milliseconds, so
+      // it changes only as each file starts and at each step; the progress event carries every update.
+      const step = Math.floor(percent / ANNOUNCED_PROGRESS_STEP_PERCENT)
+      if (messages.uploading && (loaded === 0 || step !== announcedStep)) {
         statusElement.textContent = formatUploadingMessage(messages.uploading, index + 1, granted.length, percent)
+        announcedStep = step
       }
 
       formElement.dispatchEvent(
