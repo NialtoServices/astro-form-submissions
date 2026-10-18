@@ -837,9 +837,10 @@ they sent.
 > - **Leave `attachments` unset.** It would send links to files the poster uploaded, served from your
 >   domain.
 >
-> A `to` or `replyTo` function must return a single address: `EmailDispatcher` refuses one containing `,`,
-> `;` or a control character such as a line break (an `EmailRecipientError`), so one submission can't fan out
-> to many recipients or add headers of its own. Line breaks in a rendered subject become spaces for the same
+> A `to` or `replyTo` function must return a single address: `EmailDispatcher` refuses one containing `,` or
+> `;` outside a quoted display name (`"Lovelace, Ada" <ada@example.com>` is fine), or a control character such
+> as a line break (an `EmailRecipientError`), so one submission can't fan out to many recipients or add headers
+> of its own. Line breaks in a rendered subject become spaces for the same
 > reason.
 
 ```ts

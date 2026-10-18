@@ -115,7 +115,10 @@ describe('EmailDispatcher', () => {
   it.each([
     'ada@example.com, eve@example.com',
     'ada@example.com;eve@example.com',
-    'ada@example.com\r\nBcc: eve@example.com'
+    'ada@example.com\r\nBcc: eve@example.com',
+    '"Ada" <ada@example.com>, eve@example.com',
+    '"Lovelace, Ada <ada@example.com>, eve@example.com',
+    '"Ada\r\nBcc: eve@example.com" <ada@example.com>'
   ])('refuses a `to` function that resolves to several addresses or a header break (%j)', async (address) => {
     const deliver = vi.fn()
     const dispatcher = new EmailDispatcher({
@@ -148,6 +151,23 @@ describe('EmailDispatcher', () => {
       expect(deliver).not.toHaveBeenCalled()
     }
   )
+
+  it.each([
+    '"Lovelace, Ada" <ada@example.com>',
+    '"Ada; Byron" <ada@example.com>',
+    '"Ada \\"A, L\\"" <ada@example.com>'
+  ])('accepts a comma or semicolon inside a quoted display name (%j)', async (address) => {
+    const deliver = vi.fn()
+    await new EmailDispatcher({
+      transport: { deliver },
+      templates,
+      from: 'noreply@acme.test',
+      to: (submission) => submission.email as string,
+      replyTo: (submission) => submission.email as string
+    }).dispatch({ email: address }, dispatchContext())
+
+    expect(deliveredMessage(deliver)).toMatchObject({ to: address, replyTo: address })
+  })
 
   it('turns line breaks in a rendered subject into spaces', () => {
     const content = renderEmail(

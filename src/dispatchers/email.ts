@@ -69,9 +69,15 @@ export function renderEmail<E extends FormSubmission, A>(
   }
 }
 
-/** Whether a resolved address names one recipient and holds no control character that could end a header line. */
+/** A quoted display name, whose `\"` escapes stay inside it. */
+const QUOTED_STRING = /"(?:[^"\\]|\\.)*"/g
+
+/**
+ * Whether a resolved address names one recipient and holds no control character that could end a header line.
+ * A comma or semicolon separates recipients only outside a quoted display name (`"Lovelace, Ada" <…>`).
+ */
 function isSingleAddress(address: string): boolean {
-  return !/[,;\u0000-\u001f\u007f]/.test(address)
+  return !/[\u0000-\u001f\u007f]/.test(address) && !/[,;]/.test(address.replace(QUOTED_STRING, ''))
 }
 
 /**
