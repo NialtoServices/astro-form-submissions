@@ -100,6 +100,13 @@ export class FileUploads<
     assertFileLimitOptions('FileUploads', options)
   }
 
+  // MARK: - Limits
+
+  /** The most file bytes one submission may carry, which the form route adds to the body it will read. */
+  get maxTotalBytes(): number {
+    return this.options.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES
+  }
+
   // MARK: - Enricher API
 
   async enrich(submission: E, context: EnrichmentContext<E>): Promise<EnrichmentResult<Record<K, FileLink[]>>> {
@@ -107,7 +114,7 @@ export class FileUploads<
     const attachTo = this.options.attachTo ?? 'files'
     const maxFiles = this.options.maxFiles ?? DEFAULT_MAX_FILES
     const maxFileBytes = this.options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES
-    const maxTotalBytes = this.options.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES
+    const maxTotalBytes = this.maxTotalBytes
     const accept = this.options.accept ?? ALL_TYPES
 
     // A file input left empty still submits a zero-byte part — drop those before counting.

@@ -1,9 +1,10 @@
-import { admit, clientAddressLookup, ERRORS, type ClientAddressResolver } from '#admission.js'
+import { admit, clientAddressLookup, DEFAULT_MAX_BODY_BYTES, ERRORS, type ClientAddressResolver } from '#admission.js'
 import { DestinationUnreachableError, type DispatchContext, type Dispatcher } from '#dispatchers/index.js'
 import { FileUploads, UploadedFiles, type Enricher, type EnrichmentContext } from '#enrichers/index.js'
 import type { FormError, FormErrors, ToolkitErrorKey } from '#errors.js'
 import { RateLimitGuard, type Guard } from '#guards/index.js'
 import { TurnstileInspector, type Inspector } from '#inspectors/index.js'
+import { assertPositiveNumberOption } from '#numeric-options.js'
 import { OperationalError } from '#operational-error.js'
 import type { FormSubmission } from '#pipeline.js'
 import { containedReporter, type ErrorReporter, type FormErrorStage } from '#reporting.js'
@@ -12,7 +13,7 @@ import type { SchemaInput, Submission } from '#schema.js'
 import { SubmissionVerdictError } from '#submission-verdict-error.js'
 import type { APIRoute } from 'astro'
 
-export { ERRORS, type FormErrorStage }
+export { DEFAULT_MAX_BODY_BYTES, ERRORS, type FormErrorStage }
 
 // MARK: - Errors
 
@@ -24,6 +25,7 @@ export { ERRORS, type FormErrorStage }
  */
 export const DEFAULT_ERROR_COPY: Record<ToolkitErrorKey, string> = {
   invalidForm: ERRORS.invalidForm.message,
+  requestTooLarge: ERRORS.requestTooLarge.message,
   send: ERRORS.send.message,
   unavailable: ERRORS.unavailable.message,
   validationFailed: ERRORS.validationFailed.message,
@@ -71,8 +73,16 @@ export interface FormRouteConfig<
   S extends SchemaInput,
   Es extends readonly Enricher<Submission<S>, unknown>[] = readonly Enricher<Submission<S>, unknown>[]
 > {
-  /** Cheap gates run before the body is parsed (e.g. a declared-length fast path, rate limit). Each may accept, quarantine, reject, or drop. */
+  /** Cheap gates run before the body is parsed (e.g. a rate limit). Each may accept, quarantine, reject, or drop. */
   guards?: Guard[]
+
+  /**
+   * The most request-body bytes the route reads. A larger body is refused with `requestTooLarge` (413)
+   * before it's parsed, and reading stops as soon as the limit is passed. Default
+   * {@link DEFAULT_MAX_BODY_BYTES} plus each {@link FileUploads} enricher's `maxTotalBytes`; raise it for a
+   * custom enricher that reads files from the body.
+   */
+  maxBodyBytes?: number
 
   /**
    * Resolves the client's address for every stage (the rate-limit key, Turnstile's `remoteip`, and
@@ -167,7 +177,17 @@ export function createFormRoute<
   const S extends SchemaInput,
   const Es extends readonly Enricher<Submission<S>, unknown>[] = []
 >(config: FormRouteConfig<S, Es>): APIRoute {
+  assertPositiveNumberOption('createFormRoute `maxBodyBytes`', config.maxBodyBytes)
+
   const report = containedReporter(config.onError)
+
+  // A multipart body carries FileUploads' files themselves, so each one widens the default by what it accepts.
+  const maxBodyBytes =
+    config.maxBodyBytes ??
+    (config.enrichers ?? []).reduce(
+      (total, enricher) => (enricher instanceof FileUploads ? total + enricher.maxTotalBytes : total),
+      DEFAULT_MAX_BODY_BYTES
+    )
 
   const dispatchGroups = dispatchGroupsFrom<Dispatcher<Submission<S>, MergedProvided<Es>>>(config.dispatchers ?? [])
 
@@ -215,16 +235,19 @@ export function createFormRoute<
     let admittedFormData: FormData | undefined
 
     try {
-      const admission = await admit(config, {
-        route: 'form',
-        request,
-        url,
-        site,
-        submittedAt,
-        clientAddress,
-        report,
-        registerReport
-      })
+      const admission = await admit(
+        { ...config, maxBodyBytes },
+        {
+          route: 'form',
+          request,
+          url,
+          site,
+          submittedAt,
+          clientAddress,
+          report,
+          registerReport
+        }
+      )
       if (admission.outcome === 'respond') return admission.response
       if (admission.outcome === 'drop') return jsonOk()
 

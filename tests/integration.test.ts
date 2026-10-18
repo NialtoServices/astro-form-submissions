@@ -227,7 +227,7 @@ describe('the composed pipeline with guards and file uploads', () => {
     })
   }
 
-  function submitWithFile(storage: FileStorage, limiter: RateLimiter, options: { withFile?: boolean } = {}) {
+  function fileSubmission(options: { withFile?: boolean } = {}) {
     const data = new FormData()
     data.set('name', 'Ada')
     data.set('email', 'ada@example.com')
@@ -238,7 +238,11 @@ describe('the composed pipeline with guards and file uploads', () => {
       buffer.set(PDF_HEADER)
       data.append('file', new File([buffer], 'quote.pdf'))
     }
-    return uploadRoute(storage, limiter)(makeRouteContext({ body: data, url: 'https://example.com/api/contact' }))
+    return makeRouteContext({ body: data, url: 'https://example.com/api/contact' })
+  }
+
+  function submitWithFile(storage: FileStorage, limiter: RateLimiter, options: { withFile?: boolean } = {}) {
+    return uploadRoute(storage, limiter)(fileSubmission(options))
   }
 
   it('uploads the file then emails the submission with a download link', async () => {
@@ -255,9 +259,11 @@ describe('the composed pipeline with guards and file uploads', () => {
 
   it('rejects a rate-limited request before the body is parsed or any file stored', async () => {
     const { storage, put } = stubStorage()
-    const response = await submitWithFile(storage, stubLimiter(false))
+    const context = fileSubmission()
+    const response = await uploadRoute(storage, stubLimiter(false))(context)
 
     expect(response.status).toBe(429)
+    expect(context.request.bodyUsed).toBe(false)
     expect(siteverifyCalls).toBe(0)
     expect(put).not.toHaveBeenCalled()
     expect(postmarkRequests).toHaveLength(0)

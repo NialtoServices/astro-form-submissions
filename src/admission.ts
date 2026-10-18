@@ -24,6 +24,11 @@ import type { APIContext } from 'astro'
 /** Errors the route factories themselves raise. Override the copy per-site via `errors[key]`. */
 export const ERRORS = {
   invalidForm: formError('invalidForm', 400, 'Invalid form data.'),
+  requestTooLarge: formError(
+    'requestTooLarge',
+    413,
+    'Your submission is too large to send. Please shorten it or remove some files.'
+  ),
   send: formError('send', 502, 'Could not send your message right now. Please try again or call us directly.'),
   unavailable: formError(
     'unavailable',
@@ -35,6 +40,48 @@ export const ERRORS = {
   validationFailed
 } as const
 
+// MARK: - Body
+
+/** The largest body a route reads when it carries no files: far beyond any text a form submits. */
+export const DEFAULT_MAX_BODY_BYTES = 1024 * 1024
+
+/**
+ * Parses the request body as form data, reading no more than `maxBytes` of it. A declared `Content-Length`
+ * over the limit is refused before a byte is read; a body that runs past it is cut off there, so memory never
+ * holds more than the limit however the length was declared.
+ *
+ * @param request - The request whose body to read.
+ * @param maxBytes - The most body bytes to read.
+ * @returns The form data, `'too-large'` past the limit, or `undefined` when the body isn't form data.
+ */
+async function readFormData(request: Request, maxBytes: number): Promise<FormData | 'too-large' | undefined> {
+  if (Number(request.headers.get('content-length')) > maxBytes) return 'too-large'
+  if (!request.body) return request.formData().catch(() => undefined)
+
+  let receivedBytes = 0
+  let tooLarge = false
+  const counted = request.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        receivedBytes += chunk.byteLength
+        if (receivedBytes > maxBytes) {
+          tooLarge = true
+          controller.error(new RangeError(`The request body exceeds ${maxBytes} bytes.`))
+          return
+        }
+
+        controller.enqueue(chunk)
+      }
+    })
+  )
+
+  const contentType = request.headers.get('content-type')
+  const formData = await new Response(counted, { headers: contentType ? { 'Content-Type': contentType } : {} })
+    .formData()
+    .catch(() => undefined)
+  return tooLarge ? 'too-large' : formData
+}
+
 // MARK: - Admission
 
 /** The stages that decide whether a request is let in: identical for the form route and the upload route. */
@@ -43,6 +90,13 @@ export interface AdmissionConfig<S extends SchemaInput> {
   schema: S
   inspectors?: Inspector<Submission<S>>[]
   errors?: FormErrors
+
+  /**
+   * The most request-body bytes the route reads. A larger body is refused with `requestTooLarge` (413)
+   * before it's parsed, and reading stops as soon as the limit is passed. Default
+   * {@link DEFAULT_MAX_BODY_BYTES}; the form route adds each `FileUploads` enricher's `maxTotalBytes`.
+   */
+  maxBodyBytes?: number
 
   /**
    * Resolves the client's address for every stage (the rate-limit key, Turnstile's `remoteip`, and
@@ -117,8 +171,8 @@ function verdictError(verdict: Verdict): SubmissionVerdictError | undefined {
 }
 
 /**
- * Runs guards (before the body is read), parses the body, validates it against the schema, and runs
- * the inspectors in order.
+ * Runs guards (before the body is read), parses up to `maxBodyBytes` of the body, validates it against the
+ * schema, and runs the inspectors in order.
  *
  * @param config - The guards, schema, inspectors and copy overrides.
  * @param request - The request and the route's reporters.
@@ -181,7 +235,13 @@ export async function admit<S extends SchemaInput>(
     }
   }
 
-  const formData = await request.request.formData().catch(() => undefined)
+  const maxBodyBytes = config.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES
+  const formData = await readFormData(request.request, maxBodyBytes)
+  if (formData === 'too-large') {
+    registerReport(new SubmissionVerdictError('reject', 'request.too-large', { limit: maxBodyBytes }), 'validation')
+    return fail(ERRORS.requestTooLarge)
+  }
+
   if (!formData) {
     registerReport(new SubmissionVerdictError('reject', 'form.unparseable'), 'validation')
     return fail(ERRORS.invalidForm)

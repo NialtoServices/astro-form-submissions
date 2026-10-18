@@ -46,6 +46,7 @@ export type CopyResolver = (key: string, defaultMessage: string, context: CopyCo
  */
 export type ToolkitErrorKey =
   | 'invalidForm'
+  | 'requestTooLarge'
   | 'send'
   | 'unavailable'
   | 'validationFailed'

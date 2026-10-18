@@ -1,10 +1,11 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
+import { FileUploads } from '#enrichers/file-uploads.js'
 import { formError } from '#errors.js'
 import type { FormSubmission } from '#pipeline.js'
 import { REPORTER_TIMEOUT_MS } from '#reporting.js'
-import { createFormRoute, defineLazyRoute, type FormRouteConfig } from '#route.js'
+import { createFormRoute, DEFAULT_MAX_BODY_BYTES, defineLazyRoute, ERRORS, type FormRouteConfig } from '#route.js'
 import { validationFailed } from '#schema.js'
 import type { APIRoute } from 'astro'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -451,36 +452,42 @@ describe('createFormRoute guards', () => {
 
   it('runs guards before the body is parsed', async () => {
     const validate = vi.fn(() => ({ value: {} }))
+    const context = contextFor(validForm())
     const response = await createFormRoute({
       schema: standardSchema(validate),
       guards: [{ guard: async () => ({ action: 'reject' as const, error: requestTooLarge }) }]
-    })(contextFor(validForm()))
+    })(context)
 
     expect(response.status).toBe(413)
+    expect(context.request.bodyUsed).toBe(false)
     expect(validate).not.toHaveBeenCalled()
   })
 
   it('a passing guard lets the request continue', async () => {
     const { dispatcher, dispatch } = stubDispatcher()
+    const context = contextFor(validForm())
     const response = await createFormRoute({
       ...baseConfig,
       guards: [{ guard: async () => ({ action: 'accept' as const }) }],
       dispatchers: [dispatcher]
-    })(contextFor(validForm()))
+    })(context)
 
     expect(response.status).toBe(200)
+    expect(context.request.bodyUsed).toBe(true)
     expect(dispatch).toHaveBeenCalledOnce()
   })
 
   it('a dropping guard returns a silent 200 and nothing runs', async () => {
     const validate = vi.fn(() => ({ value: {} }))
+    const context = contextFor(validForm())
     const response = await createFormRoute({
       schema: standardSchema(validate),
       guards: [{ guard: async () => ({ action: 'drop' as const }) }]
-    })(contextFor(validForm()))
+    })(context)
 
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({ ok: true })
+    expect(context.request.bodyUsed).toBe(false)
     expect(validate).not.toHaveBeenCalled()
   })
 
@@ -520,6 +527,111 @@ describe('createFormRoute guards', () => {
     // The guard's quarantine survives the body parse and reaches the dispatch gate, reason and all.
     expect(ops.dispatch).toHaveBeenCalledOnce()
     expect(ops.dispatch.mock.calls[0]![1].quarantineReasons).toEqual(['blocked-region'])
+  })
+})
+
+describe('createFormRoute body limit', () => {
+  const PDF_HEADER = new TextEncoder().encode('%PDF-1.7')
+
+  /** A form whose single file holds `bytes` bytes of PDF. */
+  function formWithFile(bytes: number) {
+    const contents = new Uint8Array(bytes)
+    contents.set(PDF_HEADER)
+    const data = validForm()
+    data.set('file', new File([contents], 'quote.pdf'))
+    return data
+  }
+
+  /**
+   * A request context carrying `data` already encoded as multipart bytes, as a real request's body arrives.
+   * Node's encoder for a `FormData` body keeps writing after the route cancels it past the limit, which
+   * surfaces as an unhandled rejection; a byte body cancels cleanly.
+   */
+  async function encodedContext(data: FormData) {
+    const encoded = new Response(data)
+    return contextFor(new Uint8Array(await encoded.arrayBuffer()), {
+      'Content-Type': encoded.headers.get('content-type') ?? ''
+    })
+  }
+
+  const fileUploads = (maxTotalBytes: number) =>
+    new FileUploads({
+      storage: { put: async () => {}, get: async () => null, delete: async () => {} },
+      link: async () => 'https://example.com/files/token/',
+      maxFileBytes: maxTotalBytes,
+      maxTotalBytes
+    })
+
+  it('refuses a declared length over the limit without reading the body', async () => {
+    const onError = vi.fn()
+    const context = contextFor(new URLSearchParams({ name: 'Ada' }), {
+      'Content-Length': String(DEFAULT_MAX_BODY_BYTES + 1),
+      'Content-Type': 'application/x-www-form-urlencoded'
+    })
+
+    const response = await createFormRoute({ ...baseConfig, onError })(context)
+
+    expect(response.status).toBe(413)
+    expect(await response.json()).toEqual({ error: ERRORS.requestTooLarge.message })
+    expect(context.request.bodyUsed).toBe(false)
+    expect(onError).toHaveBeenCalledWith(
+      verdictReport('reject', 'request.too-large', { limit: DEFAULT_MAX_BODY_BYTES }),
+      {
+        stage: 'validation'
+      }
+    )
+  })
+
+  it('stops reading an undeclared body once it passes the limit', async () => {
+    let pulledBytes = 0
+    let cancelled = false
+    const chunk = new Uint8Array(64 * 1024)
+    const endless = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (cancelled) return
+
+        pulledBytes += chunk.byteLength
+        controller.enqueue(chunk)
+      },
+      cancel() {
+        cancelled = true
+      }
+    })
+    const request = new Request('https://example.com/api/form', {
+      method: 'POST',
+      body: endless,
+      headers: { 'Content-Type': 'multipart/form-data; boundary=x' },
+      duplex: 'half'
+    } as RequestInit)
+
+    const response = await createFormRoute(baseConfig)({ ...contextFor(validForm()), request })
+
+    expect(response.status).toBe(413)
+    expect(cancelled).toBe(true)
+    expect(pulledBytes).toBeGreaterThan(DEFAULT_MAX_BODY_BYTES)
+    expect(pulledBytes).toBeLessThan(DEFAULT_MAX_BODY_BYTES + 4 * chunk.byteLength)
+  })
+
+  it("honours the site's own limit", async () => {
+    const route = createFormRoute({ ...baseConfig, maxBodyBytes: 2_000 })
+
+    expect((await route(await encodedContext(validForm()))).status).toBe(200)
+    expect((await route(await encodedContext(validForm({ message: 'x'.repeat(2_000) })))).status).toBe(413)
+  })
+
+  it("widens the default by each FileUploads enricher's total, since the files travel in the body", async () => {
+    const twoMegabyteForm = () => encodedContext(formWithFile(2 * 1024 * 1024))
+
+    expect((await createFormRoute(baseConfig)(await twoMegabyteForm())).status).toBe(413)
+    expect(
+      (await createFormRoute({ ...baseConfig, enrichers: [fileUploads(3 * 1024 * 1024)] })(await twoMegabyteForm()))
+        .status
+    ).toBe(200)
+  })
+
+  it('refuses a limit that would never limit', () => {
+    expect(() => createFormRoute({ ...baseConfig, maxBodyBytes: Number.NaN })).toThrow('maxBodyBytes')
+    expect(() => createFormRoute({ ...baseConfig, maxBodyBytes: 0 })).toThrow('maxBodyBytes')
   })
 })
 

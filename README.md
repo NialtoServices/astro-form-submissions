@@ -292,7 +292,7 @@ createFormRoute({
 Errors are **values, not registry keys**: a `FormError` carries a stable `key`, the `status` to
 fail with, and its default copy. There is no central list — every error lives with its raiser:
 
-- the route factory's `ERRORS` hold its own failures — `invalidForm`, `send`, `unavailable` — plus the
+- the route factory's `ERRORS` hold its own failures — `invalidForm`, `requestTooLarge`, `send`, `unavailable` — plus the
   schema stage's `validationFailed`, surfaced there so the keys sit together;
 - shipped components own theirs (e.g. `TurnstileInspector.errors.verification`,
   `FileUploads.errors.fileTooLarge`).
@@ -328,6 +328,7 @@ read, so the resolver receives no `data` and falls back to default-locale copy.
 | Option          | Default                | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | --------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `guards`        | `[]`                   | Gates run before the body is parsed; each may pass, quarantine, reject, or drop (see [Guards](#guards)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `maxBodyBytes`  | 1 MiB + files          | The most request-body bytes the route reads; a larger body is refused with `requestTooLarge` (413). The default adds each `FileUploads` enricher's `maxTotalBytes` (see [Guards](#guards)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `schema`        | —                      | Required. A Standard Schema validator (or a factory returning one) that validates and shapes the submission.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `inspectors`    | `[]`                   | Inspections run in order; each may accept, quarantine, drop, or reject (see below).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `enrichers`     | `[]`                   | Resource acquisition run after inspectors; each provides a resource onto `context.resources` and can roll back (see [Uploads](#file-uploads)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -356,6 +357,7 @@ The toolkit's codes:
 | Stage        | Code                               | Details                                                                                    | Meaning                                                                                      |
 | ------------ | ---------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
 | `guard`      | `rate-limit.exceeded`              | none                                                                                       | The limiter refused the request. The key is never logged, since it derives from the address. |
+| `validation` | `request.too-large`                | `limit`                                                                                    | The body was larger than `maxBodyBytes`, so it wasn't read.                                  |
 | `validation` | `form.unparseable`                 | none                                                                                       | The body wasn't form data.                                                                   |
 | `validation` | `schema.invalid`                   | `fields`                                                                                   | The schema refused these fields. Only their names are logged, never the messages.            |
 | `validation` | `schema.no-value`                  | none                                                                                       | The schema returned neither issues nor a value.                                              |
@@ -497,26 +499,13 @@ createUploadRoute({ schema, clientAddress, guards, inspectors, target, secret })
 
 The resolver feeds every stage, so the rate limit, Turnstile and your own guards agree on one address.
 
-**A route that accepts uploads must set a true ceiling at your host's edge** (e.g. a Cloudflare
-request-body limit or WAF rule, an Nginx `client_max_body_size`); the authoritative per-file/total
-caps live in `FileUploads`. No guard can enforce a real body cap — the declared `Content-Length` can
-be absent, chunked, or understated, and a guard can't consume the stream the route later parses. Where
-a cheap refusal for honest clients is worth it, a few lines gate the declared length as a fast path,
-**not a cap**:
-
-```ts
-import { formError, type Guard } from '@nialto-services/astro-form-submissions'
-
-const contentLengthGuard: Guard = {
-  guard: async (context) => {
-    const declaredBytes = Number(context.request.headers.get('content-length'))
-    if (declaredBytes > 50 * 1024 * 1024)
-      return { action: 'reject', error: formError('requestTooLarge', 413, 'Your submission is too large.') }
-
-    return { action: 'accept' }
-  }
-}
-```
+**The route caps the body it reads.** `maxBodyBytes` (default 1 MiB, plus each `FileUploads` enricher's
+`maxTotalBytes`) bounds what the route parses after the guards have run: a declared `Content-Length` over it
+is refused with `requestTooLarge` (413) before a byte is read, and a body that runs past it is cut off there,
+so memory never holds more than the limit however the length was declared. Raise it for an enricher of your
+own that reads files from the body. A ceiling at your host's edge (a Cloudflare request-body limit or WAF
+rule, an Nginx `client_max_body_size`) is still worth setting: the route stops reading, but the bytes keep
+crossing the network until the connection closes.
 
 ## Inspectors
 
@@ -1394,9 +1383,8 @@ Leave optional ones, such as a Discord webhook, out of the list.
 
 ## À la carte and bespoke flows
 
-File uploads, rate limiting, and per-file size limits are all first-class (see
-[File uploads](#file-uploads) and [Guards](#guards)), so a form that needs them stays on the factory. A
-true request-body ceiling is your host's job, as [Guards](#guards) explains.
+File uploads, rate limiting, per-file size limits and a request-body cap are all first-class (see
+[File uploads](#file-uploads) and [Guards](#guards)), so a form that needs them stays on the factory.
 Genuinely bespoke flows can still import any piece on its own (`TurnstileInspector`, `FileUploads`,
 `EmailDispatcher`, `createFileRoute`, `getField`, the response helpers) rather than the factory.
 
