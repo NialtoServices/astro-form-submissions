@@ -239,4 +239,38 @@ describe('withReportingBudget', () => {
     expect(finished).toBe(true)
     expect(hook).toHaveBeenCalledTimes(3)
   })
+
+  it('counts only time spent waiting, so a late report still gets what earlier ones left', async () => {
+    vi.useFakeTimers()
+    const completed: string[] = []
+    const report = withReportingBudget(
+      containedReporter(async (error) => {
+        await new Promise((resolve) => setTimeout(resolve, 1_000))
+        completed.push((error as Error).message)
+      })
+    )
+
+    const early = report(new Error('early'), 'inspection')
+    await vi.advanceTimersByTimeAsync(1_000)
+    await early
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    const late = report(new Error('late'), 'delivery').then(() => [...completed])
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(await late).toEqual(['early', 'late'])
+  })
+
+  it('never waits longer than one timeout in all, however its reports overlap', async () => {
+    vi.useFakeTimers()
+    const report = withReportingBudget(containedReporter(() => new Promise<void>(() => {})))
+    const settled: string[] = []
+
+    void report(new Error('first'), 'guard').then(() => settled.push('first'))
+    await vi.advanceTimersByTimeAsync(REPORTER_TIMEOUT_MS - 1_000)
+    void report(new Error('second'), 'delivery').then(() => settled.push('second'))
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(settled).toEqual(['first', 'second'])
+  })
 })
