@@ -1,6 +1,7 @@
 import type { EnrichmentContext } from '#enrichers/enricher.js'
 import { signedLink, signFileToken, verifyFileToken } from '#files/signing.js'
 import { OperationalError } from '#operational-error.js'
+import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
 const SECRET = 'a-sufficiently-long-signing-secret'
@@ -11,6 +12,22 @@ const token = { objectKey: 'abc-123', exp: inOneHour() }
 
 /** The base64url alphabet, in value order, so a character's index is the six bits it encodes. */
 const BASE64URL_ALPHABET = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_']
+
+/** One change to a token: a character replaced, added or removed, most often near the end, where the signature is. */
+const tokenEdit = fc.record({
+  kind: fc.constantFrom('replace', 'insert', 'remove'),
+  offsetFromEnd: fc.oneof(fc.nat({ max: 3 }), fc.nat({ max: 400 })),
+  character: fc.oneof(fc.constantFrom(' ', '=', '.', '~', '+', '/', '\t'), fc.constantFrom(...BASE64URL_ALPHABET))
+})
+
+/** Applies a {@link tokenEdit} to a token, counting its position back from the end. */
+function applyEdit(token: string, edit: { kind: string; offsetFromEnd: number; character: string }): string {
+  const index = Math.max(0, token.length - 1 - (edit.offsetFromEnd % token.length))
+  if (edit.kind === 'remove') return token.slice(0, index) + token.slice(index + 1)
+  if (edit.kind === 'insert') return token.slice(0, index + 1) + edit.character + token.slice(index + 1)
+
+  return token.slice(0, index) + edit.character + token.slice(index + 1)
+}
 
 // The stored-file descriptor a link builder receives.
 const stored = { objectKey: 'abc-123', filename: 'quote.pdf', contentType: 'application/pdf' }
@@ -64,6 +81,41 @@ describe('signFileToken / verifyFileToken', () => {
     ]) {
       expect(await verifyFileToken(`${header}.${body}.${respelled}`, SECRET)).toBeNull()
     }
+  })
+
+  it('verifies any object key it signed back to exactly what was signed', async () => {
+    await fc.assert(
+      fc.asyncProperty(fc.string({ unit: 'binary' }), async (objectKey) => {
+        const claims = { objectKey, exp: inOneHour() }
+
+        expect(await verifyFileToken(await signFileToken(claims, SECRET), SECRET)).toEqual(claims)
+      })
+    )
+  })
+
+  it('rejects a token with any character changed, added or removed, without throwing', async () => {
+    await fc.assert(
+      fc.asyncProperty(fc.string({ unit: 'binary', maxLength: 40 }), tokenEdit, async (objectKey, edit) => {
+        const signed = await signFileToken({ objectKey, exp: inOneHour() }, SECRET)
+        const edited = applyEdit(signed, edit)
+        if (edited === signed) return
+
+        expect(await verifyFileToken(edited, SECRET)).toBeNull()
+      }),
+      { numRuns: 1000 }
+    )
+  })
+
+  it('rejects any string that it did not sign, without throwing', async () => {
+    const tokenLike = fc
+      .array(fc.constantFrom(...BASE64URL_ALPHABET, '.', '='), { maxLength: 200 })
+      .map((characters) => characters.join(''))
+
+    await fc.assert(
+      fc.asyncProperty(fc.oneof(fc.string({ unit: 'binary' }), tokenLike), async (candidate) => {
+        expect(await verifyFileToken(candidate, SECRET)).toBeNull()
+      })
+    )
   })
 
   it('rejects an authentically-signed but expired token', async () => {
