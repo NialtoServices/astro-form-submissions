@@ -258,6 +258,25 @@ describe('FileUploads', () => {
     }
   )
 
+  it('stores nothing when a later file fails validation', async () => {
+    const mismatched = stubStorage()
+    const oversized = stubStorage()
+
+    const typeResult = await uploader(mismatched.storage).enrich(
+      { name: 'Ada' },
+      contextWith([upload('quote.pdf', PDF_HEADER), upload('mystery.bin', [0x00, 0x01, 0x02])])
+    )
+    const totalResult = await uploader(oversized.storage, { maxTotalBytes: 1_000 }).enrich(
+      { name: 'Ada' },
+      contextWith([upload('quote.pdf', PDF_HEADER, 600), upload('photo.png', PNG_HEADER, 600)])
+    )
+
+    expect(typeResult).toMatchObject({ code: 'file-uploads.type-not-accepted' })
+    expect(mismatched.put).not.toHaveBeenCalled()
+    expect(totalResult).toMatchObject({ code: 'file-uploads.total-too-large' })
+    expect(oversized.put).not.toHaveBeenCalled()
+  })
+
   it('reads files from a custom field name', async () => {
     const { storage, put } = stubStorage()
     const result = await uploader(storage, { field: 'attachment' }).enrich(

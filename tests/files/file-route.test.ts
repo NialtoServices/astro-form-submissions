@@ -90,6 +90,15 @@ describe('createFileRoute', () => {
     expect(response.status).toBe(404)
   })
 
+  it('404s a genuine token whose signature is not base64url, rather than erroring', async () => {
+    const { storage } = stubStorage(STORED)
+    const [header, body] = (await signFileToken({ objectKey: OBJECT_KEY, exp: inOneHour() }, SECRET)).split('.')
+
+    const response = await request(createFileRoute({ storage, secret: SECRET }), `${header}~${body}~!!!!`)
+
+    expect(response.status).toBe(404)
+  })
+
   it('404s a token signed with a different secret', async () => {
     const { storage } = stubStorage(STORED)
     const token = (await signFileToken({ objectKey: OBJECT_KEY, exp: inOneHour() }, 'other-secret')).replaceAll(

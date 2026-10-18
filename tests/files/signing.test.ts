@@ -38,6 +38,13 @@ describe('signFileToken / verifyFileToken', () => {
     expect(await verifyFileToken('', SECRET)).toBeNull()
   })
 
+  it('rejects a genuine header and body with a signature that is not base64url', async () => {
+    const [header, body] = (await signFileToken(token, SECRET)).split('.')
+
+    expect(await verifyFileToken(`${header}.${body}.!!!!`, SECRET)).toBeNull()
+    expect(await verifyFileToken(`${header}.${body}.abcde`, SECRET)).toBeNull()
+  })
+
   it('rejects an authentically-signed but expired token', async () => {
     const expired = await signFileToken({ objectKey: 'abc-123', exp: Math.floor(Date.now() / 1000) - 1 }, SECRET)
     expect(await verifyFileToken(expired, SECRET)).toBeNull()
