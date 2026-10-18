@@ -309,6 +309,25 @@ describe('form script submit controls', () => {
     await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
     expect(control.disabled).toBe(false)
   })
+
+  it('returns focus to the submit button when disabling it dropped focus to the page', async () => {
+    const { form, status } = mountWithControl('<button type="submit">Send</button>')
+    const control = form.querySelector<HTMLButtonElement>('button')!
+    stubFetch(async () => {
+      // Browsers move focus off a control as it is disabled, and happy-dom doesn't, nor will it blur a
+      // disabled one, so this plays the browser's part while the request is in flight.
+      control.disabled = false
+      control.blur()
+      control.disabled = true
+      throw new TypeError('Failed to fetch')
+    })
+    control.focus()
+
+    form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, submitter: control }))
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('error'))
+
+    expect(document.activeElement).toBe(control)
+  })
 })
 
 describe('form script failure handling', () => {

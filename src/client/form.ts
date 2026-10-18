@@ -687,6 +687,9 @@ async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<voi
       ? new FormData(formElement, submitterElement)
       : new FormData(formElement)
 
+  // Disabling a focused control drops focus to <body>, and re-enabling it doesn't bring focus back, so a
+  // keyboard user would be sent to the top of the page.
+  const submitterHadFocus = submitterElement !== null && document.activeElement === submitterElement
   formElement.dataset.astroFormSubmitting = 'true'
   if (submitterElement) submitterElement.disabled = true
 
@@ -716,6 +719,10 @@ async function submitForm(binding: FormBinding, event: SubmitEvent): Promise<voi
   } finally {
     if (submitterElement) submitterElement.disabled = false
     delete formElement.dataset.astroFormSubmitting
+
+    // Presenting the outcome may move focus on purpose (to a field error or the success panel) afterwards.
+    const focusLost = document.activeElement === null || document.activeElement === document.body
+    if (submitterHadFocus && submitterElement.isConnected && focusLost) submitterElement.focus()
   }
 
   if (!outcome.ok) {
