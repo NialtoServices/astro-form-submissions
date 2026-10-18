@@ -120,6 +120,12 @@ export class TurnstileInspector implements Inspector {
     verification: formError('verification', 400, 'Verification failed. Please try again.')
   }
 
+  /**
+   * Always `true`: an anti-bot check that throws must refuse the submission, not wave it through unverified as
+   * a failing inspector otherwise would.
+   */
+  readonly failClosed = true
+
   // A `[]` allowlist rejects every submission, so its diagnostic is reported once rather than per request.
   private emptyAllowlistReported = false
 

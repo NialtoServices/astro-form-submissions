@@ -1,7 +1,8 @@
 import type { InspectionContext } from '#inspectors/inspector.js'
 import { TurnstileInspector } from '#inspectors/turnstile.js'
+import { createFormRoute } from '#route.js'
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { stubFetch } from '../support/harness.js'
+import { makeRouteContext, stubFetch } from '../support/harness.js'
 
 function contextFor(
   token: string | undefined,
@@ -406,5 +407,19 @@ describe('TurnstileInspector operational diagnostics', () => {
     const reported = String(context.report.mock.calls[0]![0])
     expect(reported).not.toContain('tok-sensitive-12345')
     expect(reported).not.toContain('sec-sensitive-67890')
+  })
+
+  it('fails closed, so a bug in verification refuses a submission rather than admitting it unverified', async () => {
+    const inspector = new TurnstileInspector({ secretKey: 'secret' })
+    vi.spyOn(inspector as unknown as { verify: () => Promise<never> }, 'verify').mockRejectedValue(new Error('bug'))
+
+    const response = await createFormRoute({
+      schema: { '~standard': { version: 1, vendor: 'test', validate: (value) => ({ value: value as object }) } },
+      inspectors: [inspector],
+      onError: () => {}
+    })(makeRouteContext({ body: new URLSearchParams({ 'cf-turnstile-response': 'token' }) }))
+
+    expect(inspector.failClosed).toBe(true)
+    expect(response.status).toBe(500)
   })
 })
