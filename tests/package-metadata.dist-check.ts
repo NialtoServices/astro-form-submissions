@@ -8,6 +8,7 @@ const manifest = JSON.parse(readFileSync(`${ROOT_DIR}package.json`, 'utf8')) as 
   files: string[]
   exports: Record<string, Record<string, string>>
   imports: Record<string, Record<string, string>>
+  repository?: { url?: string }
 }
 
 // Run only by vitest.dist.config.ts, after a build: it checks what a consumer would install.
@@ -23,5 +24,9 @@ describe('the published package metadata', () => {
   it('publishes the build, and resolves internal imports into it for consumers', () => {
     expect(manifest.files).toContain('dist')
     expect(manifest.imports['#*']?.default).toBe('./dist/*')
+  })
+
+  it('names the GitHub repository it is published from, which trusted publishing requires', () => {
+    expect(manifest.repository?.url).toMatch(/^git\+https:\/\/github\.com\/[^/]+\/astro-form-submissions\.git$/)
   })
 })

@@ -4,6 +4,10 @@
   "type": "module",
   "description": "Form submissions toolkit for Astro sites.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NialtoServices/astro-form-submissions.git"
+  },
   "packageManager": "pnpm@10.30.2",
   "publishConfig": {
     "access": "public"
