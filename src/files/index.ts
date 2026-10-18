@@ -1,3 +1,4 @@
+export { createFileRoute, type CreateFileRouteConfig } from '#files/file-route.js'
 export {
   signedLink,
   signFileToken,
@@ -15,4 +16,3 @@ export {
   sniffType,
   type FileMatcher
 } from '#files/sniff.js'
-export { createFileRoute, type CreateFileRouteConfig } from '#files/file-route.js'
