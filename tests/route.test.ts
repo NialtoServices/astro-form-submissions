@@ -3,6 +3,7 @@ import { DestinationUnreachableError } from '#dispatchers/destination-unreachabl
 import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
 import { FileUploads } from '#enrichers/file-uploads.js'
 import { formError } from '#errors.js'
+import { RateLimitGuard } from '#guards/rate-limit.js'
 import type { FormSubmission } from '#pipeline.js'
 import { REPORTER_TIMEOUT_MS } from '#reporting.js'
 import {
@@ -2095,5 +2096,120 @@ describe('createFormRoute reports why a submission was turned away', () => {
     expect(onError).toHaveBeenCalledWith(verdictReport('reject', 'resources.duplicate-key', { key: 'files' }), {
       stage: 'enrichment'
     })
+  })
+})
+
+describe('createFormRoute report wiring', () => {
+  const pdf = () => {
+    const contents = new Uint8Array(64)
+    contents.set(new TextEncoder().encode('%PDF-1.7'))
+    const data = validForm()
+    data.set('file', new File([contents], 'quote.pdf'))
+    return data
+  }
+
+  it("routes a guard's operational reports to onError under the guard stage", async () => {
+    const onError = vi.fn()
+    const failing = new RateLimitGuard({
+      limiter: {
+        limit: async () => {
+          throw new Error('limiter down')
+        }
+      }
+    })
+
+    await createFormRoute({ ...baseConfig, guards: [failing], onError })(contextFor(validForm()))
+    await createFormRoute({ ...baseConfig, guards: [failing], clientAddress: () => undefined, onError })(
+      contextFor(validForm())
+    )
+
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'rate-limit.limiter-unavailable' }), {
+      stage: 'guard'
+    })
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'rate-limit.no-client-key' }), {
+      stage: 'guard'
+    })
+  })
+
+  it("routes an enricher's reports to onError under the enrichment stage before responding", async () => {
+    const onError = vi.fn()
+    const enricher = new FileUploads({
+      storage: {
+        put: async () => {},
+        get: async () => null,
+        delete: async () => {
+          throw new Error('bucket unavailable')
+        }
+      },
+      link: async () => 'https://example.com/files/token/'
+    })
+    const failing = stubDispatcher({ required: true, failWith: new Error('provider down') })
+
+    const response = await createFormRoute({
+      ...baseConfig,
+      enrichers: [enricher],
+      dispatchers: [failing.dispatcher],
+      onError
+    })(contextFor(pdf()))
+
+    expect(response.status).toBe(502)
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'storage.delete-failed' }), {
+      stage: 'enrichment'
+    })
+  })
+
+  it('rolls back on an unexpected throw after delivery when nothing exposed the files', async () => {
+    const rolledBack: string[] = []
+    const enricher = {
+      enrich: async () => ({ provide: { files: [] }, rollback: async () => void rolledBack.push('files') })
+    }
+    const notifier: Dispatcher = {
+      exposesResources: false,
+      get acceptsQuarantined(): boolean {
+        throw new Error('hostile getter')
+      },
+      dispatch: async () => {}
+    }
+    const onError = vi.fn()
+
+    const response = await createFormRoute({ ...baseConfig, enrichers: [enricher], dispatchers: [notifier], onError })(
+      contextFor(validForm())
+    )
+
+    expect(response.status).toBe(500)
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'unexpected' })
+    expect(rolledBack).toEqual(['files'])
+  })
+
+  it('rolls back the files when the only exposing delivery skips the submission', async () => {
+    const rolledBack: string[] = []
+    const enricher = {
+      enrich: async () => ({ provide: { files: [] }, rollback: async () => void rolledBack.push('files') })
+    }
+    const skipped = stubDispatcher({ deliverWhen: () => false })
+
+    const response = await createFormRoute({ ...baseConfig, enrichers: [enricher], dispatchers: [skipped.dispatcher] })(
+      contextFor(validForm())
+    )
+
+    expect(response.status).toBe(200)
+    expect(skipped.dispatch).not.toHaveBeenCalled()
+    expect(rolledBack).toEqual(['files'])
+  })
+
+  it("hands enrichers the site's resolved client address", async () => {
+    const seen: (string | undefined)[] = []
+    const enricher = {
+      enrich: async (_submission: FormSubmission, context: { clientAddress?: string }) => (
+        seen.push(context.clientAddress),
+        {}
+      )
+    }
+
+    await createFormRoute({ ...baseConfig, clientAddress: () => '192.0.2.10', enrichers: [enricher] })(
+      contextFor(validForm())
+    )
+
+    expect(seen).toEqual(['192.0.2.10'])
   })
 })
