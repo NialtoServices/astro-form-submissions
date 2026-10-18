@@ -90,4 +90,9 @@ describe('RateLimitGuard', () => {
     await new RateLimitGuard({ limiter, key: () => 'per-form-key' }).guard(guardContext())
     expect(limit).toHaveBeenCalledWith({ key: 'per-form-key' })
   })
+
+  it('refuses a missing limiter at construction, rather than failing open on every request', () => {
+    expect(() => new RateLimitGuard({ limiter: undefined } as never)).toThrow('`limiter`')
+    expect(() => new RateLimitGuard({ limiter: {} } as never)).toThrow('`limiter`')
+  })
 })

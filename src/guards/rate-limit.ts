@@ -57,8 +57,16 @@ export class RateLimitGuard implements Guard {
    * Creates a rate-limit guard.
    *
    * @param options - The limiter and optional key function.
+   * @throws When `limiter` has no `limit` method, as when an environment lacks the binding passed in.
    */
-  constructor(private readonly options: RateLimitGuardOptions) {}
+  constructor(private readonly options: RateLimitGuardOptions) {
+    // Every request would otherwise fail open on the missing limiter, so the form ships with no throttle at all.
+    if (typeof (options as Partial<RateLimitGuardOptions> | undefined)?.limiter?.limit !== 'function') {
+      throw new Error(
+        'RateLimitGuard needs a `limiter` with a `limit` method; check the rate-limit binding exists in this environment.'
+      )
+    }
+  }
 
   // MARK: - Guard API
 
