@@ -22,7 +22,7 @@ const OPAQUE_CONTENT_TYPE = 'application/octet-stream'
 
 /** Options for constructing an {@link UploadedFiles} enricher. */
 export interface UploadedFilesOptions<E extends FormSubmission = FormSubmission, K extends string = 'files'> {
-  /** The storage the uploads landed in (e.g. an {@link R2Storage}). Must implement `peek`. */
+  /** The storage the uploads landed in (e.g. an {@link R2Storage}). Must implement `peek` and `claim`. */
   storage: FileStorage
 
   /** The HMAC secret the {@link createUploadRoute} signed receipts with. */
@@ -58,10 +58,13 @@ export interface UploadedFilesOptions<E extends FormSubmission = FormSubmission,
  * rollback as {@link FileUploads}: the objects are kept once a resource-exposing delivery succeeds, and
  * deleted otherwise.
  *
- * A refused submission deletes every object it referenced, so a retry uploads afresh. Refusals:
- * `uploadMissing` (an invalid or expired receipt, a missing object, or one whose size differs from its
- * receipt), `tooManyFiles` / `fileTooLarge` (the limits, re-checked here), and `fileType` (the bytes match
- * nothing accepted, or contradict the type the object was stored with).
+ * Each receipt works once: the first submission to present it claims its object through the storage's
+ * `claim`, and only claimed objects are ever deleted. A refused submission deletes the objects it claimed, so
+ * a retry uploads afresh, while a receipt another submission already claimed is refused without touching an
+ * object that submission may have delivered. Refusals: `uploadMissing` (an invalid, expired or already-used
+ * receipt, a missing object, or one whose size differs from its receipt), `tooManyFiles` / `fileTooLarge`
+ * (the limits, re-checked here), and `fileType` (the bytes match nothing accepted, or contradict the type the
+ * object was stored with).
  */
 export class UploadedFiles<
   E extends FormSubmission = FormSubmission,
@@ -73,6 +76,7 @@ export class UploadedFiles<
   }
 
   private readonly peek: (key: string, length: number) => Promise<PeekedObject | null>
+  private readonly claim: (key: string) => Promise<boolean>
 
   // MARK: - Object Lifecycle
 
@@ -89,7 +93,12 @@ export class UploadedFiles<
       throw new Error('UploadedFiles needs a storage that implements `peek` (R2Storage does).')
     }
 
+    if (typeof options.storage.claim !== 'function') {
+      throw new Error('UploadedFiles needs a storage that implements `claim` (R2Storage does).')
+    }
+
     this.peek = options.storage.peek.bind(options.storage)
+    this.claim = options.storage.claim.bind(options.storage)
   }
 
   // MARK: - Enricher API
@@ -113,10 +122,28 @@ export class UploadedFiles<
       if (upload && !uploads.has(upload.objectKey)) uploads.set(upload.objectKey, upload)
     }
 
+    // A receipt stays valid for its whole lifetime, so an object belongs only to the submission that claims
+    // it first; deleting one claimed elsewhere could break a link an earlier submission already delivered.
     const keys = [...uploads.keys()]
+    const claims = await Promise.allSettled(keys.map(async (key) => this.claim(key)))
+    const claimedKeys = keys.filter((_key, index) => {
+      const claim = claims[index]
+      return claim?.status === 'fulfilled' && claim.value
+    })
     const refuse = async (error: FormError, code: string, details?: VerdictDetails) => {
-      await this.delete(keys, context)
+      await this.delete(claimedKeys, context)
       return { reject: error, code, details }
+    }
+
+    const failedClaim = claims.find((claim) => claim.status === 'rejected')
+    if (failedClaim) {
+      context.report?.(failedClaim.reason)
+      return refuse(FileUploads.errors.uploadFailed, 'uploaded-files.verify-failed')
+    }
+
+    const usedReceipts = keys.length - claimedKeys.length
+    if (usedReceipts > 0) {
+      return refuse(UploadedFiles.errors.uploadMissing, 'uploaded-files.receipt-used', { count: usedReceipts })
     }
 
     const invalidReceipts = verified.filter((upload) => upload === null).length
@@ -155,7 +182,7 @@ export class UploadedFiles<
       // A computed-key object widens to `{ [x: string]: FileLink[] }`, so the assertion is the one
       // spot TS can't express the `Record<K, …>` literal; the key is config-owned, never user input.
       const provide = { [attachTo]: links } as Record<K, FileLink[]>
-      return { provide, rollback: () => this.delete(keys, context) }
+      return { provide, rollback: () => this.delete(claimedKeys, context) }
     } catch (error) {
       // Clean up and fail closed. No rollback is returned: the objects are already gone, so the route
       // must not delete them a second time.

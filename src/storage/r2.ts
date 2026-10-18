@@ -8,15 +8,16 @@ import type { FileStorage, PeekedObject, PutOptions, StoredObject, StreamPutOpti
  */
 export interface R2BucketLike {
   /**
-   * Stores a file or a known-length byte stream under `key` with the given HTTP + custom metadata. With
-   * `onlyIf`, stores only when those conditional headers hold, and resolves `null` when they don't.
+   * Stores a file, a known-length byte stream or a string under `key` with the given HTTP + custom
+   * metadata. With `onlyIf`, stores only when those conditional headers hold, and resolves `null` when
+   * they don't.
    */
   put(
     key: string,
-    value: File | ReadableStream,
+    value: File | ReadableStream | string,
     options: {
-      httpMetadata: { contentType: string; contentDisposition: string }
-      customMetadata: { filename: string }
+      httpMetadata?: { contentType: string; contentDisposition: string }
+      customMetadata?: { filename: string }
       onlyIf?: Headers
     }
   ): Promise<unknown>
@@ -53,6 +54,9 @@ function decodedFilename(encoded: string | undefined): string | undefined {
     return undefined
   }
 }
+
+/** The suffix of the empty object that records a claim on the object beside it (see {@link R2Storage.claim}). */
+const CLAIM_MARKER_SUFFIX = '.claimed'
 
 /** Options for constructing an {@link R2Storage}. */
 export interface R2StorageOptions {
@@ -105,6 +109,14 @@ export class R2Storage implements FileStorage {
       onlyIf: new Headers({ 'If-None-Match': '*' })
     })
     if (stored === null) throw new ObjectExistsError(key)
+  }
+
+  async claim(key: string): Promise<boolean> {
+    // The marker sits beside the object under the same prefix, so the lifecycle rule removes both.
+    const marker = await this.options.bucket.put(this.prefixed(`${key}${CLAIM_MARKER_SUFFIX}`), '', {
+      onlyIf: new Headers({ 'If-None-Match': '*' })
+    })
+    return marker !== null
   }
 
   async peek(key: string, length: number): Promise<PeekedObject | null> {

@@ -215,7 +215,7 @@ describe('direct uploads through the Worker (local development)', () => {
     expect(postmarkRequests).toHaveLength(0)
 
     // Turnstile refuses before the enricher runs, so the upload stays for a retry with a fresh token.
-    expect(bucket.objects.size).toBe(1)
+    expect(bucket.fileKeys().length).toBe(1)
     expect((await submitReceipts(formRoute, [uploads![0]!.receipt], 'fresh-token')).status).toBe(200)
   })
 
@@ -227,7 +227,7 @@ describe('direct uploads through the Worker (local development)', () => {
     postmarkStatus = 500
     const failed = await submitReceipts(formRoute, [uploads![0]!.receipt])
     expect(failed.status).toBe(502)
-    expect(bucket.objects.size).toBe(0)
+    expect(bucket.fileKeys().length).toBe(0)
 
     postmarkStatus = 200
     const retried = await submitReceipts(formRoute, [uploads![0]!.receipt], 'token-3')
@@ -269,7 +269,7 @@ describe('direct uploads through the Worker (local development)', () => {
 
     expect(response.status).toBe(400)
     expect(postmarkRequests).toHaveLength(0)
-    expect(bucket.objects.size).toBe(0)
+    expect(bucket.fileKeys().length).toBe(0)
   })
 
   it('still accepts a multipart file on the same route, for visitors without JavaScript', async () => {

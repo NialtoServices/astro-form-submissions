@@ -18,10 +18,10 @@ export class MemoryBucket implements R2BucketLike {
 
   async put(
     key: string,
-    value: File | ReadableStream,
+    value: File | ReadableStream | string,
     options: {
-      httpMetadata: { contentType: string; contentDisposition: string }
-      customMetadata: { filename: string }
+      httpMetadata?: { contentType: string; contentDisposition: string }
+      customMetadata?: { filename: string }
       onlyIf?: Headers
     }
   ): Promise<{ key: string } | null> {
@@ -55,6 +55,11 @@ export class MemoryBucket implements R2BucketLike {
 
   async delete(key: string): Promise<void> {
     this.objects.delete(key)
+  }
+
+  /** The keys of the stored files, leaving out the empty markers `R2Storage.claim` writes beside them. */
+  fileKeys(): string[] {
+    return [...this.objects.keys()].filter((key) => !key.endsWith('.claimed'))
   }
 
   /**

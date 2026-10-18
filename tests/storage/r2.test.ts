@@ -124,6 +124,16 @@ describe('R2Storage', () => {
     expect(bucket.objects.get('uploads/key-4')?.bytes).toEqual(original)
   })
 
+  it('claims a key once, with an empty marker beside the object under the same prefix', async () => {
+    const bucket = new MemoryBucket()
+    const storage = new R2Storage({ bucket, prefix: 'uploads/' })
+
+    expect(await storage.claim('key-5')).toBe(true)
+    expect(await storage.claim('key-5')).toBe(false)
+    expect(await storage.claim('key-6')).toBe(true)
+    expect(bucket.objects.get('uploads/key-5.claimed')?.bytes).toEqual(new Uint8Array())
+  })
+
   it('peeks the leading bytes, total size and stored type through one ranged read', async () => {
     const bucket = new MemoryBucket()
     const storage = new R2Storage({ bucket, prefix: 'uploads/' })

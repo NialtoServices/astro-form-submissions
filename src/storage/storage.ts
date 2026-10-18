@@ -97,4 +97,14 @@ export interface FileStorage {
    * @returns The peeked object, or `null` when it does not exist.
    */
   peek?(key: string, length: number): Promise<PeekedObject | null>
+
+  /**
+   * Records, once and atomically, that a submission has taken the object under a key as its own. Needed by
+   * {@link UploadedFiles}, so a receipt works for one submission only and a later one can never delete what
+   * an earlier one delivered.
+   *
+   * @param key - The logical object key.
+   * @returns `true` for the first claim on the key, `false` for every later one.
+   */
+  claim?(key: string): Promise<boolean>
 }

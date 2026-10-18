@@ -372,6 +372,7 @@ The toolkit's codes:
 | `enrichment` | `file-uploads.type-not-accepted`   | none                                                                                       | A file's bytes matched no accepted type.                                                     |
 | `enrichment` | `file-uploads.store-failed`        | none                                                                                       | Storing or linking a file failed. Also reported as a failure.                                |
 | `enrichment` | `uploaded-files.receipt-invalid`   | `count`                                                                                    | Receipts that were tampered with, expired, or not receipts.                                  |
+| `enrichment` | `uploaded-files.receipt-used`      | `count`                                                                                    | Receipts another submission already used. Their files were left alone.                       |
 | `enrichment` | `uploaded-files.too-many`          | `count`, `limit`                                                                           | More receipts than `maxFiles`.                                                               |
 | `enrichment` | `uploaded-files.too-large`         | `size`, `limit`                                                                            | An upload over `maxFileBytes`.                                                               |
 | `enrichment` | `uploaded-files.total-too-large`   | `total`, `limit`                                                                           | The uploads together over `maxTotalBytes`.                                                   |
@@ -893,7 +894,8 @@ files, moves them to storage, and exposes the resulting links on `context.resour
 > **Storage today is Cloudflare R2.** `R2Storage` is the only shipped `FileStorage` adapter, so the
 > examples below use a Cloudflare R2 binding — `env` is the request-time binding from
 > [The route](#the-route)'s Cloudflare note. `FileStorage` is a small `put`/`get`/`delete` interface,
-> so another backend (S3, a dev disk, …) is one adapter away.
+> so another backend (S3, a dev disk, …) is one adapter away. [Direct uploads](#direct-uploads) also need
+> its optional `peek` and `claim` (and `putStream` behind `WorkerUploadTarget`), which `R2Storage` implements.
 
 ```ts
 import { ALL_TYPES, createFormRoute, EmailDispatcher, FileUploads, R2Storage, signedLink, submissionNotificationTemplates } from '@nialto-services/astro-form-submissions'
@@ -1001,7 +1003,7 @@ submission carry a signed receipt per file:
 3. **`POST` the form route** with a fresh Turnstile token and one `upload` field per receipt. The
    `UploadedFiles` enricher verifies each receipt, confirms the stored object exists at the admitted size,
    sniffs its leading bytes against `accept`, and exposes the same `FileLink[]` as `FileUploads`, with
-   the same rollback. A submission the enricher refuses deletes the files it referenced, and a retry
+   the same rollback. A submission the enricher refuses deletes the files it claimed, and a retry
    uploads afresh; files from an attempt refused earlier (by a guard, say) are left to the bucket's
    lifecycle rule.
 
@@ -1122,6 +1124,12 @@ needs that origin in `connect-src`. The filename travels percent-encoded in `x-a
   replaced. `WorkerUploadTarget` holds to the same rule: its `PUT` route checks the admitted size and
   answers a second upload under the same grant with 409, so the bytes checked when the form is submitted
   are the bytes delivered. Downloads are always served as attachments with `nosniff`, as for `FileUploads`.
+- **Each receipt works for one submission.** The first submission to present a receipt claims its file
+  by writing an empty `<key>.claimed` marker beside it, and that write succeeds only once, even for two
+  submissions racing each other. A later submission presenting the same receipt is refused with
+  `uploadMissing`, and a refusal or rollback only ever deletes files its own submission claimed, so it
+  can't remove a file an earlier submission delivered. The markers sit under the same `prefix`, so the
+  lifecycle rule removes them with the files.
 - **Abandoned uploads** — files uploaded for a form that was never submitted, or behind a receipt that
   failed verification — are left to the bucket's lifecycle rule, which is already required (see above).
 - **A dropped or quarantined request is granted nothing**, silently: the upload route answers

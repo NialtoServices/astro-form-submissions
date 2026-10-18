@@ -156,13 +156,87 @@ describe('UploadedFiles', () => {
     const result = await enricher.enrich({ name: 'Ada' }, contextWith(receipts))
     await (result as { rollback: () => Promise<void> }).rollback()
 
-    expect(bucket.objects.size).toBe(0)
+    expect(bucket.fileKeys().length).toBe(0)
   })
 
-  describe('refusals, which delete everything the submission referenced', () => {
+  describe('receipts, which each work for one submission', () => {
+    it('refuses a receipt a delivered submission already used, leaving its file in place', async () => {
+      const { enricher, bucket } = setup()
+      const { receipts, prepared } = await admit([photo])
+      store(bucket, prepared, [photo])
+      expect(await enricher.enrich({ name: 'Ada' }, contextWith(receipts))).toHaveProperty('provide')
+
+      const replayed = await enricher.enrich({ name: 'Ada' }, contextWith([receipts[0]!, 'not-a-receipt']))
+
+      expect(replayed).toMatchObject({
+        reject: { key: 'uploadMissing' },
+        code: 'uploaded-files.receipt-used',
+        details: { count: 1 }
+      })
+      expect(bucket.fileKeys()).toEqual([`uploads/${prepared[0]!.objectKey}`])
+    })
+
+    it('deletes only the files a refused submission claimed itself', async () => {
+      const { enricher, bucket } = setup()
+      const earlier = await admit([photo])
+      const later = await admit([quote])
+      store(bucket, earlier.prepared, [photo])
+      store(bucket, later.prepared, [quote])
+      await enricher.enrich({ name: 'Ada' }, contextWith(earlier.receipts))
+
+      const result = await enricher.enrich({ name: 'Ada' }, contextWith([...later.receipts, ...earlier.receipts]))
+
+      expect(result).toMatchObject({ code: 'uploaded-files.receipt-used' })
+      expect(bucket.fileKeys()).toEqual([`uploads/${earlier.prepared[0]!.objectKey}`])
+    })
+
+    it('lets only one of two concurrent submissions with the same receipt take its file', async () => {
+      const { enricher, bucket } = setup()
+      const { receipts, prepared } = await admit([photo])
+      store(bucket, prepared, [photo])
+
+      const results = await Promise.all([
+        enricher.enrich({ name: 'Ada' }, contextWith(receipts)),
+        enricher.enrich({ name: 'Ada' }, contextWith(receipts))
+      ])
+
+      expect(results.filter((result) => 'provide' in result)).toHaveLength(1)
+      expect(results.filter((result) => 'reject' in result)).toMatchObject([{ code: 'uploaded-files.receipt-used' }])
+      expect(bucket.fileKeys()).toHaveLength(1)
+    })
+
+    it('fails closed when a claim cannot be recorded, deleting only what was claimed', async () => {
+      const { bucket, storage } = setup()
+      const { receipts, prepared } = await admit([photo, quote])
+      store(bucket, prepared, [photo, quote])
+      const failure = new Error('bucket unavailable')
+      const flaky: FileStorage = {
+        put: storage.put.bind(storage),
+        get: storage.get.bind(storage),
+        delete: storage.delete.bind(storage),
+        peek: storage.peek.bind(storage),
+        claim: async (key) => {
+          if (key === prepared[1]!.objectKey) throw failure
+          return storage.claim(key)
+        }
+      }
+      const context = contextWith(receipts)
+
+      const result = await new UploadedFiles<Enquiry>({ storage: flaky, secret: SECRET, link: async () => '' }).enrich(
+        { name: 'Ada' },
+        context
+      )
+
+      expect(result).toMatchObject({ reject: { key: 'send', status: 502 }, code: 'uploaded-files.verify-failed' })
+      expect(context.report).toHaveBeenCalledWith(failure)
+      expect(bucket.fileKeys()).toEqual([`uploads/${prepared[1]!.objectKey}`])
+    })
+  })
+
+  describe('refusals, which delete everything the submission claimed', () => {
     const expectRefused = async (result: unknown, key: string, code: string, bucket: MemoryBucket) => {
       expect(result).toMatchObject({ reject: { key }, code })
-      expect(bucket.objects.size).toBe(0)
+      expect(bucket.fileKeys().length).toBe(0)
     }
 
     it('refuses a tampered receipt, deleting what the valid receipts identify', async () => {
@@ -178,7 +252,7 @@ describe('UploadedFiles', () => {
         code: 'uploaded-files.receipt-invalid',
         details: { count: 1 }
       })
-      expect([...bucket.objects.keys()]).toEqual([`uploads/${prepared[1]!.objectKey}`])
+      expect(bucket.fileKeys()).toEqual([`uploads/${prepared[1]!.objectKey}`])
     })
 
     it('refuses an expired receipt', async () => {
@@ -298,6 +372,7 @@ describe('UploadedFiles', () => {
         put: storage.put.bind(storage),
         get: storage.get.bind(storage),
         delete: storage.delete.bind(storage),
+        claim: storage.claim.bind(storage),
         peek: async () => {
           throw failure
         }
@@ -309,13 +384,16 @@ describe('UploadedFiles', () => {
 
       expect(result).toMatchObject({ reject: { key: 'send', status: 502 }, code: 'uploaded-files.verify-failed' })
       expect(context.report).toHaveBeenCalledWith(failure)
-      expect(bucket.objects.size).toBe(0)
+      expect(bucket.fileKeys().length).toBe(0)
     })
   })
 
-  it('refuses to construct over a storage that cannot peek, or with a short secret', () => {
+  it('refuses to construct over a storage that cannot peek or claim, or with a short secret', () => {
     const storage: FileStorage = { put: async () => {}, get: async () => null, delete: async () => {} }
     expect(() => new UploadedFiles({ storage, secret: SECRET, link: async () => '' })).toThrow('peek')
+
+    const unclaimable: FileStorage = { ...storage, peek: async () => null }
+    expect(() => new UploadedFiles({ storage: unclaimable, secret: SECRET, link: async () => '' })).toThrow('claim')
     expect(() => setup({ secret: 'short' })).toThrow('at least 32')
   })
 })
