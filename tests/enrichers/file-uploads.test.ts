@@ -128,6 +128,7 @@ describe('FileUploads', () => {
       ]
     })
     expect(put).toHaveBeenCalledTimes(2)
+
     // The sniffed content-type is stored, not the (absent) client MIME.
     expect(put.mock.calls[0]![2]).toEqual({ contentType: 'application/pdf', filename: 'quote.pdf' })
     expect(put.mock.calls[1]![2]).toEqual({ contentType: 'image/png', filename: 'photo.png' })
@@ -159,6 +160,7 @@ describe('FileUploads', () => {
     const result = await uploader(storage).enrich({ name: 'Ada' }, context)
 
     expect(result).toEqual({ reject: FileUploads.errors.uploadFailed, code: 'file-uploads.store-failed' })
+
     // Every attempted key is cleaned up (keys are tracked before `put`, so a write that committed
     // but lost its ack is still deleted); no rollback is returned to the route.
     expect(deleted.length).toBeGreaterThanOrEqual(1)

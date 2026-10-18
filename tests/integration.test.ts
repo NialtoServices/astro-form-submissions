@@ -93,6 +93,7 @@ function fullRoute() {
         to: 'owner@example.com',
         replyTo: (submission) => submission.email as string
       }),
+
       // The ops channel opts in, so it still pings and can surface the quarantine reason.
       new DiscordDispatcher({
         webhookURL: DISCORD_URL,
@@ -286,6 +287,7 @@ describe('the composed pipeline with guards and file uploads', () => {
 
     expect(response.status).toBe(502)
     expect(put).toHaveBeenCalledOnce()
+
     // The stored object is deleted so a retry doesn't orphan it.
     expect(deleted).toHaveLength(1)
   })

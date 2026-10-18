@@ -72,8 +72,9 @@ describe('R2Storage', () => {
     await storage.put('abc', file, { contentType: 'application/pdf', filename: 'quote.pdf' })
 
     const object = await storage.get('abc')
-    // The download route reads the filename/type from here now that the token is opaque, and builds the
-    // attachment disposition itself.
+
+    // The download token is opaque, so the download route reads the filename and type from the stored
+    // object and builds the attachment disposition itself.
     expect(object?.contentType).toBe('application/pdf')
     expect(object?.filename).toBe('quote.pdf')
     expect(await storage.get('missing')).toBeNull()

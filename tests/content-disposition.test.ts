@@ -35,6 +35,7 @@ describe('attachmentDisposition', () => {
     expect(() => attachmentDisposition(`evil${loneHighSurrogate}.pdf`)).not.toThrow()
 
     const value = attachmentDisposition(`evil${loneHighSurrogate}.pdf`)
+
     // U+FFFD (the replacement char) percent-encodes to %EF%BF%BD.
     expect(value).toContain('%EF%BF%BD')
   })

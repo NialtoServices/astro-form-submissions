@@ -524,6 +524,7 @@ describe('createFormRoute guards', () => {
 
     expect(response.status).toBe(200)
     expect(customer.dispatch).not.toHaveBeenCalled()
+
     // The guard's quarantine survives the body parse and reaches the dispatch gate, reason and all.
     expect(ops.dispatch).toHaveBeenCalledOnce()
     expect(ops.dispatch.mock.calls[0]![1].quarantineReasons).toEqual(['blocked-region'])
@@ -711,6 +712,7 @@ describe('createFormRoute enrichers', () => {
   it('rolls back a prior enricher when a later result throws during interpretation', async () => {
     const onError = vi.fn()
     const first = stubEnricher({ provide: { files: [] } })
+
     // A hostile result whose `provide` getter throws while the route reads it — this interpretation runs
     // outside `enrich()`, so it must still be inside the enrichment boundary that rolls prior work back.
     const hostile = {
@@ -925,6 +927,7 @@ describe('createFormRoute enrichers', () => {
 
     expect(response.status).toBe(502)
     expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'enrichment' })
+
     // Rollbacks run in reverse, so the throwing one runs first; the other must still complete.
     expect(cleaned).toEqual(['ok'])
   })

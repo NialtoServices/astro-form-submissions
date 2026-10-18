@@ -44,6 +44,7 @@ describe('createFileRoute', () => {
 
     expect(response.status).toBe(200)
     expect(response.body).toBe(STORED.body)
+
     // Content-Type is echoed from what the store persisted; the disposition is always built here as an
     // attachment from the stored filename, not taken from the token or the adapter.
     expect(response.headers.get('Content-Type')).toBe('application/pdf')

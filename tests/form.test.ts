@@ -331,6 +331,7 @@ describe('form script failure handling', () => {
       form.dataset.astroFormSubmitTimeout = badTimeout
 
       submit()
+
       // A -5/NaN/0 timeout would abort immediately; falling back to the default keeps the request alive.
       await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
       expect(fetchSpy).toHaveBeenCalledOnce()
