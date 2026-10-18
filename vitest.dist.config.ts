@@ -11,6 +11,7 @@ export default getViteConfig({
     alias: [{ find: /^#(.*)\.js$/, replacement: `${DIST_DIR}/$1.js` }]
   },
   test: {
-    environment: 'node'
+    environment: 'node',
+    include: ['tests/**/*.test.ts', 'tests/**/*.dist-check.ts']
   }
 })
