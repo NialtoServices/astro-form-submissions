@@ -207,6 +207,22 @@ describe('DiscordDispatcher webhook option', () => {
   it('refuses to construct without a webhook', () => {
     expect(() => new DiscordDispatcher({ webhookURL: '', fields: [] })).toThrow('`webhookURL`')
   })
+
+  it.each([
+    'discord.example/api/webhooks/1/SECRET-TOKEN',
+    '"https://discord.example/api/webhooks/1/SECRET-TOKEN"',
+    'http://discord.example/api/webhooks/1/SECRET-TOKEN'
+  ])('refuses %j at construction without echoing it', (webhookURL) => {
+    let thrown: unknown
+    try {
+      new DiscordDispatcher({ webhookURL, fields: [] })
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(String(thrown)).toContain('absolute https URL')
+    expect(String(thrown)).not.toContain('SECRET-TOKEN')
+  })
 })
 
 describe('DiscordDispatcher markdown', () => {

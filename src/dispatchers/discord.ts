@@ -164,9 +164,11 @@ export class DiscordDispatcher<E extends FormSubmission = FormSubmission> implem
    * @param options - The Discord dispatcher options, including the webhook URL, title, description, fields, and color.
    */
   constructor(private readonly options: DiscordDispatcherOptions<E>) {
+    // Checked here, so a malformed URL fails the build rather than every send, where it would read as an
+    // outage and `fetch`'s error would quote the URL, token included. The message never echoes the value.
     const webhookURL = options.webhookURL ?? options.webhookUrl
-    if (typeof webhookURL !== 'string' || webhookURL === '') {
-      throw new Error('DiscordDispatcher needs a non-empty `webhookURL`.')
+    if (typeof webhookURL !== 'string' || !URL.canParse(webhookURL) || new URL(webhookURL).protocol !== 'https:') {
+      throw new Error('DiscordDispatcher needs `webhookURL` to be an absolute https URL.')
     }
 
     this.webhookURL = webhookURL
