@@ -117,7 +117,8 @@ export interface SubmissionAcknowledgementTemplatesOptions<
  * (never free text such as a message, nor a name in the `greeting`), and leave `attachments` unset, which
  * would otherwise send links to files the poster uploaded.
  *
- * The footer links the site URL (the dispatch context's `siteURL`, else its `requestURL`).
+ * The footer links the site URL from Astro `site`; without it, the link is left out rather than taken from the
+ * request, whose host the sender may control.
  */
 export function submissionAcknowledgementTemplates<
   E extends FormSubmission = FormSubmission,
@@ -133,9 +134,6 @@ export function submissionAcknowledgementTemplates<
       text: textSource,
       html: htmlSource,
       view: (submission, context) => {
-        const siteHost = displayHost(context)
-        const siteURL = displayURL(context)
-
         // Reading a generic conditional bag by a generic key needs an assertion; `resolveAttachments`
         // validates the value, and the key is the config-owned `attachments`, never user input.
         const resources = context.resources as Record<string, unknown>
@@ -158,8 +156,8 @@ export function submissionAcknowledgementTemplates<
 
           // Wrapped as `{ items }` so the attachments heading renders once above the list.
           attachments: attachmentItems && { items: attachmentItems },
-          siteHost: siteHost !== '' ? siteHost : undefined,
-          siteURL: siteURL !== '' ? siteURL : undefined,
+          siteHost: displayHost(context),
+          siteURL: displayURL(context),
           formName: options.formName,
           brandName: options.brandName,
           eyebrow: copy.eyebrow ?? DEFAULT_EYEBROW,

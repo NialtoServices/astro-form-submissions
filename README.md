@@ -619,9 +619,9 @@ each stage's context exposes: `quarantined` (whether an inspector/guard flagged 
 only see it here if this dispatcher opted in) and `quarantineReasons` (the accumulated reasons, empty
 when not quarantined), plus two raw URLs — `requestURL` (the current request's URL, always present,
 whose host a proxy or client can influence) and `siteURL` (Astro's configured `site`, the **trusted
-origin**, or `undefined` when unset). Derive whatever you need and pick your own trust/fallback — e.g.
-a display host as `(context.siteURL ?? context.requestURL).hostname`, or a hostname bound strictly to
-the trusted `context.siteURL`.
+origin**, or `undefined` when unset). Derive whatever you need and pick your own trust/fallback — the
+built-in templates show the trusted `context.siteURL`'s host and leave it out when `site` is unset, since
+`requestURL`'s host can come from a header the sender sets.
 
 - **`acceptsQuarantined`** — whether this destination receives quarantined submissions. **Default
   `false`**, so the pipeline is safe by construction: a submission an inspector quarantines (e.g. spam)
@@ -744,7 +744,7 @@ templates: submissionNotificationTemplates<ContactEnquiry>({
   fields: ['name', 'email', 'phone', 'company', 'message'], // a free-text field is just a field
   formName: 'Contact form', // the email's title; also appears in the subject and preview
   brandName: 'Acme Ltd' // optional wordmark above the card (replyTo/from/to live on the EmailDispatcher)
-  // subject: 'New enquiry from {{name}}'  — default mentions formName and the site host (siteURL, else the request host)
+  // subject: 'New enquiry from {{name}}'  — default mentions formName and Astro `site`'s host (left out without it)
   // submittedAt: (submission, context) => …  — meta-line timestamp; defaults to the submission's arrival time (stamped once per request and shared by every stage, so all emails for one submission agree), formatted in UTC
   // attachments: 'files'  — renders the FileLink[] a FileUploads enricher exposed on context.resources.files (needs <ContactEnquiry, 'files'>)
   // copy: { … }  — override the template's fixed UI copy (see "Translating the copy" below)

@@ -55,11 +55,13 @@ describe('submissionNotificationTemplates', () => {
     expect(templates.html(submission, DEFAULT_CONTEXT)).toContain('href="https://example.com/"')
   })
 
-  it('falls back to the request origin when no Astro site is configured', () => {
+  it('leaves the host and site link out, rather than trusting the request host, when no Astro site is configured', () => {
     const templates = submissionNotificationTemplates<typeof submission>({ fields: ['name'] })
-    const context = dispatchContext({ host: 'forms.example.org', siteURL: null })
-    expect(templates.subject(submission, context)).toBe('New form submission via forms.example.org')
-    expect(templates.text(submission, context)).toContain('https://forms.example.org/')
+    const context = dispatchContext({ host: 'attacker.example', siteURL: null })
+
+    expect(templates.subject(submission, context)).toBe('New form submission')
+    expect(templates.text(submission, context)).not.toContain('attacker.example')
+    expect(templates.html(submission, context)).not.toContain('attacker.example')
   })
 
   it('renders a custom subject source against the submission', () => {

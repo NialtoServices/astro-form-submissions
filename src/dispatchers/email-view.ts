@@ -7,18 +7,19 @@ import { isRecord } from '#type-guards.js'
 
 /**
  * The host the built-in email copy shows in "via …" (subject, preview, meta line): the configured site's
- * host when Astro `site` is set, else the request host. A view decides its own fallback; this is the display one.
+ * host, or `undefined` without Astro `site`. Never the request host, which some adapters take from a header
+ * the sender sets, and the acknowledgement goes to an address the sender chose.
  */
-export function displayHost(context: DispatchContext): string {
-  return (context.siteURL ?? context.requestURL).hostname
+export function displayHost(context: DispatchContext): string | undefined {
+  return context.siteURL?.hostname || undefined
 }
 
 /**
- * The full site URL the built-in email footers link to (e.g. `https://example.com/`): the configured site
- * when Astro `site` is set, else the request origin, always reduced to the root — never a request path.
+ * The site URL the built-in email footers link to (e.g. `https://example.com/`): the configured site reduced
+ * to its root, or `undefined` without Astro `site`, for the same reason as {@link displayHost}.
  */
-export function displayURL(context: DispatchContext): string {
-  return new URL('/', context.siteURL ?? context.requestURL).href
+export function displayURL(context: DispatchContext): string | undefined {
+  return context.siteURL && new URL('/', context.siteURL).href
 }
 
 /**

@@ -79,8 +79,8 @@ export interface SubmissionNotificationTemplatesOptions<
  * or hand-written {@link EmailTemplates} functions without touching the dispatcher. To acknowledge the
  * person who submitted, see {@link submissionAcknowledgementTemplates}.
  *
- * The subject mentions the site host and the footer links the site URL, both taken from the dispatch
- * context (`siteURL ?? requestURL`).
+ * The subject mentions the site host and the footer links the site URL, both from Astro `site`; without it,
+ * both are left out rather than taken from the request.
  */
 export function submissionNotificationTemplates<
   E extends FormSubmission = FormSubmission,
@@ -96,9 +96,6 @@ export function submissionNotificationTemplates<
       text: textSource,
       html: htmlSource,
       view: (submission, context) => {
-        const siteHost = displayHost(context)
-        const siteURL = displayURL(context)
-
         // Reading a generic conditional bag by a generic key needs an assertion; `resolveAttachments`
         // validates the value, and the key is the config-owned `attachments`, never user input.
         const resources = context.resources as Record<string, unknown>
@@ -111,8 +108,8 @@ export function submissionNotificationTemplates<
 
           // Wrapped as `{ items }` so the attachments heading renders once above the list.
           attachments: attachmentItems && { items: attachmentItems },
-          siteHost: siteHost !== '' ? siteHost : undefined,
-          siteURL: siteURL !== '' ? siteURL : undefined,
+          siteHost: displayHost(context),
+          siteURL: displayURL(context),
           formName: options.formName,
           brandName: options.brandName,
           eyebrow: copy.eyebrow ?? DEFAULT_EYEBROW,

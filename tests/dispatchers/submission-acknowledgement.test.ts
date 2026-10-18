@@ -78,10 +78,14 @@ describe('submissionAcknowledgementTemplates', () => {
     )
     expect(templates.text(submission, DEFAULT_CONTEXT)).toContain('https://example.com/')
     expect(templates.html(submission, DEFAULT_CONTEXT)).toContain('href="https://example.com/"')
+  })
 
-    // Falls back to the request origin when no Astro site is configured.
-    const context = dispatchContext({ host: 'forms.example.org', siteURL: null })
-    expect(templates.text(submission, context)).toContain('https://forms.example.org/')
+  it('leaves the site link out, rather than trusting the request host, when no Astro site is configured', () => {
+    const templates = submissionAcknowledgementTemplates<typeof submission>({ fields: ['name'] })
+    const context = dispatchContext({ host: 'attacker.example', siteURL: null })
+
+    expect(templates.text(submission, context)).not.toContain('attacker.example')
+    expect(templates.html(submission, context)).not.toContain('attacker.example')
   })
 
   it('escapes field values in the html body only', () => {
