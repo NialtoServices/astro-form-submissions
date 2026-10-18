@@ -1145,8 +1145,9 @@ needs that origin in `connect-src`. The filename travels percent-encoded in `x-a
 - **A presigned URL stores exactly one object of exactly the admitted size.** Its `Content-Length` is
   signed, so R2 refuses any other size, and it carries `If-None-Match: *`, so a stored object can't be
   replaced. `WorkerUploadTarget` holds to the same rule: its `PUT` route checks the admitted size and
-  answers a second upload under the same grant with 409, so the bytes checked when the form is submitted
-  are the bytes delivered. Downloads are always served as attachments with `nosniff`, as for `FileUploads`.
+  answers a second upload under the same grant with 409, as it does an upload to a file a submission has
+  already claimed, even once that file is deleted, so the bytes checked when the form is submitted are the
+  bytes delivered. Downloads are always served as attachments with `nosniff`, as for `FileUploads`.
 - **Each receipt works for one submission.** The first submission to present a receipt claims its file
   by writing an empty `<key>.claimed` marker beside it, and that write succeeds only once, even for two
   submissions racing each other. A later submission presenting the same receipt is refused with

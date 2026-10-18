@@ -98,6 +98,15 @@ export class R2Storage implements FileStorage {
   }
 
   async putStream(key: string, body: ReadableStream, options: StreamPutOptions): Promise<void> {
+    // Once a submission has claimed a key, its object may since have been deleted (a refusal, a rollback, an
+    // erasure request), and a grant still within its lifetime must not write a fresh one there.
+    const marker = await this.options.bucket.get(this.prefixed(`${key}${CLAIM_MARKER_SUFFIX}`))
+    if (marker) {
+      await marker.body.cancel()
+      await body.cancel()
+      throw new ObjectExistsError(key)
+    }
+
     // Workers only stores a stream of known length; FixedLengthStream declares it and errors the write
     // if the bytes run short or long. It exists only in the Workers runtime (Miniflare included).
     const FixedLength = (globalThis as { FixedLengthStream?: new (length: number) => TransformStream })

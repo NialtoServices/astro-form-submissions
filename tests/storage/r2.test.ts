@@ -125,6 +125,21 @@ describe('R2Storage', () => {
     expect(bucket.objects.get('uploads/key-4')?.bytes).toEqual(original)
   })
 
+  it('refuses to stream to a claimed key, even once its object has been deleted', async () => {
+    const bucket = new MemoryBucket()
+    const storage = new R2Storage({ bucket, prefix: 'uploads/' })
+    const bytes = new TextEncoder().encode('%PDF-1.7 quote')
+    const options = { contentType: 'application/pdf', filename: 'quote.pdf', size: bytes.length }
+    await storage.putStream('key-7', new Response(bytes).body!, options)
+    await storage.claim('key-7')
+    await storage.delete('key-7')
+
+    await expect(storage.putStream('key-7', new Response(bytes).body!, options)).rejects.toBeInstanceOf(
+      ObjectExistsError
+    )
+    expect(bucket.fileKeys()).toEqual([])
+  })
+
   it('claims a key once, with an empty marker beside the object under the same prefix', async () => {
     const bucket = new MemoryBucket()
     const storage = new R2Storage({ bucket, prefix: 'uploads/' })
