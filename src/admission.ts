@@ -42,8 +42,19 @@ export const ERRORS = {
 
 // MARK: - Body
 
-/** The largest body a route reads when it carries no files: far beyond any text a form submits. */
+/** The largest multipart body a route reads when it carries no files: far beyond any text a form submits. */
 export const DEFAULT_MAX_BODY_BYTES = 1024 * 1024
+
+/**
+ * The largest body a route reads when it isn't multipart (an urlencoded form, say): such a body carries no
+ * files, and Node's urlencoded parser slows quadratically on a crafted one, taking seconds at 1 MiB.
+ */
+export const DEFAULT_MAX_TEXT_BODY_BYTES = 64 * 1024
+
+/** Whether the request declares a multipart body, the only kind that can carry files. */
+function isMultipart(request: Request): boolean {
+  return (request.headers.get('content-type') ?? '').toLowerCase().startsWith('multipart/form-data')
+}
 
 /**
  * Parses the request body as form data, reading no more than `maxBytes` of it. A declared `Content-Length`
@@ -97,6 +108,12 @@ export interface AdmissionConfig<S extends SchemaInput> {
    * {@link DEFAULT_MAX_BODY_BYTES}; the form route adds each `FileUploads` enricher's `maxTotalBytes`.
    */
   maxBodyBytes?: number
+
+  /**
+   * The most bytes the route reads from a body that isn't multipart, such as an urlencoded form, within
+   * `maxBodyBytes`. Default {@link DEFAULT_MAX_TEXT_BODY_BYTES}.
+   */
+  maxTextBodyBytes?: number
 
   /**
    * Resolves the client's address for every stage (the rate-limit key, Turnstile's `remoteip`, and
@@ -171,8 +188,8 @@ function verdictError(verdict: Verdict): SubmissionVerdictError | undefined {
 }
 
 /**
- * Runs guards (before the body is read), parses up to `maxBodyBytes` of the body, validates it against the
- * schema, and runs the inspectors in order.
+ * Runs guards (before the body is read), parses up to `maxBodyBytes` of the body (`maxTextBodyBytes` when it
+ * isn't multipart), validates it against the schema, and runs the inspectors in order.
  *
  * @param config - The guards, schema, inspectors and copy overrides.
  * @param request - The request and the route's reporters.
@@ -236,9 +253,12 @@ export async function admit<S extends SchemaInput>(
   }
 
   const maxBodyBytes = config.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES
-  const formData = await readFormData(request.request, maxBodyBytes)
+  const limit = isMultipart(request.request)
+    ? maxBodyBytes
+    : Math.min(maxBodyBytes, config.maxTextBodyBytes ?? DEFAULT_MAX_TEXT_BODY_BYTES)
+  const formData = await readFormData(request.request, limit)
   if (formData === 'too-large') {
-    registerReport(new SubmissionVerdictError('reject', 'request.too-large', { limit: maxBodyBytes }), 'validation')
+    registerReport(new SubmissionVerdictError('reject', 'request.too-large', { limit }), 'validation')
     return fail(ERRORS.requestTooLarge)
   }
 

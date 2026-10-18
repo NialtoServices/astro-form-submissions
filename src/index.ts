@@ -125,6 +125,7 @@ export {
   createFormRoute,
   DEFAULT_ERROR_COPY,
   DEFAULT_MAX_BODY_BYTES,
+  DEFAULT_MAX_TEXT_BODY_BYTES,
   defineLazyRoute,
   ERRORS,
   type DispatchGroup,

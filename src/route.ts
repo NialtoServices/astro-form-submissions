@@ -1,4 +1,11 @@
-import { admit, clientAddressLookup, DEFAULT_MAX_BODY_BYTES, ERRORS, type ClientAddressResolver } from '#admission.js'
+import {
+  admit,
+  clientAddressLookup,
+  DEFAULT_MAX_BODY_BYTES,
+  DEFAULT_MAX_TEXT_BODY_BYTES,
+  ERRORS,
+  type ClientAddressResolver
+} from '#admission.js'
 import { DestinationUnreachableError, type DispatchContext, type Dispatcher } from '#dispatchers/index.js'
 import { FileUploads, UploadedFiles, type Enricher, type EnrichmentContext } from '#enrichers/index.js'
 import type { FormError, FormErrors, ToolkitErrorKey } from '#errors.js'
@@ -13,7 +20,7 @@ import type { SchemaInput, Submission } from '#schema.js'
 import { SubmissionVerdictError } from '#submission-verdict-error.js'
 import type { APIRoute } from 'astro'
 
-export { DEFAULT_MAX_BODY_BYTES, ERRORS, type FormErrorStage }
+export { DEFAULT_MAX_BODY_BYTES, DEFAULT_MAX_TEXT_BODY_BYTES, ERRORS, type FormErrorStage }
 
 // MARK: - Errors
 
@@ -83,6 +90,13 @@ export interface FormRouteConfig<
    * custom enricher that reads files from the body.
    */
   maxBodyBytes?: number
+
+  /**
+   * The most bytes the route reads from a body that isn't multipart, such as an urlencoded form, within
+   * `maxBodyBytes`. Such a body can't carry files, so `FileUploads` never widens it. Default
+   * {@link DEFAULT_MAX_TEXT_BODY_BYTES}.
+   */
+  maxTextBodyBytes?: number
 
   /**
    * Resolves the client's address for every stage (the rate-limit key, Turnstile's `remoteip`, and
@@ -179,6 +193,7 @@ export function createFormRoute<
   const Es extends readonly Enricher<Submission<S>, unknown>[] = []
 >(config: FormRouteConfig<S, Es>): APIRoute {
   assertPositiveNumberOption('createFormRoute `maxBodyBytes`', config.maxBodyBytes)
+  assertPositiveNumberOption('createFormRoute `maxTextBodyBytes`', config.maxTextBodyBytes)
 
   const report = containedReporter(config.onError)
 

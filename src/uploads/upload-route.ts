@@ -124,6 +124,7 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
   assertFileLimitOptions('createUploadRoute', config)
   assertPositiveNumberOption('createUploadRoute `receiptTTLSeconds`', config.receiptTTLSeconds)
   assertPositiveNumberOption('createUploadRoute `maxBodyBytes`', config.maxBodyBytes)
+  assertPositiveNumberOption('createUploadRoute `maxTextBodyBytes`', config.maxTextBodyBytes)
 
   const report = containedReporter(config.onError)
   const field = config.field ?? 'uploads'

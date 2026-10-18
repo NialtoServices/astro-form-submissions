@@ -5,7 +5,14 @@ import { FileUploads } from '#enrichers/file-uploads.js'
 import { formError } from '#errors.js'
 import type { FormSubmission } from '#pipeline.js'
 import { REPORTER_TIMEOUT_MS } from '#reporting.js'
-import { createFormRoute, DEFAULT_MAX_BODY_BYTES, defineLazyRoute, ERRORS, type FormRouteConfig } from '#route.js'
+import {
+  createFormRoute,
+  DEFAULT_MAX_BODY_BYTES,
+  DEFAULT_MAX_TEXT_BODY_BYTES,
+  defineLazyRoute,
+  ERRORS,
+  type FormRouteConfig
+} from '#route.js'
 import { validationFailed } from '#schema.js'
 import type { APIRoute } from 'astro'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -567,7 +574,7 @@ describe('createFormRoute body limit', () => {
     const onError = vi.fn()
     const context = contextFor(new URLSearchParams({ name: 'Ada' }), {
       'Content-Length': String(DEFAULT_MAX_BODY_BYTES + 1),
-      'Content-Type': 'application/x-www-form-urlencoded'
+      'Content-Type': 'multipart/form-data; boundary=x'
     })
 
     const response = await createFormRoute({ ...baseConfig, onError })(context)
@@ -633,6 +640,43 @@ describe('createFormRoute body limit', () => {
   it('refuses a limit that would never limit', () => {
     expect(() => createFormRoute({ ...baseConfig, maxBodyBytes: Number.NaN })).toThrow('maxBodyBytes')
     expect(() => createFormRoute({ ...baseConfig, maxBodyBytes: 0 })).toThrow('maxBodyBytes')
+    expect(() => createFormRoute({ ...baseConfig, maxTextBodyBytes: -1 })).toThrow('maxTextBodyBytes')
+  })
+
+  describe('for a body that is not multipart', () => {
+    /** A request context carrying `body` as an urlencoded form. */
+    const urlencoded = (body: string) =>
+      contextFor(new TextEncoder().encode(body), { 'Content-Type': 'application/x-www-form-urlencoded' })
+
+    it('holds it to the text limit even where FileUploads widens the multipart one', async () => {
+      const onError = vi.fn()
+      const route = createFormRoute({ ...baseConfig, enrichers: [fileUploads(50 * 1024 * 1024)], onError })
+
+      const response = await route(urlencoded(`message=${'x'.repeat(DEFAULT_MAX_TEXT_BODY_BYTES)}`))
+
+      expect(response.status).toBe(413)
+      expect(onError).toHaveBeenCalledWith(
+        verdictReport('reject', 'request.too-large', { limit: DEFAULT_MAX_TEXT_BODY_BYTES }),
+        { stage: 'validation' }
+      )
+    })
+
+    it('parses a crafted body at the text limit without stalling', async () => {
+      const startedAt = performance.now()
+
+      const response = await createFormRoute(baseConfig)(urlencoded('a&'.repeat(DEFAULT_MAX_TEXT_BODY_BYTES / 2)))
+
+      expect(response.status).toBe(400)
+      expect(performance.now() - startedAt).toBeLessThan(1_000)
+    })
+
+    it("honours the site's own text limit, and never exceeds maxBodyBytes", async () => {
+      const body = `name=Ada&email=ada%40example.com&message=${'x'.repeat(1_000)}`
+
+      expect((await createFormRoute(baseConfig)(urlencoded(body))).status).toBe(200)
+      expect((await createFormRoute({ ...baseConfig, maxTextBodyBytes: 500 })(urlencoded(body))).status).toBe(413)
+      expect((await createFormRoute({ ...baseConfig, maxBodyBytes: 500 })(urlencoded(body))).status).toBe(413)
+    })
   })
 })
 
