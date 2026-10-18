@@ -140,6 +140,10 @@ export class TurnstileInspector implements Inspector {
 
   // MARK: - Inspector API
 
+  get controlFields(): readonly string[] {
+    return [this.options.tokenField ?? 'cf-turnstile-response']
+  }
+
   /**
    * Verifies the submission's Turnstile token.
    *

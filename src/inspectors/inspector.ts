@@ -46,6 +46,13 @@ export interface Inspector<E extends FormSubmission = FormSubmission> {
    */
   failClosed?: boolean
 
+  /**
+   * Form fields the inspector reads for itself, such as a verification token or a honeypot. The route leaves
+   * them out of what the schema validates, so a schema that keeps undeclared fields can't carry them into the
+   * submission; the inspector still reads them from `context.data`.
+   */
+  readonly controlFields?: readonly string[]
+
   /** Screen the submission and return a {@link Verdict}: accept, quarantine, drop, or reject. */
   inspect(context: InspectionContext<E>): Promise<Verdict>
 }

@@ -612,6 +612,11 @@ analyser (e.g. a spam scorer) takes a required `fields: (keyof E & string)[]` op
 The only sanctioned built-in defaults are protocol-level, not business fields — `TurnstileInspector`'s
 `cf-turnstile-response` token and `FileUploads`' `'file'`.
 
+A field that exists only for the inspector, such as a token or a trap field, belongs in its `controlFields`.
+The route then leaves it out of what the schema validates, so a schema that keeps undeclared fields can't
+carry it into the submission and on to an email; the inspector still reads it from `context.data`. The
+Turnstile token and the honeypot field are handled this way already.
+
 ## Dispatchers
 
 A dispatcher is a delivery destination. A flat list of dispatchers runs concurrently; see

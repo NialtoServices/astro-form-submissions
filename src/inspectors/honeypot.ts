@@ -31,6 +31,10 @@ export class HoneypotInspector implements Inspector {
 
   // MARK: - Inspector API
 
+  get controlFields(): readonly string[] {
+    return [this.options.fieldName]
+  }
+
   /**
    * Inspects the submission's honeypot field.
    *

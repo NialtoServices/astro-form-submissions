@@ -278,7 +278,15 @@ export async function admit<S extends SchemaInput>(
   let validation: StandardSchemaV1.Result<unknown>
   try {
     const validator = resolveValidator(config.schema, schemaContext)
-    validation = await validator['~standard'].validate(formDataToObject(formData))
+    const input = formDataToObject(formData)
+
+    // An inspector's own fields (a token, a honeypot) are its to read from the raw data, never submission
+    // values that a schema keeping undeclared fields could pass on to a dispatcher.
+    for (const inspector of config.inspectors ?? []) {
+      for (const field of inspector.controlFields ?? []) delete input[field]
+    }
+
+    validation = await validator['~standard'].validate(input)
   } catch (error) {
     // A throwing schema is the site's bug, as a non-object output is below; fail closed with the form
     // data, so a localising copy resolver still answers in the sender's language.

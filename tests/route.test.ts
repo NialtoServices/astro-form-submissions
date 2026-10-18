@@ -4,6 +4,8 @@ import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
 import { FileUploads } from '#enrichers/file-uploads.js'
 import { formError } from '#errors.js'
 import { RateLimitGuard } from '#guards/rate-limit.js'
+import { HoneypotInspector } from '#inspectors/honeypot.js'
+import { TurnstileInspector } from '#inspectors/turnstile.js'
 import type { FormSubmission } from '#pipeline.js'
 import { REPORTER_TIMEOUT_MS } from '#reporting.js'
 import {
@@ -2150,6 +2152,42 @@ describe('createFormRoute reports why a submission was turned away', () => {
     expect(onError).toHaveBeenCalledWith(verdictReport('reject', 'resources.duplicate-key', { key: 'files' }), {
       stage: 'enrichment'
     })
+  })
+})
+
+describe('createFormRoute inspector fields', () => {
+  it("keeps an inspector's own fields out of the schema's input while the inspector still reads them", async () => {
+    const seenByInspector: (string | undefined)[] = []
+    const { dispatcher, dispatch } = stubDispatcher()
+    const keepsEverything = standardSchema((value) => ({ value: value as Record<string, unknown> }))
+    const data = validForm({ 'verification-token': 'token-123', website: '' })
+
+    await createFormRoute({
+      schema: keepsEverything,
+      inspectors: [
+        {
+          controlFields: ['verification-token'],
+          inspect: async (context) => (
+            seenByInspector.push(context.data.get('verification-token')?.toString()),
+            { action: 'accept' as const }
+          )
+        },
+        new HoneypotInspector({ fieldName: 'website' })
+      ],
+      dispatchers: [dispatcher]
+    })(contextFor(data))
+
+    const submission = dispatch.mock.calls[0]![0]
+    expect(seenByInspector).toEqual(['token-123'])
+    expect(submission).not.toHaveProperty('verification-token')
+    expect(submission).not.toHaveProperty('website')
+    expect(submission).toMatchObject({ name: 'Ada', email: 'ada@example.com' })
+  })
+
+  it('names the fields the built-in inspectors read for themselves', () => {
+    expect(new TurnstileInspector({ secretKey: 'secret' }).controlFields).toEqual(['cf-turnstile-response'])
+    expect(new TurnstileInspector({ secretKey: 'secret', tokenField: 'captcha' }).controlFields).toEqual(['captcha'])
+    expect(new HoneypotInspector({ fieldName: 'website' }).controlFields).toEqual(['website'])
   })
 })
 
