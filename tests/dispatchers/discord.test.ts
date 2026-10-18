@@ -237,6 +237,25 @@ describe('DiscordDispatcher markdown', () => {
     )
   })
 
+  it('leaves a bare URL intact so it still links, while escaping a masked link around one', async () => {
+    const website = 'https://my-site.example/a_b?x=1#top'
+    const embed = await capture(
+      { ...base, website, message: '[Verify](https://evil.example/pay_now)' },
+      { fields: ['website', 'message'] }
+    )
+
+    expect(embed.fields.map((field) => field.value)).toEqual([
+      website,
+      '\\[Verify\\]\\(https://evil.example/pay_now\\)'
+    ])
+  })
+
+  it('clamps a value after escaping it, so it stays within the field limit', async () => {
+    const embed = await capture({ ...base, message: '*'.repeat(1_024) }, { fields: ['message'] })
+
+    expect([...embed.fields[0]!.value].length).toBe(1_024)
+  })
+
   it('escapes computed spec values too', async () => {
     const embed = await capture(
       { ...base, message: hostile },

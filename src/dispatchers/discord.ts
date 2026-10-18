@@ -21,15 +21,31 @@ const EMBED_TOTAL_LIMIT = 6000
 const MARKDOWN_CHARACTERS = /[\\*_~`|>#\-[\]()<@]/g
 
 /**
+ * A bare http(s) URL, which Discord links as written, so escaping inside it would break the link. Brackets,
+ * parentheses and the formatting characters end it, so a masked link built around one is still escaped.
+ */
+const BARE_URL = /https?:\/\/[^\s<>()[\]`|*~]+/g
+
+/**
  * Escapes text so Discord shows it as written: no formatting, headings, masked links (`[text](url)`) or
- * mentions. The dispatcher applies it to every value it resolves from `fields` specs and keys; use it on
- * submission text that a `title`, `description` or `fields` builder of your own puts in the embed.
+ * mentions. Bare URLs are left as they are, so they still link. The dispatcher applies it to every value it
+ * resolves from `fields` specs and keys; use it on submission text that a `title`, `description` or `fields`
+ * builder of your own puts in the embed.
  *
  * @param text - The text to show literally.
- * @returns The text with each markdown character backslash-escaped.
+ * @returns The text with each markdown character outside a bare URL backslash-escaped.
  */
 export function escapeDiscordMarkdown(text: string): string {
-  return text.replace(MARKDOWN_CHARACTERS, '\\$&')
+  const escape = (segment: string) => segment.replace(MARKDOWN_CHARACTERS, '\\$&')
+
+  let escaped = ''
+  let segmentStart = 0
+  for (const url of text.matchAll(BARE_URL)) {
+    escaped += escape(text.slice(segmentStart, url.index)) + url[0]
+    segmentStart = url.index + url[0].length
+  }
+
+  return escaped + escape(text.slice(segmentStart))
 }
 
 const DISCORD_TIMEOUT_MS = 5000
@@ -232,6 +248,7 @@ export class DiscordDispatcher<E extends FormSubmission = FormSubmission> implem
         headers: {
           'Content-Type': 'application/json'
         },
+
         // Mentions in an embed never notify; this keeps any mention inert even if the payload ever carries `content`.
         body: JSON.stringify({ embeds: [embed], allowed_mentions: { parse: [] } }),
         signal: controller.signal
