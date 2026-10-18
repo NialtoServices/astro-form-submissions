@@ -14,6 +14,7 @@ import { TurnstileInspector, type Inspector } from '#inspectors/index.js'
 import { assertPositiveNumberOption } from '#numeric-options.js'
 import { OperationalError } from '#operational-error.js'
 import type { FormSubmission } from '#pipeline.js'
+import { PLAIN_COPY, plainResponse, wantsPlainResponse } from '#plain-responses.js'
 import { containedReporter, withReportingBudget, type ErrorReporter, type FormErrorStage } from '#reporting.js'
 import { jsonFormError, jsonOk } from '#responses.js'
 import type { SchemaInput, Submission } from '#schema.js'
@@ -41,7 +42,9 @@ export const DEFAULT_ERROR_COPY: Record<ToolkitErrorKey, string> = {
   tooManyFiles: FileUploads.errors.tooManyFiles.message,
   fileTooLarge: FileUploads.errors.fileTooLarge.message,
   fileType: FileUploads.errors.fileType.message,
-  uploadMissing: UploadedFiles.errors.uploadMissing.message
+  uploadMissing: UploadedFiles.errors.uploadMissing.message,
+  plainSubmitted: PLAIN_COPY.plainSubmitted,
+  plainRetry: PLAIN_COPY.plainRetry
 }
 
 // MARK: - Resource Inference
@@ -139,6 +142,13 @@ export interface FormRouteConfig<
   errors?: FormErrors
 
   /**
+   * Where to send the browser once a form posted without JavaScript succeeds (a 303), such as a thank-you page
+   * or the home page. Without it, such a post gets a plain-text confirmation. A post from the toolkit's script,
+   * or any other `fetch()`, always gets JSON.
+   */
+  successURL?: string
+
+  /**
    * Called with each failure the route handles itself (a skipped guard or inspector, a rolled-back
    * enricher, a failed delivery, an unexpected throw), and with each refused, dropped or quarantined
    * submission as a {@link SubmissionVerdictError}. May be async; contained, so it can never change the response, and a
@@ -193,6 +203,9 @@ export function createFormRoute<
 >(config: FormRouteConfig<S, Es>): APIRoute {
   assertPositiveNumberOption('createFormRoute `maxBodyBytes`', config.maxBodyBytes)
   assertPositiveNumberOption('createFormRoute `maxTextBodyBytes`', config.maxTextBodyBytes)
+  if (config.successURL !== undefined && !URL.canParse(config.successURL, 'https://example.com/')) {
+    throw new Error('createFormRoute `successURL` must be a URL or a path.')
+  }
 
   const reporter = containedReporter(config.onError)
 
@@ -206,7 +219,9 @@ export function createFormRoute<
 
   const dispatchGroups = dispatchGroupsFrom<Dispatcher<Submission<S>, MergedProvided<Es>>>(config.dispatchers ?? [])
 
-  return async (context) => {
+  // A browser that posted the form itself shows whatever comes back, so it gets a redirect or plain text in
+  // place of the JSON the script reads; `admitted` carries the form data out for a localising copy resolver.
+  const respond = async (context: Parameters<APIRoute>[0], admitted: { formData?: FormData }): Promise<Response> => {
     const { request, site, url } = context
     const report = withReportingBudget(reporter)
 
@@ -269,6 +284,7 @@ export function createFormRoute<
 
       const { formData, submission, quarantined, quarantineReasons } = admission
       admittedFormData = formData
+      admitted.formData = formData
 
       const enrichmentContext: EnrichmentContext<Submission<S>> = {
         submission,
@@ -442,6 +458,14 @@ export function createFormRoute<
       // before the platform can freeze the isolate after the response.
       await Promise.allSettled(pendingReports)
     }
+  }
+
+  return async (context) => {
+    const admitted: { formData?: FormData } = {}
+    const response = await respond(context, admitted)
+    if (!wantsPlainResponse(context.request)) return response
+
+    return plainResponse(response, { successURL: config.successURL, errors: config.errors, data: admitted.formData })
   }
 }
 

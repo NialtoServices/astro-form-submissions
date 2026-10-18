@@ -2317,3 +2317,81 @@ describe('createFormRoute report wiring', () => {
     expect(seen).toEqual(['192.0.2.10'])
   })
 })
+
+describe('createFormRoute without JavaScript', () => {
+  const BROWSER_ACCEPT = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+
+  /** A form the browser posts itself, as it does with JavaScript turned off. */
+  const browserPost = (data: FormData) => contextFor(data, { Accept: BROWSER_ACCEPT })
+
+  it('confirms a successful submission in plain text when no success URL is set', async () => {
+    const response = await createFormRoute(baseConfig)(browserPost(validForm()))
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8')
+    expect(await response.text()).toBe('Form submitted. Please return to the home page.')
+  })
+
+  it('redirects a successful submission, or a silently dropped one, to the success URL', async () => {
+    const route = createFormRoute({ ...baseConfig, successURL: '/thank-you/' })
+    const dropping = createFormRoute({
+      ...baseConfig,
+      successURL: '/thank-you/',
+      guards: [{ guard: async () => ({ action: 'drop' as const }) }]
+    })
+
+    for (const response of [await route(browserPost(validForm())), await dropping(browserPost(validForm()))]) {
+      expect(response.status).toBe(303)
+      expect(response.headers.get('Location')).toBe('/thank-you/')
+    }
+  })
+
+  it('explains a refusal in plain text, with each field message and the way back, keeping its status', async () => {
+    const response = await createFormRoute(baseConfig)(browserPost(validForm({ email: 'not-an-email' })))
+
+    expect(response.status).toBe(400)
+    expect(response.headers.get('Content-Type')).toBe('text/plain; charset=utf-8')
+    expect((await response.text()).split('\n')).toEqual([
+      ERRORS.validationFailed.message,
+      'Please enter a valid email address.',
+      '',
+      'Please go back and try again. If JavaScript is turned off in your browser, turning it on may help.'
+    ])
+  })
+
+  it('says to go back for a verification that needed JavaScript', async () => {
+    const response = await createFormRoute({
+      ...baseConfig,
+      inspectors: [new TurnstileInspector({ secretKey: 'secret' })]
+    })(browserPost(validForm()))
+
+    expect(response.status).toBe(400)
+    expect(await response.text()).toBe(
+      'Verification failed. Please try again.\n\nPlease go back and try again. If JavaScript is turned off in your browser, turning it on may help.'
+    )
+  })
+
+  it("keeps JSON for the toolkit's script and for any other fetch", async () => {
+    const route = createFormRoute({ ...baseConfig, successURL: '/thank-you/' })
+
+    const fromScript = await route(contextFor(validForm(), { Accept: 'application/json' }))
+    const fromFetch = await route(contextFor(validForm()))
+
+    expect(await fromScript.json()).toEqual({ ok: true })
+    expect(await fromFetch.json()).toEqual({ ok: true })
+  })
+
+  it('lets a site replace either line, reading the form data to localise it', async () => {
+    const response = await createFormRoute({
+      ...baseConfig,
+      errors: (key, fallback, { data }) =>
+        key === 'plainSubmitted' && data?.get('lang') === 'cy' ? "Wedi'i gyflwyno." : undefined
+    })(browserPost(validForm({ lang: 'cy' })))
+
+    expect(await response.text()).toBe("Wedi'i gyflwyno.")
+  })
+
+  it('refuses a success URL that is not a URL or a path', () => {
+    expect(() => createFormRoute({ ...baseConfig, successURL: 'http://' })).toThrow('successURL')
+  })
+})

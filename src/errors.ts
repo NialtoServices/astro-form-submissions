@@ -39,10 +39,11 @@ export interface CopyContext {
 export type CopyResolver = (key: string, defaultMessage: string, context: CopyContext) => string | undefined
 
 /**
- * Every error key the toolkit itself raises — the handles a site's `errors` map overrides copy by. Not
- * a runtime registry (errors stay values that live with their raiser); it exists to give the `errors`
- * map **autocomplete** and to key {@link DEFAULT_ERROR_COPY}. A site's own guards/inspectors may still
- * mint keys outside this set.
+ * Every key the toolkit itself resolves copy by — the handles a site's `errors` map overrides copy by: each
+ * error it raises, plus `plainSubmitted` and `plainRetry`, the lines it adds when answering a form posted
+ * without JavaScript. Not a runtime registry (errors stay values that live with their raiser); it exists to
+ * give the `errors` map **autocomplete** and to key {@link DEFAULT_ERROR_COPY}. A site's own
+ * guards/inspectors may still mint keys outside this set.
  */
 export type ToolkitErrorKey =
   | 'invalidForm'
@@ -56,6 +57,8 @@ export type ToolkitErrorKey =
   | 'fileTooLarge'
   | 'fileType'
   | 'uploadMissing'
+  | 'plainSubmitted'
+  | 'plainRetry'
 
 /**
  * Per-site copy overrides keyed by {@link FormError.key}: a static map, or a {@link CopyResolver} for

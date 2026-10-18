@@ -295,7 +295,9 @@ fail with, and its default copy. There is no central list — every error lives 
 - the route factory's `ERRORS` hold its own failures — `invalidForm`, `requestTooLarge`, `send`, `unavailable` — plus the
   schema stage's `validationFailed`, surfaced there so the keys sit together;
 - shipped components own theirs (e.g. `TurnstileInspector.errors.verification`,
-  `FileUploads.errors.fileTooLarge`).
+  `FileUploads.errors.fileTooLarge`);
+- two more keys, `plainSubmitted` and `plainRetry`, are the lines added when answering a form posted without
+  JavaScript (see [Without JavaScript](#without-javascript)).
 
 **Schema validation** is the exception to "every error is a keyed `FormError`". Per-field messages
 come straight from your validator (`z.email('Enter a valid email')` or the library's default) — the
@@ -336,6 +338,7 @@ read, so the resolver receives no `data` and falls back to default-locale copy.
 | `dispatchers`      | `[]`                   | Delivery destinations: a flat list runs concurrently; a list of groups runs in order, and a failed required delivery stops later groups. A quarantined submission reaches only those with `acceptsQuarantined`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `clientAddress`    | Astro's                | Resolves the client's address for every stage: the rate-limit key, Turnstile's `remoteip`, each context's `clientAddress`. Default: Astro's `context.clientAddress`. See [Trusting the client address](#trusting-the-client-address).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `errors`           | `{}`                   | Per-site copy overrides by error key (see [Errors](#errors)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `successURL`       | —                      | Where a form posted without JavaScript goes once it succeeds (a 303); without it, a plain-text confirmation (see [Without JavaScript](#without-javascript)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `onError`          | `defaultErrorReporter` | Called with every failure the route handles itself (a skipped guard or inspector, a rolled-back enricher, a failed delivery, an unexpected throw), and with each refused, dropped or quarantined submission as a `SubmissionVerdictError`. The default writes one **PII-safe line** per call (see [Logs](#logs)): verdicts on `console.warn`, failures on `console.error`, naming the stage, the error class, codes and safe details — never the error's message/object, since provider errors can quote submission data (e.g. a `Reply-To`). Override it to log the full error where your pipeline can hold that PII, or to forward failures to an error tracker; type it as `ErrorReporter`, and call the exported `defaultErrorReporter` from it to keep the default line. A request waits for its calls for up to 5 seconds in all; reports still pending then are abandoned, so a stalled hook never holds the response open. |
 
 ### Logs
@@ -1389,6 +1392,23 @@ Accessibility: the summary is announced once via the status region's `aria-live=
 messages are linked with `aria-describedby` so they're read **on focus**, not mass-announced (so they
 are deliberately **not** `role="alert"`); and focus lands on the summary list when present, otherwise
 the first invalid field.
+
+### Without JavaScript
+
+A form posted by the browser itself, with JavaScript turned off, still reaches the route, and the browser
+shows whatever comes back. The route tells such a post apart by its `Accept` header, which names `text/html`
+(the script asks for `application/json`, and `fetch()` accepts anything), and answers it in a form a person
+can read:
+
+- **Success**, including a submission quietly dropped as spam, redirects to `successURL` (a thank-you page,
+  or simply `/`). Without one, the response is the line "Form submitted. Please return to the home page."
+- **A refusal** is plain text with the same message the form would show, each field's message on its own
+  line, then "Please go back and try again. If JavaScript is turned off in your browser, turning it on may
+  help.", keeping the refusal's status.
+
+Both lines are copy like any other, under the keys `plainSubmitted` and `plainRetry` (see [Errors](#errors)).
+A form protected by Turnstile can't be sent without JavaScript, since the widget needs it to issue a token,
+so such a post is always refused, with that retry line.
 
 ## Styling
 
