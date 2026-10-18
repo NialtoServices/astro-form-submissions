@@ -14,5 +14,5 @@
     "types": [],
     "customConditions": ["astro-form-submissions:source"]
   },
-  "include": ["src", "tests", "vitest.config.ts", "vitest.dist.config.ts"]
+  "include": ["src", "tests", "vitest.config.ts", "vitest.dist.config.ts", "vitest.workers.config.ts"]
 }
