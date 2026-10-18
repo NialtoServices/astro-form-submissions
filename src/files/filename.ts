@@ -9,11 +9,30 @@ const FALLBACK_FILENAME = 'upload'
 const BIDI_CONTROLS = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu
 
 /**
+ * The longest name stored, in characters. Percent-encoded, a name can take twelve bytes a character, and R2
+ * refuses an object whose custom metadata passes 8 KB, so an unbounded name would fail the store.
+ */
+const MAX_FILENAME_LENGTH = 200
+
+/** The longest trailing part kept as an extension when a long name is shortened. */
+const MAX_KEPT_EXTENSION_LENGTH = 16
+
+/** Shortens a name to {@link MAX_FILENAME_LENGTH} characters, keeping a short extension on the end. */
+function shortened(name: string): string {
+  if ([...name].length <= MAX_FILENAME_LENGTH) return name
+
+  const dotIndex = name.lastIndexOf('.')
+  const extension = dotIndex > 0 && name.length - dotIndex <= MAX_KEPT_EXTENSION_LENGTH + 1 ? name.slice(dotIndex) : ''
+  const base = [...name.slice(0, name.length - extension.length)]
+  return base.slice(0, MAX_FILENAME_LENGTH - [...extension].length).join('') + extension
+}
+
+/**
  * The filename stored with an upload and shown in its link: the browser's name made well-formed (a lone
  * UTF-16 surrogate becomes U+FFFD, since `encodeURIComponent` throws on one), without CR, LF or `"`, which
- * would break a header or a quoted attribute, without bidirectional text controls, and without trailing dots
- * or whitespace, which Windows drops when saving (so `invoice.js.` would be saved as `invoice.js`); or
- * `upload` when nothing is left. With `extensions`, the name also ends in one of them. Shared by both upload
+ * would break a header or a quoted attribute, without bidirectional text controls, without trailing dots or
+ * whitespace, which Windows drops when saving (so `invoice.js.` would be saved as `invoice.js`), and no longer
+ * than {@link MAX_FILENAME_LENGTH} characters, keeping its extension; or `upload` when nothing is left. With `extensions`, the name also ends in one of them. Shared by both upload
  * paths so a file is named the same way whichever one it took.
  *
  * @param name - The filename the browser reported.
@@ -22,11 +41,13 @@ const BIDI_CONTROLS = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu
  */
 export function storedFilename(name: string, extensions?: readonly string[]): string {
   const cleaned =
-    name
-      .toWellFormed()
-      .replace(/[\r\n"]/g, '')
-      .replace(BIDI_CONTROLS, '')
-      .replace(/[.\s]+$/u, '') || FALLBACK_FILENAME
+    shortened(
+      name
+        .toWellFormed()
+        .replace(/[\r\n"]/g, '')
+        .replace(BIDI_CONTROLS, '')
+        .replace(/[.\s]+$/u, '')
+    ) || FALLBACK_FILENAME
   const preferred = extensions?.[0]
   if (preferred === undefined || hasExtension(cleaned, extensions)) return cleaned
 

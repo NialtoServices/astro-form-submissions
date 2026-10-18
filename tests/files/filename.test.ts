@@ -34,6 +34,14 @@ describe('storedFilename', () => {
     expect(storedFilename('.gif', ['gif'])).toBe('.gif')
   })
 
+  it('shortens a long name to 200 characters, keeping its extension', () => {
+    const stored = storedFilename(`${'\u{1F4C4}'.repeat(500)}.pdf`)
+
+    expect([...stored]).toHaveLength(200)
+    expect(stored.endsWith('\u{1F4C4}.pdf')).toBe(true)
+    expect([...storedFilename('a'.repeat(300))]).toHaveLength(200)
+  })
+
   it('keeps the name as given when the type names no extensions', () => {
     expect(storedFilename('invoice.js')).toBe('invoice.js')
     expect(storedFilename('invoice.js', [])).toBe('invoice.js')
