@@ -55,8 +55,10 @@ export class InMemoryRateLimiter implements RateLimiter {
    * @throws When `limit`, `windowSeconds`, or `maxKeys` is not a finite positive number.
    */
   constructor(private readonly options: InMemoryRateLimiterOptions) {
-    assertPositiveNumberOption('InMemoryRateLimiter `limit`', options.limit)
-    assertPositiveNumberOption('InMemoryRateLimiter `windowSeconds`', options.windowSeconds)
+    // `limit` and `windowSeconds` are required, so a missing one from an untyped caller must fail like `NaN`
+    // rather than pass as an option left to its default.
+    assertPositiveNumberOption('InMemoryRateLimiter `limit`', options.limit ?? Number.NaN)
+    assertPositiveNumberOption('InMemoryRateLimiter `windowSeconds`', options.windowSeconds ?? Number.NaN)
     assertPositiveNumberOption('InMemoryRateLimiter `maxKeys`', options.maxKeys)
 
     this.maxKeys = options.maxKeys ?? DEFAULT_MAX_KEYS

@@ -16,6 +16,11 @@ describe('InMemoryRateLimiter', () => {
     expect(() => new InMemoryRateLimiter({ limit: 3, windowSeconds: Number.NaN })).toThrow(/windowSeconds/)
   })
 
+  it('rejects a missing limit or window from an untyped caller at construction', () => {
+    expect(() => new InMemoryRateLimiter({ windowSeconds: 60 } as never)).toThrow(/limit/)
+    expect(() => new InMemoryRateLimiter({ limit: 3 } as never)).toThrow(/windowSeconds/)
+  })
+
   it('rejects a non-positive or non-finite maxKeys at construction', () => {
     expect(() => new InMemoryRateLimiter({ limit: 3, windowSeconds: 60, maxKeys: 0 })).toThrow(/maxKeys/)
     expect(() => new InMemoryRateLimiter({ limit: 3, windowSeconds: 60, maxKeys: Infinity })).toThrow(/maxKeys/)
