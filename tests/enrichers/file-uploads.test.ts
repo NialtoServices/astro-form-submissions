@@ -177,6 +177,18 @@ describe('FileUploads', () => {
     ])
   })
 
+  it("keeps a long name within 200 characters when it appends the type's extension, and stable when named again", async () => {
+    const { storage, put } = stubStorage()
+    await uploader(storage).enrich({ name: 'Ada' }, contextWith([upload('a'.repeat(300), PDF_HEADER)]))
+    const stored = (put.mock.calls[0]![2] as { filename: string }).filename
+
+    const again = stubStorage()
+    await uploader(again.storage).enrich({ name: 'Ada' }, contextWith([upload(stored, PDF_HEADER)]))
+
+    expect(stored).toBe(`${'a'.repeat(196)}.pdf`)
+    expect((again.put.mock.calls[0]![2] as { filename: string }).filename).toBe(stored)
+  })
+
   it('rolls back its own uploads and rejects `send` when a later upload fails', async () => {
     let call = 0
     const { storage, deleted } = stubStorage(() => {

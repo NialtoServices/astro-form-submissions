@@ -20,14 +20,18 @@ const MAX_FILENAME_LENGTH = 200
 /** The longest trailing part kept as an extension when a long name is shortened. */
 const MAX_KEPT_EXTENSION_LENGTH = 16
 
-/** Shortens a name to {@link MAX_FILENAME_LENGTH} characters, keeping a short extension on the end. */
-function shortened(name: string): string {
-  if ([...name].length <= MAX_FILENAME_LENGTH) return name
+/**
+ * Shortens a name to `maxLength` characters, keeping a short extension on the end, and trims the trailing dots
+ * or whitespace the cut can leave.
+ */
+function shortened(name: string, maxLength: number): string {
+  if ([...name].length <= maxLength) return name
 
   const dotIndex = name.lastIndexOf('.')
   const extension = dotIndex > 0 && name.length - dotIndex <= MAX_KEPT_EXTENSION_LENGTH + 1 ? name.slice(dotIndex) : ''
   const base = [...name.slice(0, name.length - extension.length)]
-  return base.slice(0, MAX_FILENAME_LENGTH - [...extension].length).join('') + extension
+  const cut = base.slice(0, Math.max(0, maxLength - [...extension].length)).join('') + extension
+  return cut.replace(TRAILING_DOTS_AND_WHITESPACE, '')
 }
 
 /**
@@ -49,13 +53,13 @@ export function storedFilename(name: string, extensions?: readonly string[]): st
     .replace(/[\r\n"]/g, '')
     .replace(BIDI_CONTROLS, '')
     .replace(TRAILING_DOTS_AND_WHITESPACE, '')
-
-  // Shortening can cut a name just after a dot or a space, so its result is trimmed the same way.
-  const cleaned = shortened(trimmed).replace(TRAILING_DOTS_AND_WHITESPACE, '') || FALLBACK_FILENAME
+  const cleaned = shortened(trimmed, MAX_FILENAME_LENGTH) || FALLBACK_FILENAME
   const preferred = extensions?.[0]
   if (preferred === undefined || hasExtension(cleaned, extensions)) return cleaned
 
-  return `${cleaned}.${preferred}`
+  // The appended extension counts towards the cap, so naming a stored name again leaves it unchanged.
+  const suffix = `.${preferred}`
+  return (shortened(cleaned, MAX_FILENAME_LENGTH - [...suffix].length) || FALLBACK_FILENAME) + suffix
 }
 
 /**
