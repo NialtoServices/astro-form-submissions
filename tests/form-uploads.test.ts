@@ -18,9 +18,10 @@ interface SentUpload {
 /**
  * A stand-in for `XMLHttpRequest` that records each upload and answers with a status chosen per call,
  * firing upload progress at half and full size first, as a browser does for a body it can measure. A
- * `stall` outcome sends nothing and never answers, until aborted.
+ * `stall` outcome sends nothing and never answers, until aborted. A `slow` outcome reports a third of the body
+ * every 4 seconds and answers 200 once it is all sent, 12 seconds in.
  */
-function installFakeXHR(statuses: (number | 'network-error' | 'stall')[] = []) {
+function installFakeXHR(statuses: (number | 'network-error' | 'stall' | 'slow')[] = []) {
   const sent: SentUpload[] = []
 
   class FakeXMLHttpRequest extends EventTarget {
@@ -47,6 +48,21 @@ function installFakeXHR(statuses: (number | 'network-error' | 'stall')[] = []) {
       const outcome = statuses[sent.length] ?? 200
       sent.push({ method: this.method, url: this.url, headers: { ...this.headers }, body })
       if (outcome === 'stall') return
+      if (outcome === 'slow') {
+        for (const third of [1, 2, 3]) {
+          setTimeout(() => {
+            const loaded = Math.round((body.size * third) / 3)
+            this.upload.dispatchEvent(
+              Object.assign(new Event('progress'), { lengthComputable: true, loaded, total: body.size })
+            )
+            if (third < 3) return
+
+            this.status = 200
+            this.dispatchEvent(new Event('load'))
+          }, third * 4_000)
+        }
+        return
+      }
 
       queueMicrotask(() => {
         for (const loaded of [Math.floor(body.size / 2), body.size]) {
@@ -327,6 +343,62 @@ describe('form script — direct uploads', () => {
 
     expect(status.textContent).toBe('Could not reach the server.')
     expect(form.dataset.astroFormSubmitting).toBeUndefined()
+  })
+
+  it('lets an upload that keeps making progress run past the idle timeout', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    const sent = installFakeXHR(['slow'])
+    stubFetch(async (url) =>
+      String(url).includes('/uploads/')
+        ? jsonResponse({ ok: true, uploads: grants.slice(0, 1) })
+        : jsonResponse({ ok: true })
+    )
+    const { form, fileInput, status, submit } = mountForm()
+    form.dataset.astroFormSubmitTimeout = '5000'
+    choose(fileInput, [photo])
+
+    submit()
+    for (let attempt = 0; attempt < 20 && sent.length === 0; attempt++) await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(12_000)
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'))
+  })
+
+  it('sends the clicked control’s name and value with both requests', async () => {
+    installFakeXHR()
+    const fetchSpy = stubFetch(async (url) =>
+      String(url).includes('/uploads/')
+        ? jsonResponse({ ok: true, uploads: grants.slice(0, 1) })
+        : jsonResponse({ ok: true })
+    )
+    const { form, fileInput, status } = mountForm()
+    const control = form.querySelector<HTMLButtonElement>('button')!
+    control.name = 'intent'
+    control.value = 'quote'
+    choose(fileInput, [photo])
+
+    form.dispatchEvent(new SubmitEvent('submit', { cancelable: true, submitter: control }))
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'), { timeout: 2000 })
+
+    expect(fetchSpy.mock.calls.map(([, init]) => (init!.body as FormData).get('intent'))).toEqual(['quote', 'quote'])
+  })
+
+  it.each([
+    { ok: true, uploads: 'not a list' },
+    { ok: true, uploads: [{ url: 1, method: 'PUT', headers: {}, receipt: 'r' }] },
+    { ok: true, uploads: [{ url: 'https://uploads.example/a', method: 'PUT', headers: {}, receipt: 5 }] },
+    { ok: true, uploads: [{ url: 'https://uploads.example/a', method: 'PUT', headers: 'x', receipt: 'r' }] },
+    { ok: true }
+  ])('treats a malformed grant (%j) as a generic failure and uploads nothing', async (body) => {
+    const sent = installFakeXHR()
+    stubFetch(async () => jsonResponse(body))
+    const { fileInput, status, submit } = mountForm()
+    choose(fileInput, [photo])
+
+    submit()
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('error'))
+
+    expect(status.textContent).toBe('Something went wrong.')
+    expect(sent).toHaveLength(0)
   })
 
   it('shows the form route’s refusal after the uploads', async () => {

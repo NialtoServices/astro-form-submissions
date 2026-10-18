@@ -815,6 +815,25 @@ describe('form script success panel', () => {
     expect(panel.textContent).toBe('Thanks!')
   })
 
+  it('never reports an error, inviting a resend, when presenting a delivered success fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { form, submit } = mountForm({ successPanel: true })
+    const panel = document.querySelector<HTMLElement>('[data-astro-form-success]')!
+    panel.focus = () => {
+      throw new Error('focus failed')
+    }
+    const errors: Event[] = []
+    document.addEventListener('astro-form:error', (event) => errors.push(event))
+
+    submit()
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
+
+    expect(errors).toEqual([])
+    expect(fetchSpy).toHaveBeenCalledOnce()
+    expect(form.dataset.astroFormSubmitting).toBeUndefined()
+  })
+
   it('focuses a panel the site gave no tabindex', async () => {
     stubFetch(async () => jsonResponse({ ok: true }))
     const { submit } = mountForm({ successPanel: true, successPanelTabindex: false })
