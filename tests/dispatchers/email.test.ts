@@ -120,7 +120,8 @@ describe('EmailDispatcher', () => {
     '"Lovelace, Ada <ada@example.com>, eve@example.com',
     '"Ada\r\nBcc: eve@example.com" <ada@example.com>',
     'ada@example.com eve@example.com',
-    'Ada <ada@example.com> <eve@example.com>'
+    'Ada <ada@example.com> <eve@example.com>',
+    'ada@example.com\u0085X-Priority: 1'
   ])('refuses a `to` function that resolves to several addresses or a header break (%j)', async (address) => {
     const deliver = vi.fn()
     const dispatcher = new EmailDispatcher({
@@ -137,7 +138,8 @@ describe('EmailDispatcher', () => {
   it.each([
     'ada@example.com, eve@example.com',
     'ada@example.com\nBcc: eve@example.com',
-    'ada@example.com eve@example.com'
+    'ada@example.com eve@example.com',
+    'ada@example.com\u0085X-Priority: 1'
   ])('refuses a `replyTo` function that resolves to several addresses or a header break (%j)', async (address) => {
     const deliver = vi.fn()
     const dispatcher = new EmailDispatcher({
@@ -173,27 +175,30 @@ describe('EmailDispatcher', () => {
     expect(deliveredMessage(deliver)).toMatchObject({ to: address, replyTo: address })
   })
 
-  it('turns line breaks in a resolved `from` into spaces', async () => {
+  it('turns control characters in a resolved `from` into spaces', async () => {
     const deliver = vi.fn()
     await new EmailDispatcher({
       transport: { deliver },
       templates,
       from: (submission) => `${submission.name as string} via Example <forms@example.com>`,
       to: 'owner@acme.test'
-    }).dispatch({ name: 'Ada\r\nBcc: eve@example.org' }, dispatchContext())
+    }).dispatch({ name: 'Ada\r\n\u0085Bcc: eve@example.org' }, dispatchContext())
 
     expect(deliveredMessage(deliver).from).toBe('Ada Bcc: eve@example.org via Example <forms@example.com>')
   })
 
-  it('turns line breaks in a rendered subject into spaces', () => {
-    const content = renderEmail(
-      { subject: () => 'Thanks Ada\r\nBcc: eve@example.com', text: () => '', html: () => '' },
-      {},
-      dispatchContext()
-    )
+  it.each(['\r\n', '\u0085', '\u0000\u009b'])(
+    'turns control characters in a rendered subject into spaces (%j)',
+    (breaker) => {
+      const content = renderEmail(
+        { subject: () => `Thanks Ada${breaker}Bcc: eve@example.com`, text: () => '', html: () => '' },
+        {},
+        dispatchContext()
+      )
 
-    expect(content.subject).toBe('Thanks Ada Bcc: eve@example.com')
-  })
+      expect(content.subject).toBe('Thanks Ada Bcc: eve@example.com')
+    }
+  )
 
   it('keeps the address out of the recipient error', () => {
     expect(new EmailRecipientError().message).not.toContain('@')

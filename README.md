@@ -842,8 +842,8 @@ they sent.
 > A `to` or `replyTo` function must return a single address: `EmailDispatcher` refuses one containing `,`, `;`
 > or a second `@` outside a quoted display name (`"Lovelace, Ada" <ada@example.com>` is fine), or a control
 > character such as a line break (an `EmailRecipientError`), so one submission can't fan out to many recipients
-> or add headers of its own. Line breaks in a rendered subject, or in what a `from` function returns, become spaces for the
-> same reason.
+> or add headers of its own. Control characters in a rendered subject, or in what a `from` function returns,
+> become spaces for the same reason.
 
 ```ts
 new EmailDispatcher({

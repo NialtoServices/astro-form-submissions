@@ -47,8 +47,11 @@ export interface EmailTemplates<E extends FormSubmission = FormSubmission, A = o
   readonly exposesResources?: boolean
 }
 
-/** Runs of control characters, any of which could end a header line in a transport that writes raw headers. */
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]+/g
+/**
+ * Runs of control characters, any of which could end a header line in a transport that writes raw headers. The
+ * C1 range counts too, since some software reads U+0085 (next line) as a line break.
+ */
+const CONTROL_CHARACTERS = /\p{Cc}+/gu
 
 /**
  * Renders a submission into email content using the site's templates.
@@ -82,7 +85,7 @@ const QUOTED_STRING = /"(?:[^"\\]|\\.)*"/g
  */
 function isSingleAddress(address: string): boolean {
   const unquoted = address.replace(QUOTED_STRING, '')
-  return !/[\u0000-\u001f\u007f]/.test(address) && !/[,;]/.test(unquoted) && unquoted.split('@').length <= 2
+  return !/\p{Cc}/u.test(address) && !/[,;]/.test(unquoted) && unquoted.split('@').length <= 2
 }
 
 /**
