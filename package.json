@@ -33,7 +33,7 @@
     "check": "node scripts/generate-email-template-sources.mjs && tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "test": "node scripts/generate-email-template-sources.mjs && vitest run",
-    "prepublishOnly": "pnpm build",
+    "prepublishOnly": "prettier --check . && pnpm check && pnpm lint && pnpm test && pnpm build",
     "format": "prettier --write ."
   },
   "dependencies": {
