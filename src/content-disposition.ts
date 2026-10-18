@@ -21,10 +21,11 @@ export function attachmentDisposition(filename: string): string {
   const cleaned = filename.toWellFormed().replace(/\p{Cc}/gu, '') || FALLBACK_FILENAME
 
   // A quoted-string fallback that is always valid: quotes and backslashes can't be escaped portably
-  // across clients, and non-ASCII bytes aren't allowed here at all, so replace them all with `_`.
+  // across clients, some clients percent-decode the fallback (RFC 6266 §4.3), and non-ASCII bytes aren't
+  // allowed here at all, so replace them all with `_`.
   const asciiFallback = [...cleaned]
     .map((character) => {
-      if (character === '"' || character === '\\') return '_'
+      if (character === '"' || character === '\\' || character === '%') return '_'
 
       const code = character.charCodeAt(0)
       return code >= PRINTABLE_ASCII_FLOOR && code <= PRINTABLE_ASCII_CEILING ? character : '_'

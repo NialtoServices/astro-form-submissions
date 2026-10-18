@@ -25,6 +25,10 @@ describe('attachmentDisposition', () => {
     expect(attachmentDisposition('a"b\\c.pdf')).toContain('filename="a_b_c.pdf"')
   })
 
+  it('keeps percent signs out of the ASCII fallback, where some browsers would decode them', () => {
+    expect(attachmentDisposition('a%41b.pdf')).toBe('attachment; filename="a_41b.pdf"; filename*=UTF-8\'\'a%2541b.pdf')
+  })
+
   it('names the file `download` in both forms when the name is empty or only control characters', () => {
     for (const name of ['', '\r\n\t']) {
       expect(attachmentDisposition(name)).toBe('attachment; filename="download"; filename*=UTF-8\'\'download')
