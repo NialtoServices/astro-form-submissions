@@ -10,7 +10,7 @@ import { storedFilename } from '#files/filename.js'
 import { ALL_TYPES, extensionsFor, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions, assertPositiveNumberOption } from '#numeric-options.js'
 import type { VerdictDetails } from '#pipeline.js'
-import { containedReporter, type ErrorReporter, type FormErrorStage } from '#reporting.js'
+import { containedReporter, withReportingBudget, type ErrorReporter, type FormErrorStage } from '#reporting.js'
 import { jsonFormError, jsonOk } from '#responses.js'
 import type { SchemaInput } from '#schema.js'
 import { SubmissionVerdictError } from '#submission-verdict-error.js'
@@ -126,7 +126,7 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
   assertPositiveNumberOption('createUploadRoute `maxBodyBytes`', config.maxBodyBytes)
   assertPositiveNumberOption('createUploadRoute `maxTextBodyBytes`', config.maxTextBodyBytes)
 
-  const report = containedReporter(config.onError)
+  const reporter = containedReporter(config.onError)
   const field = config.field ?? 'uploads'
   const maxFiles = config.maxFiles ?? DEFAULT_MAX_FILES
   const maxFileBytes = config.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES
@@ -137,6 +137,7 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
 
   return async (context) => {
     const { request, site, url } = context
+    const report = withReportingBudget(reporter)
     const submittedAt = new Date()
 
     const pendingReports: Promise<void>[] = []

@@ -1,7 +1,13 @@
 import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 import { PostmarkDeliveryError } from '#dispatchers/postmark-delivery-error.js'
 import { OperationalError } from '#operational-error.js'
-import { containedReporter, defaultErrorReporter, REPORTER_TIMEOUT_MS, type FormErrorStage } from '#reporting.js'
+import {
+  containedReporter,
+  defaultErrorReporter,
+  REPORTER_TIMEOUT_MS,
+  withReportingBudget,
+  type FormErrorStage
+} from '#reporting.js'
 import { SubmissionVerdictError } from '#submission-verdict-error.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -206,5 +212,31 @@ describe('containedReporter', () => {
 
     await vi.advanceTimersByTimeAsync(REPORTER_TIMEOUT_MS * 2)
     await expect(report).resolves.toBeUndefined()
+  })
+})
+
+describe('withReportingBudget', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("waits for all of a request's reports together no longer than one timeout, still calling the hook for each", async () => {
+    vi.useFakeTimers()
+    const hook = vi.fn(() => new Promise<void>(() => {}))
+    const report = withReportingBudget(containedReporter(hook))
+    let finished = false
+
+    const reporting = (async () => {
+      await report(new Error('first'), 'delivery')
+      await report(new Error('second'), 'delivery')
+      await report(new Error('third'), 'unexpected')
+      finished = true
+    })()
+
+    await vi.advanceTimersByTimeAsync(REPORTER_TIMEOUT_MS)
+    await reporting
+
+    expect(finished).toBe(true)
+    expect(hook).toHaveBeenCalledTimes(3)
   })
 })

@@ -14,7 +14,7 @@ import { TurnstileInspector, type Inspector } from '#inspectors/index.js'
 import { assertPositiveNumberOption } from '#numeric-options.js'
 import { OperationalError } from '#operational-error.js'
 import type { FormSubmission } from '#pipeline.js'
-import { containedReporter, type ErrorReporter, type FormErrorStage } from '#reporting.js'
+import { containedReporter, withReportingBudget, type ErrorReporter, type FormErrorStage } from '#reporting.js'
 import { jsonFormError, jsonOk } from '#responses.js'
 import type { SchemaInput, Submission } from '#schema.js'
 import { SubmissionVerdictError } from '#submission-verdict-error.js'
@@ -141,9 +141,8 @@ export interface FormRouteConfig<
   /**
    * Called with each failure the route handles itself (a skipped guard or inspector, a rolled-back
    * enricher, a failed delivery, an unexpected throw), and with each refused, dropped or quarantined
-   * submission as a {@link SubmissionVerdictError}. May be async; each call is awaited for up to 5 seconds
-   * and contained, so it can never change the response, and a stalled one delays it by at most that long
-   * per report.
+   * submission as a {@link SubmissionVerdictError}. May be async; contained, so it can never change the response, and a
+   * request waits for its calls for at most 5 seconds in all.
    *
    * The default, {@link defaultErrorReporter}, writes one **PII-safe line** per call: verdicts on
    * `console.warn`, failures on `console.error`, with the stage, error class, codes and safe details, never
@@ -195,7 +194,7 @@ export function createFormRoute<
   assertPositiveNumberOption('createFormRoute `maxBodyBytes`', config.maxBodyBytes)
   assertPositiveNumberOption('createFormRoute `maxTextBodyBytes`', config.maxTextBodyBytes)
 
-  const report = containedReporter(config.onError)
+  const reporter = containedReporter(config.onError)
 
   // A multipart body carries FileUploads' files themselves, so each one widens the default by what it accepts.
   const maxBodyBytes =
@@ -209,6 +208,7 @@ export function createFormRoute<
 
   return async (context) => {
     const { request, site, url } = context
+    const report = withReportingBudget(reporter)
 
     // Threaded through every stage context so the whole pipeline shares one instant — e.g. both emails
     // for a submission render the same time.

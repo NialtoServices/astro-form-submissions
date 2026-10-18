@@ -1,5 +1,5 @@
 import type { VerdictDetails } from '#pipeline.js'
-import { containedReporter, type ErrorReporter } from '#reporting.js'
+import { containedReporter, withReportingBudget, type ErrorReporter } from '#reporting.js'
 import { ObjectExistsError } from '#storage/object-exists-error.js'
 import type { FileStorage } from '#storage/storage.js'
 import { SubmissionVerdictError } from '#submission-verdict-error.js'
@@ -20,8 +20,8 @@ export interface CreateUploadPutRouteConfig {
 
   /**
    * Called (stage `upload`) with a failed write before the 502 is returned, and with each refused upload as a
-   * {@link SubmissionVerdictError}. Awaited for up to 5 seconds and contained, so a reporter that throws or
-   * stalls can't change the response. The same contract as the form route's `onError`; default
+   * {@link SubmissionVerdictError}. Contained, so a reporter that throws or stalls can't change the
+   * response, and a request waits for its calls for at most 5 seconds in all. The same contract as the form route's `onError`; default
    * {@link defaultErrorReporter}.
    */
   onError?: ErrorReporter
@@ -66,18 +66,19 @@ export function createUploadPutRoute(config: CreateUploadPutRouteConfig): APIRou
   }
 
   const putStream = config.storage.putStream.bind(config.storage)
-  const report = containedReporter(config.onError)
+  const reporter = containedReporter(config.onError)
 
   const tokenParam = config.tokenParam ?? 'token'
 
-  // A refused upload would otherwise leave no trace, so an expired grant on a slow connection looked the same
-  // in the log as nothing having happened at all.
-  const refuse = async (body: string, status: number, code: string, details?: VerdictDetails) => {
-    await report(new SubmissionVerdictError('reject', code, details), 'upload')
-    return plain(body, status)
-  }
-
   return async ({ params, request }) => {
+    const report = withReportingBudget(reporter)
+
+    // Every refusal is reported: without it, an expired grant on a slow connection leaves no trace in the log.
+    const refuse = async (body: string, status: number, code: string, details?: VerdictDetails) => {
+      await report(new SubmissionVerdictError('reject', code, details), 'upload')
+      return plain(body, status)
+    }
+
     const upload = await verifyUploadClaims('put', tokenFromPathSegment(params[tokenParam] ?? ''), config.secret)
     if (!upload) return refuse('Not found', 404, 'upload-put.grant-invalid')
 

@@ -99,26 +99,33 @@ export function defaultErrorReporter(error: unknown, { stage }: { stage: FormErr
   console.error(`[astro-form-submissions] ${stage} error: ${summarizeError(error)}`)
 }
 
-/** How long a route waits on one report before abandoning it and answering anyway. */
+/** How long a request waits on its reports, in all, before abandoning them and answering anyway. */
 export const REPORTER_TIMEOUT_MS = 5_000
+
+/** A contained reporter: reports one failure, waiting at most `waitMs` for the site's hook. */
+export type ContainedReport = (error: unknown, stage: FormErrorStage, waitMs?: number) => Promise<void>
 
 /**
  * Wraps a reporter so every call is awaited (an async hook can't detach into an unhandled rejection),
  * contained (a broken reporter can never replace the documented response) and bounded (a report still
- * pending after {@link REPORTER_TIMEOUT_MS} is abandoned, so a stalled hook can't hold the response open).
- * Reporter failures and timeouts are deliberately not re-reported: there is nowhere left to send them.
+ * pending after `waitMs`, {@link REPORTER_TIMEOUT_MS} by default, is abandoned, so a stalled hook can't hold
+ * the response open). Reporter failures and timeouts are deliberately not re-reported: there is nowhere left
+ * to send them.
  *
  * @param onError - The site's reporter, or `undefined` for {@link defaultErrorReporter}.
  * @returns The contained reporter.
  */
-export function containedReporter(onError: ErrorReporter | undefined) {
+export function containedReporter(onError: ErrorReporter | undefined): ContainedReport {
   const reporter = onError ?? defaultErrorReporter
 
-  return async (error: unknown, stage: FormErrorStage): Promise<void> => {
+  return async (error, stage, waitMs = REPORTER_TIMEOUT_MS) => {
     let timer: ReturnType<typeof setTimeout> | undefined
-    const timeout = new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, REPORTER_TIMEOUT_MS)
-    })
+    const timeout =
+      waitMs > 0
+        ? new Promise<void>((resolve) => {
+            timer = setTimeout(resolve, waitMs)
+          })
+        : Promise.resolve()
 
     try {
       await Promise.race([reporter(error, { stage }), timeout])
@@ -127,5 +134,22 @@ export function containedReporter(onError: ErrorReporter | undefined) {
     } finally {
       clearTimeout(timer)
     }
+  }
+}
+
+/**
+ * Shares one {@link REPORTER_TIMEOUT_MS} budget across every report a request makes. Each report still reaches
+ * the site's hook, but once the budget is spent the request stops waiting for them: a request can make several
+ * in turn, and waits that added up could outlast the browser's own timeout, whose retry would then send the
+ * submission twice.
+ *
+ * @param report - The route's contained reporter.
+ * @returns The reporter one request uses.
+ */
+export function withReportingBudget(report: ContainedReport): (error: unknown, stage: FormErrorStage) => Promise<void> {
+  let deadline: number | undefined
+  return (error, stage) => {
+    deadline ??= Date.now() + REPORTER_TIMEOUT_MS
+    return report(error, stage, Math.max(0, deadline - Date.now()))
   }
 }

@@ -1075,6 +1075,22 @@ describe('createFormRoute report draining', () => {
     expect(settled).toBe(true)
   })
 
+  it('waits for a stalled onError no longer than one timeout across several reports in turn', async () => {
+    vi.useFakeTimers()
+    const first = stubDispatcher({ failWith: new Error('provider down') })
+    const second = stubDispatcher({ failWith: new Error('webhook down') })
+    const pending = createFormRoute({
+      ...baseConfig,
+      dispatchers: [[first.dispatcher], [second.dispatcher]],
+      onError: () => new Promise<void>(() => {})
+    })(contextFor(validForm()))
+
+    await vi.advanceTimersByTimeAsync(REPORTER_TIMEOUT_MS)
+
+    expect((await pending).status).toBe(502)
+    expect(second.dispatch).toHaveBeenCalledOnce()
+  })
+
   it('still answers when onError never settles', async () => {
     vi.useFakeTimers()
     const pending = createFormRoute({
