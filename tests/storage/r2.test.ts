@@ -1,3 +1,4 @@
+import { ObjectExistsError } from '#storage/object-exists-error.js'
 import { R2Storage, type R2BucketLike } from '#storage/r2.js'
 import { describe, expect, it, vi } from 'vitest'
 import { MemoryBucket } from '../support/memory-bucket.js'
@@ -106,6 +107,21 @@ describe('R2Storage', () => {
     expect(stored?.bytes).toEqual(bytes)
     expect(stored?.httpMetadata.contentType).toBe('video/mp4')
     expect((await storage.get('key-2'))?.filename).toBe('clip.mp4')
+  })
+
+  it('refuses to stream over an object already stored under the key, keeping the original bytes', async () => {
+    const bucket = new MemoryBucket()
+    const storage = new R2Storage({ bucket, prefix: 'uploads/' })
+    const original = new TextEncoder().encode('%PDF-1.7 original')
+    const swapped = new TextEncoder().encode('MZ executable bytes')
+    const options = { contentType: 'application/pdf', filename: 'quote.pdf', size: original.length }
+
+    await storage.putStream('key-4', new Response(original).body!, options)
+    const second = storage.putStream('key-4', new Response(swapped).body!, { ...options, size: swapped.length })
+
+    await expect(second).rejects.toBeInstanceOf(ObjectExistsError)
+    await expect(second).rejects.toMatchObject({ key: 'key-4' })
+    expect(bucket.objects.get('uploads/key-4')?.bytes).toEqual(original)
   })
 
   it('peeks the leading bytes, total size and stored type through one ranged read', async () => {

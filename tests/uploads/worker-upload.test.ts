@@ -97,6 +97,31 @@ describe('createUploadPutRoute', () => {
     expect((await storage.get(upload.objectKey))?.filename).toBe('Quote – March.pdf')
   })
 
+  it('answers 409 to a second PUT under the same grant, so the checked bytes stay in place', async () => {
+    const { bucket, target, route } = setup()
+    const token = tokenOf((await target.prepare(upload)).url)
+    const swapped = new TextEncoder().encode('MZ'.padEnd(bytes.length, 'x'))
+    const onError = vi.fn()
+
+    expect((await put(route, token)).status).toBe(200)
+    const second = await put(
+      createUploadPutRoute({ storage: new R2Storage({ bucket, prefix: 'uploads/' }), secret: SECRET, onError }),
+      token,
+      {
+        body: swapped,
+        headers: {
+          'Content-Length': String(swapped.length),
+          'Content-Type': 'application/pdf',
+          'x-amz-meta-filename-uri': encodeURIComponent(upload.filename)
+        }
+      }
+    )
+
+    expect(second.status).toBe(409)
+    expect(bucket.objects.get(`uploads/${upload.objectKey}`)?.bytes).toEqual(bytes)
+    expect(onError).not.toHaveBeenCalled()
+  })
+
   it('answers 404 for a tampered, foreign or expired grant, and stores nothing', async () => {
     const { bucket, target, route } = setup()
     const token = tokenOf((await target.prepare(upload)).url)

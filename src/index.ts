@@ -37,6 +37,7 @@ export {
 } from '#enrichers/index.js'
 
 export {
+  ObjectExistsError,
   R2Storage,
   type FileStorage,
   type PeekedObject,

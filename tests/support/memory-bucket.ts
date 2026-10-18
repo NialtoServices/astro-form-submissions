@@ -9,8 +9,8 @@ export interface MemoryObject {
 
 /**
  * An in-memory stand-in for an R2 bucket binding that behaves like one where the toolkit relies on it:
- * it stores real bytes from a `File` or a stream, honours `range` reads while reporting the whole
- * object's `size`, and treats deleting an absent key as a no-op. `objects` is public so a test can seed
+ * it stores real bytes from a `File` or a stream, honours `If-None-Match: *` writes and `range` reads while
+ * reporting the whole object's `size`, and treats deleting an absent key as a no-op. `objects` is public so a test can seed
  * what a presigned upload would have written, or inspect what the toolkit stored.
  */
 export class MemoryBucket implements R2BucketLike {
@@ -22,15 +22,18 @@ export class MemoryBucket implements R2BucketLike {
     options: {
       httpMetadata: { contentType: string; contentDisposition: string }
       customMetadata: { filename: string }
+      onlyIf?: Headers
     }
-  ): Promise<void> {
+  ): Promise<{ key: string } | null> {
     const bytes = new Uint8Array(await (value instanceof File ? value : new Response(value)).arrayBuffer())
+    if (options.onlyIf?.get('If-None-Match') === '*' && this.objects.has(key)) return null
 
     this.objects.set(key, {
       bytes,
       httpMetadata: { ...options.httpMetadata },
       customMetadata: { ...options.customMetadata }
     })
+    return { key }
   }
 
   async get(key: string, options?: { range: { offset: number; length: number } }) {

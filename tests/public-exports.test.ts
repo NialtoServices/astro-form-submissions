@@ -7,6 +7,7 @@ describe('package entry', () => {
       DestinationUnreachableError: expect.any(Function),
       DiscordDeliveryError: expect.any(Function),
       EmailRecipientError: expect.any(Function),
+      ObjectExistsError: expect.any(Function),
       OperationalError: expect.any(Function),
       PostmarkDeliveryError: expect.any(Function),
       SubmissionVerdictError: expect.any(Function),

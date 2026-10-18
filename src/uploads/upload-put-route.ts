@@ -1,4 +1,5 @@
 import { containedReporter, type ErrorReporter } from '#reporting.js'
+import { ObjectExistsError } from '#storage/object-exists-error.js'
 import type { FileStorage } from '#storage/storage.js'
 import { assertValidSigningSecret, tokenFromPathSegment } from '#tokens.js'
 import { filenameDigest, verifyUploadClaims } from '#uploads/upload-claims.js'
@@ -49,8 +50,9 @@ function headerFilename(request: Request): string | undefined {
  *
  * Responses: 200 once stored; 404 for an invalid, expired or wrong-purpose grant (never revealing which);
  * 411 without a `Content-Length`; 413 when it exceeds the admitted size; 400 when it is smaller, or when
- * the filename header is missing or not the admitted name; 502 when the write fails, including a stream
- * whose bytes run short or long of its declared length.
+ * the filename header is missing or not the admitted name; 409 when the grant has already stored its file,
+ * which can't be replaced; 502 when the write fails, including a stream whose bytes run short or long of its
+ * declared length.
  */
 export function createUploadPutRoute(config: CreateUploadPutRouteConfig): APIRoute {
   assertValidSigningSecret(config.secret)
@@ -87,6 +89,8 @@ export function createUploadPutRoute(config: CreateUploadPutRouteConfig): APIRou
         size: upload.size
       })
     } catch (error) {
+      if (error instanceof ObjectExistsError) return plain('This file has already been uploaded.', 409)
+
       await report(error, 'upload')
       return plain('This file could not be stored. Please try again.', 502)
     }

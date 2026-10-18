@@ -1,4 +1,5 @@
 import { attachmentDisposition } from '#content-disposition.js'
+import { ObjectExistsError } from '#storage/object-exists-error.js'
 import type { FileStorage, PeekedObject, PutOptions, StoredObject, StreamPutOptions } from '#storage/storage.js'
 
 /**
@@ -6,13 +7,17 @@ import type { FileStorage, PeekedObject, PutOptions, StoredObject, StreamPutOpti
  * toolkit needs no `@cloudflare/workers-types` dependency — a real `env.<BUCKET>` binding satisfies it.
  */
 export interface R2BucketLike {
-  /** Stores a file or a known-length byte stream under `key` with the given HTTP + custom metadata. */
+  /**
+   * Stores a file or a known-length byte stream under `key` with the given HTTP + custom metadata. With
+   * `onlyIf`, stores only when those conditional headers hold, and resolves `null` when they don't.
+   */
   put(
     key: string,
     value: File | ReadableStream,
     options: {
       httpMetadata: { contentType: string; contentDisposition: string }
       customMetadata: { filename: string }
+      onlyIf?: Headers
     }
   ): Promise<unknown>
 
@@ -93,7 +98,13 @@ export class R2Storage implements FileStorage {
       .FixedLengthStream
     const value = FixedLength ? body.pipeThrough(new FixedLength(options.size)) : body
 
-    await this.options.bucket.put(this.prefixed(key), value, this.metadata(options))
+    // A grant stays valid for its whole lifetime while the bytes are type-checked only on submission, so an
+    // object that could be rewritten later would reach the recipient unchecked.
+    const stored = await this.options.bucket.put(this.prefixed(key), value, {
+      ...this.metadata(options),
+      onlyIf: new Headers({ 'If-None-Match': '*' })
+    })
+    if (stored === null) throw new ObjectExistsError(key)
   }
 
   async peek(key: string, length: number): Promise<PeekedObject | null> {

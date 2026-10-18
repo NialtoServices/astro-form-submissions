@@ -1119,9 +1119,9 @@ needs that origin in `connect-src`. The filename travels percent-encoded in `x-a
   shorter than the receipt's.
 - **A presigned URL stores exactly one object of exactly the admitted size.** Its `Content-Length` is
   signed, so R2 refuses any other size, and it carries `If-None-Match: *`, so a stored object can't be
-  replaced. Through `WorkerUploadTarget`, a sender can replace their own upload with another of the same
-  size until the grant expires; the type check happens when the form is submitted, so such a file isn't
-  re-checked. Downloads are always served as attachments with `nosniff`, as for `FileUploads`.
+  replaced. `WorkerUploadTarget` holds to the same rule: its `PUT` route checks the admitted size and
+  answers a second upload under the same grant with 409, so the bytes checked when the form is submitted
+  are the bytes delivered. Downloads are always served as attachments with `nosniff`, as for `FileUploads`.
 - **Abandoned uploads** — files uploaded for a form that was never submitted, or behind a receipt that
   failed verification — are left to the bucket's lifecycle rule, which is already required (see above).
 - **A dropped or quarantined request is granted nothing**, silently: the upload route answers

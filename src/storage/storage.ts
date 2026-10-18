@@ -77,13 +77,14 @@ export interface FileStorage {
   delete(key: string): Promise<void>
 
   /**
-   * Stores a byte stream of known length under a key, without buffering it. Needed by
-   * {@link createUploadPutRoute}.
+   * Stores a byte stream of known length under a key, without buffering it, and never over an existing
+   * object. Needed by {@link createUploadPutRoute}.
    *
    * @param key - The logical object key.
    * @param body - The bytes to store.
    * @param options - The content-type, filename and exact size to persist with the object.
-   * @throws On storage failure, or when the stream's length differs from `options.size`.
+   * @throws {@link ObjectExistsError} when the key already holds an object; otherwise on storage failure, or
+   * when the stream's length differs from `options.size`.
    */
   putStream?(key: string, body: ReadableStream, options: StreamPutOptions): Promise<void>
 
