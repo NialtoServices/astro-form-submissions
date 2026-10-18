@@ -1,3 +1,4 @@
+import { attachmentDisposition } from '#content-disposition.js'
 import type { R2BucketLike } from '#storage/r2.js'
 
 /** One object held by {@link MemoryBucket}, as R2 would store it. */
@@ -63,13 +64,13 @@ export class MemoryBucket implements R2BucketLike {
   }
 
   /**
-   * Seeds an object as a presigned upload would leave it: bytes, the signed content-type, and the
-   * percent-encoded filename metadata.
+   * Seeds an object as a presigned upload would leave it: bytes, the signed content-type and disposition,
+   * and the percent-encoded filename metadata.
    */
   seedPresignedUpload(key: string, bytes: Uint8Array<ArrayBuffer>, contentType: string, filename: string): void {
     this.objects.set(key, {
       bytes,
-      httpMetadata: { contentType },
+      httpMetadata: { contentType, contentDisposition: attachmentDisposition(filename) },
       customMetadata: { 'filename-uri': encodeURIComponent(filename) }
     })
   }

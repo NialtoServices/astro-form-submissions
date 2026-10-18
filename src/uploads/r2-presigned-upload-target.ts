@@ -1,3 +1,4 @@
+import { attachmentDisposition } from '#content-disposition.js'
 import { assertPositiveNumberOption } from '#numeric-options.js'
 import { presignURL } from '#uploads/sigv4.js'
 import type { PendingUpload, UploadInstruction, UploadTarget } from '#uploads/upload-target.js'
@@ -83,7 +84,10 @@ export class R2PresignedUploadTarget implements UploadTarget {
 
     // Header values must be ASCII, so the filename travels percent-encoded; R2Storage decodes it on download.
     // `If-None-Match: *` makes the URL single-write, so an object can't be replaced after it was verified.
+    // The disposition is stored as R2Storage stores it on the Worker path, so the object downloads rather
+    // than renders even if the bucket is ever served directly.
     const headers = {
+      'Content-Disposition': attachmentDisposition(upload.filename),
       'Content-Type': upload.contentType,
       'If-None-Match': '*',
       'x-amz-meta-filename-uri': encodeURIComponent(upload.filename)

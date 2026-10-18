@@ -31,14 +31,15 @@ describe('R2PresignedUploadTarget', () => {
     expect(url.pathname).toBe(`/files-example/uploads/${upload.objectKey}`)
     expect(url.searchParams.get('X-Amz-Expires')).toBe('3600')
     expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe(
-      'content-length;content-type;host;if-none-match;x-amz-meta-filename-uri'
+      'content-disposition;content-length;content-type;host;if-none-match;x-amz-meta-filename-uri'
     )
   })
 
-  it('returns the headers the upload must carry, with the filename percent-encoded', async () => {
+  it('returns the headers the upload must carry, with the filename percent-encoded and the object an attachment', async () => {
     const instruction = await new R2PresignedUploadTarget(options).prepare(upload)
 
     expect(instruction.headers).toEqual({
+      'Content-Disposition': `attachment; filename="Garden _ before.mov"; filename*=UTF-8''Garden%20%E2%80%93%20before.mov`,
       'Content-Type': 'video/quicktime',
       'If-None-Match': '*',
       'x-amz-meta-filename-uri': 'Garden%20%E2%80%93%20before.mov'

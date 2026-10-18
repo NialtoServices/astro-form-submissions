@@ -987,6 +987,12 @@ you own both:
 > does. **Without a lifecycle rule, uploaded files — personal data — persist in the bucket
 > indefinitely**, so configuring one is a deployment step, not an optimisation.
 
+> **Keep the upload bucket private.** Serve uploads only through `createFileRoute`, which checks each link's
+> signature and expiry and always sends the file as a download. Never attach a public `r2.dev` URL or a
+> custom domain to the bucket: that serves every stored file, personal data included, to anyone who learns
+> its key, with no link expiry. Every upload is stored as an attachment so a file still downloads rather than
+> renders if that ever happens, but it is a backstop, not a way to serve files.
+
 **Servicing an erasure request.** `FileStorage` exposes `delete(key)` — implemented by `R2Storage`,
 and the same call the enricher's rollback uses — so removing a specific stored file on demand (e.g. a
 data-subject deletion request) is a supported operation, not only a console action. It takes the bare
@@ -1112,7 +1118,7 @@ and give the bucket a CORS rule for the site's origins:
   {
     "AllowedOrigins": ["https://example.com"],
     "AllowedMethods": ["PUT"],
-    "AllowedHeaders": ["Content-Type", "If-None-Match", "x-amz-meta-filename-uri"],
+    "AllowedHeaders": ["Content-Disposition", "Content-Type", "If-None-Match", "x-amz-meta-filename-uri"],
     "MaxAgeSeconds": 3600
   }
 ]
