@@ -6,6 +6,7 @@ import { createUploadPutRoute } from '#uploads/upload-put-route.js'
 import { WorkerUploadTarget } from '#uploads/worker-upload-target.js'
 import type { APIRoute } from 'astro'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { verdictReport } from '../support/harness.js'
 import { MemoryBucket } from '../support/memory-bucket.js'
 
 const SECRET = 'a-sufficiently-long-signing-secret'
@@ -119,7 +120,9 @@ describe('createUploadPutRoute', () => {
 
     expect(second.status).toBe(409)
     expect(bucket.objects.get(`uploads/${upload.objectKey}`)?.bytes).toEqual(bytes)
-    expect(onError).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledExactlyOnceWith(verdictReport('reject', 'upload-put.already-stored'), {
+      stage: 'upload'
+    })
   })
 
   describe('on the Workers runtime, where FixedLengthStream enforces the declared length', () => {
@@ -204,6 +207,34 @@ describe('createUploadPutRoute', () => {
     expect((await put(route, foreign)).status).toBe(404)
     expect(expired.status).toBe(404)
     expect(bucket.objects.size).toBe(0)
+  })
+
+  it('reports each refusal under the upload stage with its own code', async () => {
+    const { storage, target } = setup()
+    const onError = vi.fn()
+    const route = createUploadPutRoute({ storage, secret: SECRET, onError })
+    const token = tokenOf((await target.prepare(upload)).url)
+    const named = { 'Content-Type': 'application/pdf', 'x-amz-meta-filename-uri': encodeURIComponent(upload.filename) }
+
+    await put(route, `${token}x`)
+    await put(route, token, { headers: named })
+    await put(route, token, { headers: { ...named, 'Content-Length': String(bytes.length + 1) } })
+    await put(route, token, { headers: { ...named, 'Content-Length': String(bytes.length - 1) } })
+    await put(route, token, { headers: { 'Content-Length': String(bytes.length) } })
+
+    expect(onError.mock.calls).toEqual([
+      [verdictReport('reject', 'upload-put.grant-invalid'), { stage: 'upload' }],
+      [verdictReport('reject', 'upload-put.length-missing'), { stage: 'upload' }],
+      [
+        verdictReport('reject', 'upload-put.too-large', { declared: bytes.length + 1, admitted: bytes.length }),
+        { stage: 'upload' }
+      ],
+      [
+        verdictReport('reject', 'upload-put.size-mismatch', { declared: bytes.length - 1, admitted: bytes.length }),
+        { stage: 'upload' }
+      ],
+      [verdictReport('reject', 'upload-put.filename-mismatch'), { stage: 'upload' }]
+    ])
   })
 
   it('refuses a download link presented as an upload grant', async () => {

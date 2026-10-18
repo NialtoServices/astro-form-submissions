@@ -1,6 +1,8 @@
+import type { VerdictDetails } from '#pipeline.js'
 import { containedReporter, type ErrorReporter } from '#reporting.js'
 import { ObjectExistsError } from '#storage/object-exists-error.js'
 import type { FileStorage } from '#storage/storage.js'
+import { SubmissionVerdictError } from '#submission-verdict-error.js'
 import { assertValidSigningSecret, tokenFromPathSegment } from '#tokens.js'
 import { filenameDigest, verifyUploadClaims } from '#uploads/upload-claims.js'
 import type { APIRoute } from 'astro'
@@ -17,9 +19,10 @@ export interface CreateUploadPutRouteConfig {
   tokenParam?: string
 
   /**
-   * Called with a failed write (stage `upload`) before the 502 is returned. Awaited for up to 5 seconds and
-   * contained, so a reporter that throws or stalls can't change the response.
-   * The same contract as the form route's `onError`; default {@link defaultErrorReporter}.
+   * Called (stage `upload`) with a failed write before the 502 is returned, and with each refused upload as a
+   * {@link SubmissionVerdictError}. Awaited for up to 5 seconds and contained, so a reporter that throws or
+   * stalls can't change the response. The same contract as the form route's `onError`; default
+   * {@link defaultErrorReporter}.
    */
   onError?: ErrorReporter
 }
@@ -48,7 +51,8 @@ function headerFilename(request: Request): string | undefined {
  * and must be the one admitted; the grant in the URL carries only its digest, so request logs never
  * record the name.
  *
- * Responses: 200 once stored; 404 for an invalid, expired or wrong-purpose grant (never revealing which);
+ * Every refusal is reported to `onError` with a code (see the README's Logs section). Responses: 200 once
+ * stored; 404 for an invalid, expired or wrong-purpose grant (never revealing which);
  * 411 without a `Content-Length`; 413 when it exceeds the admitted size; 400 when it is smaller, or when
  * the filename header is missing or not the admitted name; 409 when the grant has already stored its file,
  * which can't be replaced; 502 when the write fails, including a stream whose bytes run short or long of its
@@ -66,20 +70,38 @@ export function createUploadPutRoute(config: CreateUploadPutRouteConfig): APIRou
 
   const tokenParam = config.tokenParam ?? 'token'
 
+  // A refused upload would otherwise leave no trace, so an expired grant on a slow connection looked the same
+  // in the log as nothing having happened at all.
+  const refuse = async (body: string, status: number, code: string, details?: VerdictDetails) => {
+    await report(new SubmissionVerdictError('reject', code, details), 'upload')
+    return plain(body, status)
+  }
+
   return async ({ params, request }) => {
     const upload = await verifyUploadClaims('put', tokenFromPathSegment(params[tokenParam] ?? ''), config.secret)
-    if (!upload) return plain('Not found', 404)
+    if (!upload) return refuse('Not found', 404, 'upload-put.grant-invalid')
 
     const declaredLength = request.headers.get('content-length')
-    if (declaredLength === null || !request.body) return plain('Length required', 411)
+    if (declaredLength === null || !request.body) return refuse('Length required', 411, 'upload-put.length-missing')
 
     const length = Number(declaredLength)
-    if (length > upload.size) return plain('This file is larger than was declared.', 413)
-    if (length !== upload.size) return plain('This file is not the size that was declared.', 400)
+    if (length > upload.size) {
+      return refuse('This file is larger than was declared.', 413, 'upload-put.too-large', {
+        declared: length,
+        admitted: upload.size
+      })
+    }
+
+    if (length !== upload.size) {
+      return refuse('This file is not the size that was declared.', 400, 'upload-put.size-mismatch', {
+        declared: length,
+        admitted: upload.size
+      })
+    }
 
     const filename = headerFilename(request)
     if (filename === undefined || (await filenameDigest(filename, config.secret)) !== upload.filenameDigest) {
-      return plain('This file is not the one that was declared.', 400)
+      return refuse('This file is not the one that was declared.', 400, 'upload-put.filename-mismatch')
     }
 
     try {
@@ -89,7 +111,9 @@ export function createUploadPutRoute(config: CreateUploadPutRouteConfig): APIRou
         size: upload.size
       })
     } catch (error) {
-      if (error instanceof ObjectExistsError) return plain('This file has already been uploaded.', 409)
+      if (error instanceof ObjectExistsError) {
+        return refuse('This file has already been uploaded.', 409, 'upload-put.already-stored')
+      }
 
       await report(error, 'upload')
       return plain('This file could not be stored. Please try again.', 502)
