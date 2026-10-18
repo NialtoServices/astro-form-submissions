@@ -748,6 +748,11 @@ may resolve to `undefined` to omit the header — e.g. `replyTo: (submission) =>
 replies to the sender. A `to` resolver is also what lets a second dispatcher address the sender to
 acknowledge them (see [Acknowledging the sender](#acknowledging-the-sender)).
 
+A fixed `to` string can list several of the site's own inboxes, comma-separated, so one environment variable
+can hold them all (`to: env.FORM_TO`, set to `bob@example.com, alice@example.com`). Only a resolver is held
+to a single address, since that's how a sender's input reaches it, so pass the variable's value rather than
+wrapping it in a function.
+
 #### Templates
 
 `templates` is three functions (`subject`/`text`/`html`), with three ways to produce them — quickest first.
