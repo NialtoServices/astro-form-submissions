@@ -7,7 +7,7 @@ export class DiscordDeliveryError extends Error {
   // MARK: - Object Lifecycle
 
   constructor(readonly status: number) {
-    super(`Discord webhook responded with ${status}`)
+    super(`Discord webhook responded with ${status}.`)
     this.name = 'DiscordDeliveryError'
   }
 }

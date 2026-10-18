@@ -197,7 +197,7 @@ describe('PostmarkDeliveryError', () => {
     await expect(delivery).rejects.toMatchObject({
       status: 502,
       errorCode: undefined,
-      message: 'Postmark refused the message (HTTP 502)'
+      message: 'Postmark refused the message (HTTP 502).'
     })
   })
 })

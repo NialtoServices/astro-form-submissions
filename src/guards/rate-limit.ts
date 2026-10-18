@@ -76,7 +76,7 @@ export class RateLimitGuard implements Guard {
       context.report?.(
         new OperationalError(
           'rate-limit.no-client-key',
-          'Rate limiter has no client key for this request; failing open'
+          'Rate limiter has no client key for this request; failing open.'
         )
       )
       return { action: 'accept' }
@@ -86,7 +86,7 @@ export class RateLimitGuard implements Guard {
     // it — without the possibly-sensitive key — so a silently-disabled throttle doesn't go unnoticed.
     const { success } = await this.options.limiter.limit({ key }).catch((error: unknown) => {
       context.report?.(
-        new OperationalError('rate-limit.limiter-unavailable', 'Rate limiter unavailable; failing open', {
+        new OperationalError('rate-limit.limiter-unavailable', 'Rate limiter unavailable; failing open.', {
           cause: error
         })
       )

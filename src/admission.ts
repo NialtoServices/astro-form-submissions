@@ -281,7 +281,7 @@ export async function admit<S extends SchemaInput>(
   // than object-spread it into a garbage submission.
   const value = validation.value
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    await report(new OperationalError('schema.non-object', 'Schema output must be an object'), 'unexpected')
+    await report(new OperationalError('schema.non-object', 'Schema output must be an object.'), 'unexpected')
     return fail(ERRORS.unavailable, formData)
   }
 

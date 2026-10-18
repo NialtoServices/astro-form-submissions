@@ -149,7 +149,7 @@ export class TurnstileInspector implements Inspector {
       context.report?.(
         new OperationalError(
           'turnstile.siteverify-failed',
-          `Turnstile verification could not complete: ${result.failure}`
+          `Turnstile verification could not complete: ${result.failure}.`
         )
       )
       return this.reject('turnstile.siteverify-failed', result.details)

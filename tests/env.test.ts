@@ -36,7 +36,7 @@ describe('requireEnv', () => {
     const error = thrown as MissingEnvError
     expect(error.name).toBe('MissingEnvError')
     expect(error.keys).toEqual(['POSTMARK_TOKEN', 'DISCORD_WEBHOOK_URL'])
-    expect(error.message).toBe('Missing required environment values: POSTMARK_TOKEN, DISCORD_WEBHOOK_URL')
+    expect(error.message).toBe('Missing required environment values: POSTMARK_TOKEN, DISCORD_WEBHOOK_URL.')
     expect(error.message).not.toContain('ts-secret')
   })
 

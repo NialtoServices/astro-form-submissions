@@ -6,7 +6,7 @@ export class MissingEnvError extends Error {
   // MARK: - Object Lifecycle
 
   constructor(readonly keys: readonly string[]) {
-    super(`Missing required environment ${keys.length === 1 ? 'value' : 'values'}: ${keys.join(', ')}`)
+    super(`Missing required environment ${keys.length === 1 ? 'value' : 'values'}: ${keys.join(', ')}.`)
     this.name = 'MissingEnvError'
   }
 }

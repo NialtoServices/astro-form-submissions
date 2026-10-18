@@ -13,7 +13,10 @@ export class PostmarkDeliveryError extends Error {
     readonly postmarkMessage?: string
   ) {
     const detail = errorCode === undefined ? `HTTP ${status}` : `HTTP ${status}, error ${errorCode}`
-    super(`Postmark refused the message (${detail})${postmarkMessage ? `: ${postmarkMessage}` : ''}`)
+    const message = `Postmark refused the message (${detail})${postmarkMessage ? `: ${postmarkMessage}` : ''}`
+
+    // Postmark's own explanation usually ends a sentence already.
+    super(/[.!?]$/.test(message) ? message : `${message}.`)
     this.name = 'PostmarkDeliveryError'
   }
 

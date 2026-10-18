@@ -11,7 +11,7 @@ export class DestinationUnreachableError extends Error {
     readonly destination: string,
     options: { cause: unknown }
   ) {
-    super(`${destination} could not be reached`, options)
+    super(`${destination} could not be reached.`, options)
     this.name = 'DestinationUnreachableError'
   }
 }
