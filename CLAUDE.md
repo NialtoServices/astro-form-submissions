@@ -28,9 +28,19 @@ examples use reserved placeholders such as `example.com`, `ada@example.com` and 
 Explain a change by what it does and the general shape of the problem it handles, never by who needed it or where it
 came up. A comment, test name or commit message says "cap the request body", not "fix the crash a site reported".
 
+## Changelog
+
+`CHANGELOG.md` ships with the package, and it's how a site learns what an upgrade asks of it. A commit that changes what
+a site sees or must do (an export, an option, a default, a response, an email, a refusal) adds its entry under
+`## [Unreleased]` in that same commit, so the file never falls behind. Anything a site must act on goes under
+**Upgrading** as a numbered step that says what to do, not only what changed. Internal work (tests, refactors, tooling)
+gets no entry. The rules under "Keep the package generic" apply here too.
+
 ## Releasing
 
-Releases publish from CI, never from a workstation: bump `version` in `package.json`, commit, tag the commit
-`v<version>` and push the tag. The `publish` job in `.github/workflows/ci.yml` runs only after `verify` passes for
+Releases publish from CI, never from a workstation: bump `version` in `package.json`, rename `## [Unreleased]` in
+`CHANGELOG.md` to `## [<version>] - <date>` with a fresh empty `## [Unreleased]` above it, update the compare links at
+the foot of the file, commit, tag the commit `v<version>` and push the tag. `pnpm test:dist` fails if the changelog has
+no section for the package's version. The `publish` job in `.github/workflows/ci.yml` runs only after `verify` passes for
 that tag, and publishes through npm trusted publishing, which needs no npm token and attaches provenance. The owner
 cuts releases; don't tag or publish unless asked.

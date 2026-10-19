@@ -11,6 +11,9 @@ you get a choice: a ready-made generic `submissionNotificationTemplates` (declar
 write) or fully site-owned templates when a site wants its own voice. Either way, the package owns the
 plumbing around them.
 
+**Upgrading a site?** [CHANGELOG.md](CHANGELOG.md) records every release; each version's **Upgrading** section lists
+what a site must do to move to it.
+
 ## Contents
 
 - [Quick start](#quick-start)

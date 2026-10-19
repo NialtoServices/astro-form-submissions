@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 const ROOT_DIR = fileURLToPath(new URL('..', import.meta.url))
 
 const manifest = JSON.parse(readFileSync(`${ROOT_DIR}package.json`, 'utf8')) as {
+  version: string
   files: string[]
   exports: Record<string, Record<string, string>>
   imports: Record<string, Record<string, string>>
@@ -24,6 +25,13 @@ describe('the published package metadata', () => {
   it('publishes the build, and resolves internal imports into it for consumers', () => {
     expect(manifest.files).toContain('dist')
     expect(manifest.imports['#*']?.default).toBe('./dist/*')
+  })
+
+  it('publishes the changelog, with a section for the version being published', () => {
+    const changelog = existsSync(`${ROOT_DIR}CHANGELOG.md`) ? readFileSync(`${ROOT_DIR}CHANGELOG.md`, 'utf8') : ''
+
+    expect(manifest.files).toContain('CHANGELOG.md')
+    expect(changelog).toContain(`\n## [${manifest.version}] - `)
   })
 
   it('names the GitHub repository it is published from, which trusted publishing requires', () => {
