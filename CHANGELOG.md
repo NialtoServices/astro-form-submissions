@@ -75,6 +75,7 @@ reason code, and a form posted without JavaScript gets a page a person can read.
 - A request waits at most 5 seconds in all on its `onError` calls, counting only time a report is pending, then
   answers anyway; every report still reaches the hook. `defineLazyRoute`'s `onError` is bounded the same way.
 - Refused Worker uploads are reported with `upload-put.*` codes.
+- A matcher whose `test` throws is treated as no match, and the next matcher is tried.
 - A 502 or 504 from Postmark or Discord is a `DestinationUnreachableError`, so uploaded files are kept as for
   any delivery whose outcome is unknown.
 - Discord values are escaped as markdown, leaving bare URLs linkable, and webhooks mention no one.

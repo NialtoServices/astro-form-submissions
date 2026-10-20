@@ -2,6 +2,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { EnrichmentContext } from '#enrichers/enricher.js'
 import { UploadedFiles, type UploadedFilesOptions } from '#enrichers/uploaded-files.js'
 import type { FilePayload } from '#files/signing.js'
+import type { FileMatcher } from '#files/sniff.js'
 import { R2Storage } from '#storage/r2.js'
 import type { FileStorage } from '#storage/storage.js'
 import { createUploadRoute } from '#uploads/upload-route.js'
@@ -561,6 +562,31 @@ describe('UploadedFiles', () => {
           cause: failure
         })
       )
+    })
+
+    it('holds a storage that returns more bytes than asked for to the length asked for', async () => {
+      const bucket = new MemoryBucket()
+      const lengths: number[] = []
+      const matcher: FileMatcher = {
+        contentType: 'application/x-trailer',
+        test: () => true,
+        inspect: async (reader) => {
+          lengths.push((await reader.read(0, 4)).length)
+          return true
+        }
+      }
+      const enricher = new UploadedFiles<Enquiry>({
+        storage: storageReadingRangesWith(bucket, (real, key, offset) => real.readRange(key, offset, 1_000_000)),
+        secret: SECRET,
+        link: async () => 'https://example.com/files/x/',
+        accept: [matcher]
+      })
+      const report = { name: 'report.trl', type: '', bytes: trailerBytes(true) }
+      const { receipts, prepared } = await admit([report])
+      store(bucket, prepared, [report])
+
+      expect(await enricher.enrich({ name: 'Ada' }, contextWith(receipts))).toMatchObject({ provide: {} })
+      expect(lengths).toEqual([4])
     })
 
     it('refuses bytes that contradict the type they were stored with', async () => {

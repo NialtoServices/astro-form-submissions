@@ -1,5 +1,13 @@
 import { MAX_INSPECTED_BYTES, MAX_INSPECTED_READS, type ByteRangeReader } from '#files/byte-range-reader.js'
-import { ALL_TYPES, DOCUMENT_TYPES, HEADER_BYTES, IMAGE_TYPES, sniffType, type FileMatcher } from '#files/sniff.js'
+import {
+  ALL_TYPES,
+  DOCUMENT_TYPES,
+  HEADER_BYTES,
+  IMAGE_TYPES,
+  sniffBytes,
+  sniffType,
+  type FileMatcher
+} from '#files/sniff.js'
 import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
@@ -144,6 +152,25 @@ describe('sniffType', () => {
 
   it('names the extensions every built-in type is saved under', () => {
     expect(ALL_TYPES.filter((matcher) => !matcher.extensions?.length)).toEqual([])
+  })
+})
+
+describe('sniffBytes', () => {
+  it('skips a matcher that needs ranged reads, and treats a header test that throws as no match', () => {
+    const needsRangedReads: FileMatcher = {
+      contentType: 'application/x-inspected',
+      test: () => true,
+      inspect: async () => true
+    }
+    const throwing: FileMatcher = {
+      contentType: 'application/x-broken',
+      test: () => {
+        throw new Error('boom')
+      }
+    }
+    const fallback: FileMatcher = { contentType: 'application/x-fallback', test: () => true }
+
+    expect(sniffBytes(new Uint8Array([1, 2, 3]), [needsRangedReads, throwing, fallback])).toBe('application/x-fallback')
   })
 })
 

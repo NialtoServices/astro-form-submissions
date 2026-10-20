@@ -24,7 +24,7 @@ export interface ByteRangeReader {
    *
    * @param offset - The index of the first byte; a non-negative integer.
    * @param length - How many bytes to read; a non-negative integer.
-   * @returns The bytes read.
+   * @returns The bytes read, never more than `length`.
    * @throws A `RangeError` when the range is invalid, or when it would exceed {@link MAX_INSPECTED_BYTES} or
    * {@link MAX_INSPECTED_READS} for the file; any other error when the bytes can't be read, which a type
    * check doesn't count as a mismatch.
@@ -34,7 +34,7 @@ export interface ByteRangeReader {
 
 /**
  * Wraps a source of byte ranges in the per-file budget, so no matcher can read more than the limits allow
- * whatever it asks for. A source's failure becomes a {@link ByteRangeReadError}.
+ * whatever it asks for, or whatever the source returns. A source's failure becomes a {@link ByteRangeReadError}.
  *
  * @param size - The file's total size in bytes.
  * @param readSlice - Reads a range already known to lie within the file.
@@ -67,11 +67,14 @@ function budgetedReader(
 
       byteCount += available
 
+      let bytes: Uint8Array
       try {
-        return await readSlice(offset, available)
+        bytes = await readSlice(offset, available)
       } catch (error) {
         throw new ByteRangeReadError(offset, available, { cause: error })
       }
+
+      return bytes.length > available ? bytes.subarray(0, available) : bytes
     }
   }
 }
