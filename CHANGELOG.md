@@ -121,6 +121,8 @@ reason code, and a form posted without JavaScript gets a page a person can read.
 
 ### Changed
 
+- Forms added to the page after `initializeForms()` bind themselves. Calling it again is harmless, and a form
+  moved within the page (into a drawer, say) keeps its state.
 - A request waits at most 5 seconds in all on its `onError` calls, counting only time a report is pending, then
   answers anyway; every report still reaches the hook. `defineLazyRoute`'s `onError` is bounded the same way.
 - Refused Worker uploads are reported with `upload-put.*` codes.

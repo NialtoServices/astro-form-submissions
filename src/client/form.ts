@@ -5,7 +5,8 @@
 // `initializeForms` to enhance it. The markup is yours, so ordinary scoped styles reach it; the
 // only contract is the `data-astro-form-*` hooks, which are behavioural, not styling handles.
 //
-// Import it from a `<script>` on the page and re-run it on Astro View Transitions:
+// Import it from a `<script>` on the page. One call also binds forms added to the page later, Astro View
+// Transitions included; calling it again, as an `astro:page-load` listener does, is harmless:
 //
 // ```ts
 // import { initializeForms } from '@nialto-services/astro-form-submissions/form'

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Contact, added later</title>
+    <script type="module">
+      import { initializeForms } from '/client/form.js'
+
+      initializeForms()
+
+      // Stands in for content a site renders after load, such as a tab panel or a client-side route.
+      document.querySelector('#show-form').addEventListener('click', () => {
+        const templateElement = document.querySelector('#contact-form-template')
+        document.querySelector('main').append(templateElement.content.cloneNode(true))
+      })
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>Contact us</h1>
+
+      <button type="button" id="show-form">Show the form</button>
+
+      <template id="contact-form-template">
+        <form data-astro-form action="/api/contact" method="POST" novalidate>
+          <input type="text" name="website" tabindex="-1" autocomplete="off" hidden />
+
+          <label>Name <input name="name" /></label>
+          <label>Email <input name="email" type="email" /></label>
+          <label>Message <textarea name="message"></textarea></label>
+
+          <button type="submit">Send</button>
+
+          <p
+            data-astro-form-status
+            data-astro-form-message-sending="Sending…"
+            data-astro-form-message-success="Thanks, we'll be in touch."
+            data-astro-form-message-generic-error="Something went wrong."></p>
+        </form>
+      </template>
+    </main>
+  </body>
+</html>

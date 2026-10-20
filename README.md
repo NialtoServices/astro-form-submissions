@@ -1466,11 +1466,14 @@ styling handles.
 ```
 
 The enhancement submits via `fetch`, shows the message copy in the status element (announced to
-screen readers), guards against double-submits, and re-initialises on Astro View Transitions
-(`astro:page-load` — hence the listener). Standard submit semantics are preserved: any submit control
-works (`<button>`, `<input type="submit">`, multiple named controls), and the clicked control's
-name/value joins the payload. Requests are bounded by a 30-second timeout (override per form with a
-`data-astro-form-submit-timeout` attribute, in milliseconds — a non-positive or non-finite value is
+screen readers), and guards against double-submits. One `initializeForms()` call covers forms added to
+the page later too, such as a form a script renders after load or the page an Astro View Transition swaps
+in. Calling it again, as the `astro:page-load` listener does, is harmless: a bound form is never bound
+twice. A form moved within the page, as a drawer or dialog that re-parents its content does, keeps its
+state (typed values and field errors) and goes on working. Standard submit semantics are preserved:
+any submit control works (`<button>`, `<input type="submit">`, multiple named controls), and the
+clicked control's name/value joins the payload. Requests are bounded by a 30-second timeout (override
+per form with a `data-astro-form-submit-timeout` attribute, in milliseconds — a non-positive or non-finite value is
 ignored and the default kept); a timeout shows the network-error copy. A [direct upload](#direct-uploads-in-the-form)
 uses the same value as an idle deadline instead, failing once that long passes with no progress, so a
 large file on a slow but moving connection still finishes.
@@ -1481,9 +1484,9 @@ Success requires the route's `{ ok: true }` body — any other 2xx response is t
 
 ### The contract
 
-`initializeForms` enhances every `[data-astro-form]` form in the document (safe to call repeatedly).
-A form without its required status element is left unenhanced, with a console warning. Each hook is an
-attribute you add to your own markup:
+`initializeForms` enhances every `[data-astro-form]` form in the document, and every one added to it
+later (safe to call repeatedly). A form without its required status element is left unenhanced, with a
+console warning. Each hook is an attribute you add to your own markup:
 
 | Attribute                                                               | On                              | Purpose                                                                                                                                                                    |
 | ----------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

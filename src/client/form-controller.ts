@@ -10,17 +10,34 @@ import {
 } from './submission.js'
 import { applyTurnstileTokens, resetTurnstileWidget, waitForTurnstileToken } from './turnstile.js'
 
+/** Releases what a form part set up, once its form leaves the page for good. */
+export type FormTeardown = () => void
+
+/** What a part attached to a bound form (a file field, say) may use of the form's controller. */
+export interface FormPartHost {
+  /** The bound form. */
+  readonly formElement: HTMLFormElement
+
+  /**
+   * Aborted once the form leaves the page for good. A listener a part adds outside the form (on `document`
+   * or `window`) passes it as its `signal`, so the listener goes with the form.
+   */
+  readonly signal: AbortSignal
+}
+
 /**
  * Enhances one `[data-astro-form]` form: submits it by `fetch`, presents the outcome in its status element,
  * and keeps its field errors in step with what the visitor edits.
  */
-export class FormController {
+export class FormController implements FormPartHost {
   // MARK: - Properties
 
   readonly formElement: HTMLFormElement
   private readonly statusElement: HTMLElement
   private readonly successElement: HTMLElement | null
   private readonly messages: FormMessages
+  private readonly abortController = new AbortController()
+  private readonly teardowns: FormTeardown[] = []
 
   // MARK: - Object Lifecycle
 
@@ -59,11 +76,39 @@ export class FormController {
     this.messages = { sending, uploading, success, genericError, networkError }
 
     formElement.dataset.astroFormBound = 'true'
-    formElement.addEventListener('input', (event) => this.recoverField(event))
-    formElement.addEventListener('submit', (event) => void this.submit(event))
+    formElement.addEventListener('input', (event) => this.recoverField(event), { signal: this.signal })
+    formElement.addEventListener('submit', (event) => void this.submit(event), { signal: this.signal })
+  }
+
+  /**
+   * Release the form once it has left the page for good: abort {@link signal}, run every part's teardown, and
+   * drop the `data-astro-form-bound` marker, so the form binds afresh if it is ever put back.
+   */
+  disconnect(): void {
+    this.abortController.abort()
+    for (const teardown of this.teardowns.splice(0)) {
+      try {
+        teardown()
+      } catch (error) {
+        console.warn('[astro-form-submissions] Failed to tear down a form part', error)
+      }
+    }
+
+    delete this.formElement.dataset.astroFormBound
+  }
+
+  // MARK: - Parts
+
+  /** Run `teardown` when the form leaves the page for good. */
+  addTeardown(teardown: FormTeardown): void {
+    this.teardowns.push(teardown)
   }
 
   // MARK: - Derived State
+
+  get signal(): AbortSignal {
+    return this.abortController.signal
+  }
 
   private get submissionContext(): SubmissionContext {
     return { formElement: this.formElement, statusElement: this.statusElement, messages: this.messages }
