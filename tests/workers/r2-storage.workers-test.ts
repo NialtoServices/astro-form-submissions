@@ -63,4 +63,16 @@ describe('R2Storage on the Workers runtime', () => {
     expect(stored?.filename).toBe('quote.pdf')
     expect(stored?.contentType).toBe('application/pdf')
   })
+
+  it('reads back the requested slice of a stored object, and null for a missing key', async () => {
+    const uploads = storage()
+    await uploads.putStream('key', stream(bytes), options)
+
+    const slice = await uploads.readRange('key', 5, 3)
+    const tail = await uploads.readRange('key', bytes.length - 6, 6)
+
+    expect(new TextDecoder().decode(slice!)).toBe(new TextDecoder().decode(bytes.slice(5, 8)))
+    expect(new TextDecoder().decode(tail!)).toBe('garden')
+    expect(await uploads.readRange('absent', 0, 4)).toBeNull()
+  })
 })

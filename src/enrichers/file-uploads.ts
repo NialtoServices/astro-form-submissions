@@ -62,7 +62,10 @@ export interface FileUploadsOptions<E extends FormSubmission = FormSubmission, K
   /** Maximum combined size of all files, in bytes. Default {@link DEFAULT_MAX_TOTAL_BYTES}. */
   maxTotalBytes?: number
 
-  /** Permitted content-type matchers, checked by magic bytes (never the client MIME). Default {@link ALL_TYPES}. */
+  /**
+   * Permitted content-type matchers, checked by magic bytes (never the client MIME), reading further ranges of
+   * the file for a matcher that asks. Default {@link ALL_TYPES}.
+   */
   accept?: FileMatcher[]
 
   /**

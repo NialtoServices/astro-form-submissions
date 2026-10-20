@@ -6,6 +6,8 @@
 // still needs `X-Content-Type-Options: nosniff`, and inline PDFs on the app origin need `Content-Disposition: attachment`
 // (or a separate, cookieless origin).
 
+import { readerForFile, type ByteRangeReader } from '#files/byte-range-reader.js'
+
 /**
  * Number of leading bytes read and handed to each matcher.
  *
@@ -18,6 +20,9 @@ export const HEADER_BYTES = 64
 export interface FileMatcher {
   /** The content-type this matcher grants when its test passes. */
   contentType: string
+
+  /** A short, readable name for the type (`PDF`, `Word`), for hint text. Optional. */
+  label?: string
 
   /**
    * The extensions a file of this type is saved under, without the dot, most common first; case doesn't
@@ -34,6 +39,18 @@ export interface FileMatcher {
    * needs an explicit length check. A matcher must never throw.
    */
   test: (bytes: Uint8Array) => boolean
+
+  /**
+   * Confirms the type from bytes beyond the header, by reading ranges of the file. Optional: a matcher without
+   * it decides from {@link FileMatcher.test} alone.
+   *
+   * The matcher grants its type when `test` passes **and** `inspect` resolves `true`; `inspect` only runs once
+   * `test` has passed. The reader enforces a budget per file ({@link MAX_INSPECTED_BYTES} bytes and
+   * {@link MAX_INSPECTED_READS} reads, shared by every matcher tried against the file), rejecting a read past
+   * it. A throw or rejection counts as no match, as does a storage that can't read ranges, so structure outside
+   * the ranges a matcher reads is never assumed.
+   */
+  inspect?: (reader: ByteRangeReader) => Promise<boolean>
 }
 
 /**
@@ -191,10 +208,26 @@ export const DOCUMENT_TYPES: FileMatcher[] = [
 export const ALL_TYPES: FileMatcher[] = [...IMAGE_TYPES, ...DOCUMENT_TYPES]
 
 /**
+ * Runs a matcher's header test, counting a throw as a failed test.
+ *
+ * @param matcher - The matcher to try.
+ * @param header - The file's leading bytes.
+ * @returns `true` when the header test passes.
+ */
+function passesHeaderTest(matcher: FileMatcher, header: Uint8Array): boolean {
+  try {
+    return matcher.test(header)
+  } catch {
+    return false
+  }
+}
+
+/**
  * Matches already-read header bytes against an allow-list.
  *
  * Matchers are tried in order and the first pass wins, so a list containing overlapping matchers should be ordered
- * most-specific first.
+ * most-specific first. A matcher with an {@link FileMatcher.inspect} never matches here, since its type can't be
+ * confirmed from the header alone; use {@link sniffType}, which can read the rest of the file.
  *
  * @param header - The file's leading bytes (at most {@link HEADER_BYTES} are needed).
  * @param matchers - The permitted matchers; defaults to {@link ALL_TYPES}.
@@ -202,7 +235,37 @@ export const ALL_TYPES: FileMatcher[] = [...IMAGE_TYPES, ...DOCUMENT_TYPES]
  */
 export function sniffBytes(header: Uint8Array, matchers: FileMatcher[] = ALL_TYPES): string | null {
   for (const matcher of matchers) {
-    if (matcher.test(header)) return matcher.contentType
+    if (!matcher.inspect && passesHeaderTest(matcher, header)) return matcher.contentType
+  }
+
+  return null
+}
+
+/**
+ * Matches a file's header bytes, and where a matcher asks for it the rest of the file, against an allow-list.
+ * Ordering is as for {@link sniffBytes}.
+ *
+ * @param header - The file's leading bytes (at most {@link HEADER_BYTES} are needed).
+ * @param reader - Reads further ranges of the same file, whose budget covers every matcher tried; `undefined`
+ *   when the bytes can't be read again, which leaves a matcher with an `inspect` unable to match.
+ * @param matchers - The permitted matchers; defaults to {@link ALL_TYPES}.
+ * @returns The matched content-type, or `null` when the file matches nothing on the list.
+ */
+export async function sniffWithReader(
+  header: Uint8Array,
+  reader: ByteRangeReader | undefined,
+  matchers: FileMatcher[] = ALL_TYPES
+): Promise<string | null> {
+  for (const matcher of matchers) {
+    if (!passesHeaderTest(matcher, header)) continue
+    if (!matcher.inspect) return matcher.contentType
+    if (!reader) continue
+
+    try {
+      if ((await matcher.inspect(reader)) === true) return matcher.contentType
+    } catch {
+      continue
+    }
   }
 
   return null
@@ -220,12 +283,13 @@ export function extensionsFor(contentType: string, matchers: FileMatcher[]): rea
 }
 
 /**
- * Sniffs a file's content-type from its header bytes against an allow-list. See {@link sniffBytes}.
+ * Sniffs a file's content-type from its bytes against an allow-list. See {@link sniffWithReader}.
  *
  * @param file - The file to inspect.
  * @param matchers - The permitted matchers; defaults to {@link ALL_TYPES}.
  * @returns The matched content-type, or `null` when the file matches nothing on the list.
  */
 export async function sniffType(file: File, matchers: FileMatcher[] = ALL_TYPES): Promise<string | null> {
-  return sniffBytes(new Uint8Array(await file.slice(0, HEADER_BYTES).arrayBuffer()), matchers)
+  const header = new Uint8Array(await file.slice(0, HEADER_BYTES).arrayBuffer())
+  return sniffWithReader(header, readerForFile(file), matchers)
 }

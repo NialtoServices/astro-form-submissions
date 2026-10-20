@@ -145,6 +145,17 @@ export class R2Storage implements FileStorage {
     }
   }
 
+  async readRange(key: string, offset: number, length: number): Promise<Uint8Array | null> {
+    const object = await this.options.bucket.get(this.prefixed(key), { range: { offset, length } })
+    if (!object) return null
+
+    if (typeof object.arrayBuffer !== 'function') {
+      throw new Error('R2Storage.readRange needs a bucket whose objects expose `arrayBuffer()`.')
+    }
+
+    return new Uint8Array(await object.arrayBuffer())
+  }
+
   async get(key: string): Promise<StoredObject | null> {
     const object = await this.options.bucket.get(this.prefixed(key))
     if (!object) return null

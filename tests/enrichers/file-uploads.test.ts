@@ -4,6 +4,7 @@ import type { FileStorage } from '#storage/storage.js'
 import fc from 'fast-check'
 import { describe, expect, it, vi } from 'vitest'
 import { browserFilename, expectSafeStoredName } from '../support/filenames.js'
+import { TRAILER_MATCHER, trailerBytes } from '../support/trailer-matcher.js'
 
 const PNG_HEADER = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
 const PDF_HEADER = [0x25, 0x50, 0x44, 0x46, 0x2d]
@@ -334,5 +335,18 @@ describe('FileUploads', () => {
     )
     expect('provide' in result).toBe(true)
     expect(put).toHaveBeenCalledOnce()
+  })
+
+  it("accepts a file a matcher confirms from its end, and refuses one it doesn't", async () => {
+    const { storage, put } = stubStorage()
+    const enricher = uploader(storage, { accept: [TRAILER_MATCHER] })
+
+    const complete = await enricher.enrich({ name: 'Ada' }, contextWith([new File([trailerBytes(true)], 'report.trl')]))
+    const cutShort = await enricher.enrich({ name: 'Ada' }, contextWith([new File([trailerBytes(false)], 'cut.trl')]))
+
+    expect(complete).toMatchObject({ provide: { files: [{ name: 'report.trl' }] } })
+    expect(put).toHaveBeenCalledOnce()
+    expect(put.mock.calls[0]![2]).toEqual({ contentType: 'application/x-trailer', filename: 'report.trl' })
+    expect(cutShort).toEqual({ reject: FileUploads.errors.fileType, code: 'file-uploads.type-not-accepted' })
   })
 })

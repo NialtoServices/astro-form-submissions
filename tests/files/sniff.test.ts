@@ -1,4 +1,6 @@
-import { ALL_TYPES, DOCUMENT_TYPES, IMAGE_TYPES, sniffType } from '#files/sniff.js'
+import { MAX_INSPECTED_BYTES, MAX_INSPECTED_READS, type ByteRangeReader } from '#files/byte-range-reader.js'
+import { ALL_TYPES, DOCUMENT_TYPES, HEADER_BYTES, IMAGE_TYPES, sniffType, type FileMatcher } from '#files/sniff.js'
+import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 
 /** A File whose leading bytes are exactly `bytes` (nothing padded), so short-header handling is exercised for real. */
@@ -142,5 +144,222 @@ describe('sniffType', () => {
 
   it('names the extensions every built-in type is saved under', () => {
     expect(ALL_TYPES.filter((matcher) => !matcher.extensions?.length)).toEqual([])
+  })
+})
+
+/** Whether two byte arrays hold the same bytes; a plain loop, as `toEqual` crawls over arrays of this size. */
+function sameBytes(actual: Uint8Array, expected: Uint8Array): boolean {
+  return actual.length === expected.length && actual.every((byte, index) => byte === expected[index])
+}
+
+/** A matcher whose header test always passes, so that `inspect` alone decides. */
+function inspecting(inspect: FileMatcher['inspect']): FileMatcher {
+  return { contentType: 'application/x-inspected', test: () => true, inspect }
+}
+
+/** A File that records every range sliced from it, as the bytes the slice covers. */
+class RecordingFile extends File {
+  readonly sliced: number[] = []
+
+  override slice(start?: number, end?: number, contentType?: string): Blob {
+    const slice = super.slice(start, end, contentType)
+    this.sliced.push(slice.size)
+    return slice
+  }
+}
+
+describe('sniffType with ranged reads', () => {
+  it('grants a type when the header test passes and inspect resolves true', async () => {
+    const file = new File([new Uint8Array(100).fill(7)], 'upload.bin')
+
+    expect(await sniffType(file, [inspecting(async (reader) => reader.size === 100)])).toBe('application/x-inspected')
+    expect(await sniffType(file, [inspecting(async () => false)])).toBeNull()
+  })
+
+  it('never runs inspect for a file the header test refuses', async () => {
+    let inspected = false
+    const matcher: FileMatcher = {
+      contentType: 'application/x-inspected',
+      test: () => false,
+      inspect: async () => (inspected = true)
+    }
+
+    expect(await sniffType(new File([new Uint8Array(100)], 'upload.bin'), [matcher])).toBeNull()
+    expect(inspected).toBe(false)
+  })
+
+  it('treats a matcher that throws or rejects as no match, and moves on to the next', async () => {
+    const file = new File([new Uint8Array(100)], 'upload.bin')
+    const fallback = { ...inspecting(async () => true), contentType: 'application/x-fallback' }
+
+    const rejecting = inspecting(async () => Promise.reject(new Error('boom')))
+    const throwing = inspecting(() => {
+      throw new Error('boom')
+    })
+    const throwingHeaderTest: FileMatcher = {
+      contentType: 'application/x-broken',
+      test: () => {
+        throw new Error('boom')
+      }
+    }
+
+    expect(await sniffType(file, [rejecting, throwing, throwingHeaderTest, fallback])).toBe('application/x-fallback')
+  })
+
+  it('reads the slice asked for, and what exists when the range runs past the end', async () => {
+    const file = new File([Uint8Array.from({ length: 10 }, (_value, index) => index)], 'upload.bin')
+    const seen: number[][] = []
+
+    await sniffType(file, [
+      inspecting(async (reader) => {
+        seen.push([...(await reader.read(2, 3))], [...(await reader.read(8, 50))], [...(await reader.read(40, 4))])
+        return false
+      })
+    ])
+
+    expect(seen).toEqual([[2, 3, 4], [8, 9], []])
+  })
+
+  it('refuses a read that would take the file past its byte budget', async () => {
+    const file = new File([new Uint8Array(MAX_INSPECTED_BYTES * 2)], 'upload.bin')
+    const outcomes: string[] = []
+
+    await sniffType(file, [
+      inspecting(async (reader) => {
+        await reader.read(0, MAX_INSPECTED_BYTES - 10)
+        outcomes.push(
+          await reader.read(0, 20).then(
+            () => 'read',
+            () => 'refused'
+          )
+        )
+        outcomes.push(
+          await reader.read(0, 10).then(
+            () => 'read',
+            () => 'refused'
+          )
+        )
+        return false
+      })
+    ])
+
+    expect(outcomes).toEqual(['refused', 'read'])
+  })
+
+  it('refuses a read beyond the read budget, however small', async () => {
+    const file = new File([new Uint8Array(1000)], 'upload.bin')
+    const outcomes: string[] = []
+
+    await sniffType(file, [
+      inspecting(async (reader) => {
+        for (let attempt = 0; attempt <= MAX_INSPECTED_READS; attempt++) {
+          outcomes.push(
+            await reader.read(0, 1).then(
+              () => 'read',
+              () => 'refused'
+            )
+          )
+        }
+        return false
+      })
+    ])
+
+    expect(outcomes).toEqual([...Array<string>(MAX_INSPECTED_READS).fill('read'), 'refused'])
+  })
+
+  it('shares one budget across every matcher inspecting the same file', async () => {
+    const file = new File([new Uint8Array(1000)], 'upload.bin')
+    const outcomes: string[] = []
+    const greedy = inspecting(async (reader) => {
+      for (let attempt = 0; attempt < MAX_INSPECTED_READS; attempt++) await reader.read(0, 1)
+      return false
+    })
+    const next = inspecting(async (reader) => {
+      outcomes.push(
+        await reader.read(0, 1).then(
+          () => 'read',
+          () => 'refused'
+        )
+      )
+      return false
+    })
+
+    await sniffType(file, [greedy, next])
+
+    expect(outcomes).toEqual(['refused'])
+  })
+
+  it('refuses a read with a negative or fractional range', async () => {
+    const file = new File([new Uint8Array(100)], 'upload.bin')
+    const outcomes: string[] = []
+
+    await sniffType(file, [
+      inspecting(async (reader) => {
+        for (const [offset, length] of [
+          [-1, 4],
+          [0, -4],
+          [0.5, 4],
+          [0, Number.NaN]
+        ] as const) {
+          outcomes.push(
+            await reader.read(offset, length).then(
+              () => 'read',
+              () => 'refused'
+            )
+          )
+        }
+        return false
+      })
+    ])
+
+    expect(outcomes).toEqual(['refused', 'refused', 'refused', 'refused'])
+  })
+
+  it('never throws and never reads more than the budget, whatever the bytes and the ranges asked for', async () => {
+    const reads = fc.array(fc.tuple(fc.integer({ min: -8, max: 200_000 }), fc.integer({ min: -8, max: 100_000 })), {
+      maxLength: 12
+    })
+    const contents = fc.oneof(
+      { weight: 3, arbitrary: fc.uint8Array({ maxLength: 300 }) },
+
+      // Only the length matters past the budget, and a patterned body shrinks to its size alone, where an arbitrary
+      // one this long makes a failing run take minutes to shrink.
+      {
+        weight: 1,
+        arbitrary: fc
+          .integer({ min: 70_000, max: 150_000 })
+          .map((length) => Uint8Array.from({ length }, (_value, index) => (index * 31) % 251))
+      }
+    )
+
+    await fc.assert(
+      fc.asyncProperty(contents, reads, async (bytes, plan) => {
+        const file = new RecordingFile([bytes], 'upload.bin')
+        let totalRead = 0
+        let readCount = 0
+        const matcher = inspecting(async (reader: ByteRangeReader) => {
+          for (const [offset, length] of plan) {
+            const slice = await reader.read(offset, length).catch(() => undefined)
+            if (!slice) continue
+
+            readCount++
+            totalRead += slice.length
+            expect(sameBytes(slice, bytes.subarray(offset, offset + length))).toBe(true)
+          }
+          return true
+        })
+
+        await expect(sniffType(file, [matcher])).resolves.toBeTypeOf('string')
+
+        expect(totalRead).toBeLessThanOrEqual(MAX_INSPECTED_BYTES)
+        expect(readCount).toBeLessThanOrEqual(MAX_INSPECTED_READS)
+
+        // The header read comes first; every slice after it is a ranged read, and the file itself is the other witness.
+        const [headerSlice = 0, ...rangedSlices] = file.sliced
+        expect(headerSlice).toBeLessThanOrEqual(HEADER_BYTES)
+        expect(rangedSlices.reduce((sum, size) => sum + size, 0)).toBeLessThanOrEqual(MAX_INSPECTED_BYTES)
+      }),
+      { numRuns: 60 }
+    )
   })
 })

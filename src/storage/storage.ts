@@ -101,6 +101,19 @@ export interface FileStorage {
   peek?(key: string, length: number): Promise<PeekedObject | null>
 
   /**
+   * Reads a range of a stored object's bytes, without fetching the rest. Optional: {@link UploadedFiles} uses it
+   * to confirm types that need bytes beyond the header (see {@link FileMatcher.inspect}); without it, such a type
+   * is never accepted for a direct upload.
+   *
+   * @param key - The logical object key.
+   * @param offset - The index of the first byte to read.
+   * @param length - How many bytes to read.
+   * @returns Up to `length` bytes from `offset` (fewer when the object ends first), or `null` when the object
+   * does not exist.
+   */
+  readRange?(key: string, offset: number, length: number): Promise<Uint8Array | null>
+
+  /**
    * Records, once and atomically, that a submission has taken the object under a key as its own. Needed by
    * {@link UploadedFiles}, so a receipt works for one submission only and a later one can never delete what
    * an earlier one delivered.

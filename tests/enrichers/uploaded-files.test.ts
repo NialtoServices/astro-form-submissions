@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { browserFilename, expectSafeStoredName } from '../support/filenames.js'
 import { makeRouteContext } from '../support/harness.js'
 import { MemoryBucket } from '../support/memory-bucket.js'
+import { TRAILER_MATCHER, trailerBytes } from '../support/trailer-matcher.js'
 
 const SECRET = 'a-sufficiently-long-signing-secret'
 
@@ -450,6 +451,63 @@ describe('UploadedFiles', () => {
       const notes = { name: 'notes.pdf', type: 'application/pdf', bytes: TEXT }
       const { receipts, prepared } = await admit([notes])
       store(bucket, prepared, [notes])
+
+      await expectRefused(
+        await enricher.enrich({ name: 'Ada' }, contextWith(receipts)),
+        'fileType',
+        'uploaded-files.type-not-accepted',
+        bucket
+      )
+    })
+
+    it('confirms a stored upload from a ranged read', async () => {
+      const { enricher, bucket, link } = setup({ accept: [TRAILER_MATCHER] })
+      const report = { name: 'report.trl', type: '', bytes: trailerBytes(true) }
+      const { receipts, prepared } = await admit([report])
+      store(bucket, prepared, [report])
+
+      const result = await enricher.enrich({ name: 'Ada' }, contextWith(receipts))
+
+      expect(result).toMatchObject({ provide: { files: [{ name: 'report.trl', key: prepared[0]!.objectKey }] } })
+      expect(link).toHaveBeenCalledWith(
+        { objectKey: prepared[0]!.objectKey, filename: 'report.trl', contentType: 'application/x-trailer' },
+        expect.anything()
+      )
+    })
+
+    it("refuses a stored upload whose end a ranged read shows isn't what its start claims", async () => {
+      const { enricher, bucket } = setup({ accept: [TRAILER_MATCHER] })
+      const cutShort = { name: 'cut.trl', type: '', bytes: trailerBytes(false) }
+      const { receipts, prepared } = await admit([cutShort])
+      store(bucket, prepared, [cutShort])
+
+      await expectRefused(
+        await enricher.enrich({ name: 'Ada' }, contextWith(receipts)),
+        'fileType',
+        'uploaded-files.type-not-accepted',
+        bucket
+      )
+    })
+
+    it("refuses a type needing ranged reads when the storage can't provide them", async () => {
+      const bucket = new MemoryBucket()
+      const withReadRange = new R2Storage({ bucket, prefix: 'uploads/' })
+      const storage: FileStorage = {
+        put: withReadRange.put.bind(withReadRange),
+        get: withReadRange.get.bind(withReadRange),
+        delete: withReadRange.delete.bind(withReadRange),
+        peek: withReadRange.peek.bind(withReadRange),
+        claim: withReadRange.claim.bind(withReadRange)
+      }
+      const enricher = new UploadedFiles<Enquiry>({
+        storage,
+        secret: SECRET,
+        link: async () => 'https://example.com/files/x/',
+        accept: [TRAILER_MATCHER]
+      })
+      const report = { name: 'report.trl', type: '', bytes: trailerBytes(true) }
+      const { receipts, prepared } = await admit([report])
+      store(bucket, prepared, [report])
 
       await expectRefused(
         await enricher.enrich({ name: 'Ada' }, contextWith(receipts)),

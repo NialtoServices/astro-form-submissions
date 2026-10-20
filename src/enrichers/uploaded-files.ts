@@ -8,9 +8,10 @@ import {
   type FileLink
 } from '#enrichers/file-uploads.js'
 import { formError, type FormError } from '#errors.js'
+import { readerForStorage } from '#files/byte-range-reader.js'
 import { hasAnyExtension, hasExtension } from '#files/filename.js'
 import type { FilePayload } from '#files/signing.js'
-import { ALL_TYPES, extensionsFor, HEADER_BYTES, sniffBytes, type FileMatcher } from '#files/sniff.js'
+import { ALL_TYPES, extensionsFor, HEADER_BYTES, sniffWithReader, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions } from '#numeric-options.js'
 import { OperationalError } from '#operational-error.js'
 import type { FormSubmission, VerdictDetails } from '#pipeline.js'
@@ -45,7 +46,10 @@ export interface UploadedFilesOptions<E extends FormSubmission = FormSubmission,
   /** Maximum combined size of all files, in bytes. Default {@link DEFAULT_MAX_TOTAL_BYTES}. */
   maxTotalBytes?: number
 
-  /** Permitted content-type matchers, checked against the stored bytes. Default {@link ALL_TYPES}. */
+  /**
+   * Permitted content-type matchers, checked against the stored bytes. Default {@link ALL_TYPES}. A matcher that
+   * reads beyond the header (`inspect`) needs the storage to implement `readRange`, and never matches without it.
+   */
   accept?: FileMatcher[]
 
   /**
@@ -58,10 +62,10 @@ export interface UploadedFilesOptions<E extends FormSubmission = FormSubmission,
 /**
  * The enricher for files uploaded straight to storage before the submission (see
  * {@link createUploadRoute}). The submission carries a signed receipt per file instead of its bytes; this
- * verifies each receipt, confirms the stored object exists at the admitted size, sniffs its leading bytes
- * against `accept`, and exposes signed download links under `context.resources[attachTo]` — with the same
- * rollback as {@link FileUploads}: the objects are kept once a resource-exposing delivery succeeds or may have
- * landed, and deleted otherwise.
+ * verifies each receipt, confirms the stored object exists at the admitted size, sniffs its leading bytes (and,
+ * for a matcher that asks, further ranges of it) against `accept`, and exposes signed download links under
+ * `context.resources[attachTo]` — with the same rollback as {@link FileUploads}: the objects are kept once a
+ * resource-exposing delivery succeeds or may have landed, and deleted otherwise.
  *
  * Each receipt works once: the first submission to present it claims its object through the storage's
  * `claim`, and only claimed objects are ever deleted. A refused submission deletes the objects it claimed, so
@@ -185,7 +189,11 @@ export class UploadedFiles<
         }
 
         const accept = this.options.accept ?? ALL_TYPES
-        const contentType = sniffBytes(object.header, accept)
+        const contentType = await sniffWithReader(
+          object.header,
+          readerForStorage(this.options.storage, upload.objectKey, object.size),
+          accept
+        )
         const storedType = object.contentType ?? OPAQUE_CONTENT_TYPE
         if (!contentType || (storedType !== OPAQUE_CONTENT_TYPE && storedType !== contentType)) {
           return refuse(FileUploads.errors.fileType, 'uploaded-files.type-not-accepted')

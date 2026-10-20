@@ -65,6 +65,8 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   `ObjectExistsError`, `escapeDiscordMarkdown`, `DEFAULT_MAX_BODY_BYTES`, `DEFAULT_MAX_TEXT_BODY_BYTES`,
   `VerdictReason`, `VerdictDetails` and `VerdictDetail`.
 - This changelog, which now ships with the package.
+- `FileMatcher.inspect` and `FileStorage.readRange`, so a type check can read beyond the file's first bytes;
+  `R2Storage` implements it. Also exports `ByteRangeReader`, `MAX_INSPECTED_BYTES` and `MAX_INSPECTED_READS`.
 
 ### Changed
 

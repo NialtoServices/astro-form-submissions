@@ -1,3 +1,4 @@
+export { MAX_INSPECTED_BYTES, MAX_INSPECTED_READS, type ByteRangeReader } from '#files/byte-range-reader.js'
 export { createFileRoute, type CreateFileRouteConfig } from '#files/file-route.js'
 export {
   signedLink,
