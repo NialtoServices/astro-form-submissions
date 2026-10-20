@@ -107,6 +107,11 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   Also exports `AttachedFile` and `FileAttachmentsOptions`.
 - The `accept` option of `FileUploads`, `UploadedFiles` and `createUploadRoute`, and the `sniffBytes`, `sniffType`
   and `sniffWithReader` parameters, take a `readonly FileMatcher[]`.
+- `EmailDispatcher`'s `attach` option, naming the `context.resources` key whose files the email carries as
+  attachments, such as a `FileAttachments` enricher's `attachTo`. They reach the transport on the new
+  `EmailMessage.attachments` as `EmailAttachment`s (`filename`, `contentType`, `content`); a message without any has
+  no `attachments` property. A key no enricher provides, or one holding `FileUploads` links, fails to compile.
+  Attaching leaves `exposesResources` alone. Also exports `EmailAttachment` and `AttachableKey`.
 
 ### Changed
 

@@ -1,8 +1,11 @@
 import { DiscordDispatcher } from '#dispatchers/discord.js'
-import { EmailDispatcher } from '#dispatchers/email.js'
+import { EmailDispatcher, type EmailMessage, type EmailTransport } from '#dispatchers/email.js'
 import { PostmarkTransport } from '#dispatchers/postmark.js'
+import { submissionAcknowledgementTemplates } from '#dispatchers/submission-acknowledgement.js'
 import { submissionNotificationTemplates } from '#dispatchers/submission-notification.js'
+import { FileAttachments } from '#enrichers/file-attachments.js'
 import { FileUploads } from '#enrichers/file-uploads.js'
+import { FILE_TYPES } from '#files/sniff.js'
 import { RateLimitGuard, type RateLimiter } from '#guards/rate-limit.js'
 import { HoneypotInspector } from '#inspectors/honeypot.js'
 import { TurnstileInspector } from '#inspectors/turnstile.js'
@@ -292,6 +295,136 @@ describe('the composed pipeline with guards and file uploads', () => {
 
     // The stored object is deleted so a retry doesn't orphan it.
     expect(deleted).toHaveLength(1)
+  })
+})
+
+describe('the application form, which emails the CV as an attachment', () => {
+  const CV_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x0a, 0x25, 0x25, 0x45, 0x4f, 0x46])
+
+  // Each opening's tracking address is looked up on the server, so the sender only ever picks an opening.
+  const TRACKING_ADDRESSES = { '1234': 'jobs-1234@example.com' } as const
+
+  const applicationSchema = z.object({
+    name: z.string(),
+    email: z.email(),
+    jobId: z.enum(['1234'])
+  })
+
+  type Application = z.infer<typeof applicationSchema>
+
+  /** A transport that records every message it is handed. */
+  function recordingTransport() {
+    const messages: EmailMessage[] = []
+    const transport: EmailTransport = { deliver: async (message) => void messages.push(message) }
+    return { transport, messages }
+  }
+
+  function application() {
+    const data = new FormData()
+    data.set('name', 'Ada')
+    data.set('email', 'ada@example.com')
+    data.set('jobId', '1234')
+    data.append('cv', new File([CV_BYTES], 'cv.pdf', { type: 'application/octet-stream' }))
+    return makeRouteContext({ body: data, url: 'https://example.com/api/apply' })
+  }
+
+  const cvAttachments = new FileAttachments<Application, 'cv'>({
+    field: 'cv',
+    accept: [FILE_TYPES.pdf],
+    maxFiles: 1,
+    required: true,
+    attachTo: 'cv'
+  })
+
+  const notificationTemplates = submissionNotificationTemplates<Application>({
+    fields: ['name', 'email', 'jobId'],
+    formName: 'Job application'
+  })
+
+  it('attaches the CV for the tracking address and the site mailbox, and acknowledges the applicant without it', async () => {
+    const { transport, messages } = recordingTransport()
+    const route = createFormRoute({
+      schema: applicationSchema,
+      enrichers: [cvAttachments],
+      dispatchers: [
+        [
+          new EmailDispatcher({
+            transport,
+            templates: notificationTemplates,
+            from: 'site@example.com',
+            to: (submission) => TRACKING_ADDRESSES[submission.jobId],
+            attach: 'cv'
+          }),
+          new EmailDispatcher({
+            transport,
+            templates: notificationTemplates,
+            from: 'site@example.com',
+            to: 'office@example.com',
+            attach: 'cv',
+            required: false
+          })
+        ],
+        [
+          new EmailDispatcher({
+            transport,
+            templates: submissionAcknowledgementTemplates<Application>({ formName: 'Job application' }),
+            from: 'site@example.com',
+            to: (submission) => submission.email,
+            required: false
+          })
+        ]
+      ]
+    })
+
+    const response = await route(application())
+
+    expect(response.status).toBe(200)
+    const attachment = { filename: 'cv.pdf', contentType: 'application/pdf', content: CV_BYTES }
+    const byRecipient = Object.fromEntries(messages.map((message) => [message.to, message]))
+    expect(Object.keys(byRecipient).sort()).toEqual(['ada@example.com', 'jobs-1234@example.com', 'office@example.com'])
+    expect(byRecipient['jobs-1234@example.com']!.attachments).toEqual([attachment])
+    expect(byRecipient['office@example.com']!.attachments).toEqual([attachment])
+
+    // The acknowledgement goes wherever the sender typed, so it carries neither the file nor a link to it.
+    const acknowledgement = byRecipient['ada@example.com']!
+    expect(messages.at(-1)).toBe(acknowledgement)
+    expect(acknowledgement).not.toHaveProperty('attachments')
+    expect(`${acknowledgement.text}${acknowledgement.html}`).not.toContain('cv.pdf')
+  })
+
+  it("a quarantined submission's attachments reach only dispatchers that accept quarantined submissions", async () => {
+    const { transport, messages } = recordingTransport()
+    const route = createFormRoute({
+      schema: applicationSchema,
+      inspectors: [{ inspect: async () => ({ action: 'quarantine', reason: 'screening' }) }],
+      enrichers: [cvAttachments],
+      dispatchers: [
+        new EmailDispatcher({
+          transport,
+          templates: notificationTemplates,
+          from: 'site@example.com',
+          to: 'office@example.com',
+          attach: 'cv'
+        }),
+        new EmailDispatcher({
+          transport,
+          templates: notificationTemplates,
+          from: 'site@example.com',
+          to: 'review@example.com',
+          attach: 'cv',
+          acceptsQuarantined: true
+        })
+      ]
+    })
+
+    const response = await route(application())
+
+    expect(response.status).toBe(200)
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toMatchObject({
+      to: 'review@example.com',
+      attachments: [{ filename: 'cv.pdf', contentType: 'application/pdf', content: CV_BYTES }]
+    })
   })
 })
 

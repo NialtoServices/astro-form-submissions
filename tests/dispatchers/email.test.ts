@@ -1,6 +1,7 @@
 import { EmailRecipientError } from '#dispatchers/email-recipient-error.js'
 import { EmailDispatcher, renderEmail, type EmailTemplates } from '#dispatchers/email.js'
 import { submissionNotificationTemplates } from '#dispatchers/submission-notification.js'
+import { FileAttachments } from '#enrichers/file-attachments.js'
 import emailAddresses from 'email-addresses'
 import fc from 'fast-check'
 import { describe, expect, it, vi } from 'vitest'
@@ -30,6 +31,30 @@ async function deliverResolving(field: 'to' | 'replyTo', address: string) {
   )
 
   return { refusal, message: deliver.mock.calls.length > 0 ? deliveredMessage(deliver) : undefined }
+}
+
+const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x0a, 0x25, 0x25, 0x45, 0x4f, 0x46])
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d])
+
+/** The resources a `FileAttachments` enricher on the `cv` field provides for the files a form posted. */
+async function attachedResources(files: File[]) {
+  const data = new FormData()
+  for (const file of files) data.append('cv', file)
+
+  const result = await new FileAttachments({ field: 'cv', attachTo: 'cv' }).enrich(
+    {},
+    {
+      submission: {},
+      data,
+      requestURL: new URL('https://example.com/api/apply'),
+      siteURL: new URL('https://example.com/'),
+      submittedAt: new Date('2026-01-02T03:04:05Z'),
+      report: vi.fn()
+    }
+  )
+  if (!('provide' in result) || !result.provide) throw new Error('expected attached files')
+
+  return result.provide
 }
 
 function dispatcherWith(deliver = vi.fn(), options: { required?: boolean } = {}) {
@@ -297,6 +322,69 @@ describe('EmailDispatcher', () => {
   it('propagates a transport failure', async () => {
     const deliver = vi.fn(() => Promise.reject(new Error('provider down')))
     await expect(dispatcherWith(deliver).dispatch({ name: 'Ada' }, dispatchContext())).rejects.toThrow('provider down')
+  })
+
+  describe('attachments', () => {
+    it("attaches the named key's files to the message", async () => {
+      const resources = await attachedResources([
+        new File([PDF_BYTES], 'cv.pdf', { type: 'text/plain' }),
+        new File([PNG_BYTES], 'portfolio.png', { type: 'application/octet-stream' })
+      ])
+      const deliver = vi.fn()
+      await new EmailDispatcher({
+        transport: { deliver },
+        templates,
+        from: 'from@example.com',
+        to: 'to@example.com',
+        attach: 'cv'
+      }).dispatch({ name: 'Ada' }, dispatchContext({ resources }))
+
+      expect(deliveredMessage(deliver).attachments).toEqual([
+        { filename: 'cv.pdf', contentType: 'application/pdf', content: PDF_BYTES },
+        { filename: 'portfolio.png', contentType: 'image/png', content: PNG_BYTES }
+      ])
+    })
+
+    it('sends no attachments property without attach', async () => {
+      const resources = await attachedResources([new File([PDF_BYTES], 'cv.pdf')])
+      const deliver = vi.fn()
+      await new EmailDispatcher({
+        transport: { deliver },
+        templates,
+        from: 'from@example.com',
+        to: 'to@example.com'
+      }).dispatch({ name: 'Ada' }, dispatchContext({ resources }))
+
+      expect(deliveredMessage(deliver)).not.toHaveProperty('attachments')
+    })
+
+    it('sends no attachments property when the form posted no file to attach', async () => {
+      const deliver = vi.fn()
+
+      // `FileAttachments` provides nothing when the field is empty, so the key is absent at runtime.
+      const resources = {} as Awaited<ReturnType<typeof attachedResources>>
+      await new EmailDispatcher({
+        transport: { deliver },
+        templates,
+        from: 'from@example.com',
+        to: 'to@example.com',
+        attach: 'cv'
+      }).dispatch({ name: 'Ada' }, dispatchContext({ resources }))
+
+      expect(deliveredMessage(deliver)).not.toHaveProperty('attachments')
+    })
+
+    it('leaves exposesResources to the templates, since attached files need no keeping', () => {
+      const dispatcher = new EmailDispatcher({
+        transport: { deliver: vi.fn() },
+        templates: submissionNotificationTemplates<{ name: string }>({ fields: ['name'] }),
+        from: 'from@example.com',
+        to: 'to@example.com',
+        attach: 'cv'
+      })
+
+      expect(dispatcher.exposesResources).toBe(false)
+    })
   })
 
   describe('exposesResources default derivation', () => {

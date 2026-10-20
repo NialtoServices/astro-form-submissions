@@ -859,6 +859,41 @@ and other edge runtimes, where compiling engines (Handlebars, EJS) can't.
 **Any other engine** — implement the three `EmailTemplates` functions with it (JSX via
 `preact-render-to-string`, whatever suits the site) — the dispatcher never knows the difference.
 
+#### Attaching files
+
+`attach` names the `context.resources` key whose files the email carries inside it, usually the `attachTo` of a
+[`FileAttachments`](#file-attachments) enricher. Each file reaches the transport as an `EmailAttachment`
+(`filename`, `contentType` and `content`, the bytes) on `EmailMessage.attachments`, with the cleaned name and the
+type its bytes matched. Without `attach`, or when the form posted no file, the message has no `attachments` at all.
+A custom `EmailTransport` must send `message.attachments`; one that ignores them delivers the email without the files.
+
+```ts
+enrichers: [new FileAttachments<Application, 'cv'>({ field: 'cv', accept: [FILE_TYPES.pdf], attachTo: 'cv' })],
+dispatchers: [
+  new EmailDispatcher({
+    transport,
+    templates: submissionNotificationTemplates<Application>({ fields: ['name', 'email', 'jobId'] }),
+    from: 'site@example.com',
+    to: (submission) => trackingAddressFor(submission.jobId), // looked up on the server
+    attach: 'cv'
+  })
+]
+```
+
+The key is checked when the route compiles, as the templates' `attachments` key is: naming a key no enricher
+provides, or one that holds `FileUploads` links rather than attachable files, fails to type-check, and so does a
+`FileAttachments` key given to the templates' `attachments`. One email can attach one key and link another.
+
+> **Never attach to an address the sender typed.** A `to` that returns `submission.email` sends the files wherever
+> the sender points it, from your verified sender, which makes the form a relay for any file it accepts. The
+> package can't refuse this, since a legitimate recipient is often resolved too (a tracking address looked up from
+> a job id on the server, say). Attach only for the site's own inboxes and addresses your server chooses, and keep
+> the acknowledgement free of both attachments and links (see [Acknowledging the sender](#acknowledging-the-sender)).
+
+Attaching doesn't change `exposesResources`: the files are held in memory and never stored, so there is nothing
+to keep or roll back for them, and the flag still follows the links the templates render. Quarantine works as it
+does for any delivery: a quarantined submission's files reach only dispatchers with `acceptsQuarantined`.
+
 #### Acknowledging the sender
 
 To email the person who submitted — a "thanks, we got it" confirmation — add a **second**
@@ -875,8 +910,8 @@ they sent.
 >   `subject` (`'Thanks {{name}}'`), lets an attacker write the email, and inbox lists show the subject
 >   first; HTML is escaped, but mail clients still link bare URLs. Copy back only fields your schema
 >   constrains (a choice, a date), or none.
-> - **Leave `attachments` unset.** It would send links to files the poster uploaded, served from your
->   domain.
+> - **Leave `attachments` and `attach` unset.** The first would send links to files the poster uploaded,
+>   served from your domain; the second would send the files themselves.
 >
 > A `to` or `replyTo` function must return a single address: `EmailDispatcher` refuses one containing `,`, `;`
 > or a second `@` outside a quoted display name (`"Lovelace, Ada" <ada@example.com>` is fine), or a control
@@ -1224,8 +1259,8 @@ enrichers: [
 The files live in the request's memory, so keep the total small; the route adds `maxTotalBytes` to the body it
 will read, as it does for `FileUploads`. The rules from [`uploadRules`](#upload-rules) spread in as they do for
 `FileUploads`; because they always carry a per-file limit, which is the total when the rules name none, a file may
-be as large as the total allows. Refusals are logged as `file-attachments.*` (see [Logs](#logs)). `EmailDispatcher` is the
-dispatcher that sends these files as email attachments.
+be as large as the total allows. Refusals are logged as `file-attachments.*` (see [Logs](#logs)). `EmailDispatcher`'s
+`attach` option sends these files as email attachments (see [Attaching files](#attaching-files)).
 
 ### Direct uploads
 

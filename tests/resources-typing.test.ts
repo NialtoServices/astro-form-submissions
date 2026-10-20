@@ -1,8 +1,8 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { Dispatcher } from '#dispatchers/dispatcher.js'
-import { EmailDispatcher, type EmailTransport } from '#dispatchers/index.js'
+import { EmailDispatcher, type AttachableKey, type EmailTransport } from '#dispatchers/index.js'
 import { submissionNotificationTemplates } from '#dispatchers/submission-notification.js'
-import type { Enricher, FileLink } from '#enrichers/index.js'
+import { FileAttachments, FileUploads, type AttachedFile, type Enricher, type FileLink } from '#enrichers/index.js'
 import { createFormRoute } from '#route.js'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 
@@ -106,6 +106,83 @@ describe('resource threading types', () => {
       schema,
       // @ts-expect-error the notification email reads `files` but nothing provides it
       dispatchers: [email]
+    })
+  })
+
+  describe('email attachments', () => {
+    const transport: EmailTransport = { deliver: async () => {} }
+    const plainTemplates = submissionNotificationTemplates<Enquiry>({ fields: ['name'] })
+    const fileAttachments = new FileAttachments<Enquiry>()
+    const fileUploads = new FileUploads<Enquiry>({
+      storage: { put: async () => {}, get: async () => null, delete: async () => {} },
+      link: async (stored) => `https://example.com/files/${stored.objectKey}/`
+    })
+
+    it('names the resource keys that hold attachable files', () => {
+      expectTypeOf<
+        AttachableKey<{ cv: AttachedFile[]; photos: readonly AttachedFile[]; links: FileLink[] }>
+      >().toEqualTypeOf<'cv' | 'photos'>()
+    })
+
+    it("checks an email's attach key against what the enrichers provide", () => {
+      const attaching = new EmailDispatcher({
+        transport,
+        templates: plainTemplates,
+        from: 'a@b.test',
+        to: 'c@d.test',
+        attach: 'files'
+      })
+
+      // The attach key flows into the dispatcher's resource type, as the templates' keys do.
+      const asDispatcher: Dispatcher<Enquiry, { files: readonly AttachedFile[] }> = attaching
+      void asDispatcher
+
+      createFormRoute({ schema, enrichers: [fileAttachments], dispatchers: [attaching] })
+
+      createFormRoute({
+        schema,
+        // @ts-expect-error the email attaches `files` but nothing provides it
+        dispatchers: [attaching]
+      })
+
+      createFormRoute({
+        schema,
+        enrichers: [fileUploads],
+        // @ts-expect-error `files` holds FileUploads links, which can't be attached
+        dispatchers: [attaching]
+      })
+    })
+
+    it("refuses a FileAttachments key as the templates' attachments", () => {
+      const linking = new EmailDispatcher({
+        transport,
+        templates: submissionNotificationTemplates<Enquiry, 'files'>({ fields: ['name'], attachments: 'files' }),
+        from: 'a@b.test',
+        to: 'c@d.test'
+      })
+
+      createFormRoute({
+        schema,
+        enrichers: [fileAttachments],
+        // @ts-expect-error `files` holds attached files, which the templates can't render as links
+        dispatchers: [linking]
+      })
+    })
+
+    it('lets one email attach one key and link another', () => {
+      const email = new EmailDispatcher({
+        transport,
+        templates: submissionNotificationTemplates<Enquiry, 'files'>({ fields: ['name'], attachments: 'files' }),
+        from: 'a@b.test',
+        to: 'c@d.test',
+        attach: 'cv'
+      })
+
+      createFormRoute({
+        schema,
+        enrichers: [fileUploads, new FileAttachments<Enquiry, 'cv'>({ field: 'cv', attachTo: 'cv' })],
+        dispatchers: [email]
+      })
     })
   })
 
