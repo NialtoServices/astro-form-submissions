@@ -1643,15 +1643,19 @@ Styling is yours. Key off the state attributes, and use `:has()` for a wrapper:
 
 Without JavaScript the template stays inert and the input is a plain file input: the browser posts whatever the
 last pick chose, every file of it for a `multiple` input, and the server's checks refuse what the field doesn't
-accept. A file input without a list is left exactly as the browser provides it, with JavaScript or without.
+accept. A file input with neither a list nor a [drop zone](#dropping-files) is left exactly as the browser provides it, with JavaScript or without.
 
 #### Dropping files
 
 A file input takes files dragged onto it, and any other element can take them too: mark it with
 `data-astro-form-file-drop-for`, naming the field. Dropped files join the selection exactly as picked ones do, so they
 are added to the files already listed, listed once if identical, checked against the same limits and sent with the form.
-Drop targets belong to a field that has a list, as the rest of the file handling above does.
 A dropped file of the wrong type is listed and flagged, not skipped.
+
+A drop zone makes the field managed on its own, so the list is optional: without one the field still accumulates,
+checks and flags files, and holds the form back while one has a problem, but shows no items, so nothing on the page
+lets the person remove a file short of resetting the form. Give the field a list if people should see and remove
+what they dropped.
 
 ```html
 <input id="quote-photos" type="file" name="photos" multiple />
@@ -1689,14 +1693,16 @@ Things to know:
 
 - **A field that takes one file keeps the first.** When several files are dropped on an input without `multiple`,
   the first is listed and the form's status says "Only one file can be added." The field is not marked invalid; the
-  notice is polite (`aria-live`) and carries no `data-astro-form-state`. Replace the copy with
+  notice is polite (`aria-live`) and carries no `data-astro-form-state`, and it is removed again once the next pick or
+  drop is accepted, unless the status has since shown something else. Replace the copy with
   `data-astro-form-message-only-one-file`.
 - **A disabled field ignores drops** (directly or through a `<fieldset>`) and shows no hover state.
 - **Only dragged files count.** A drag of text, a link or an element shows nothing and is left to the browser.
 - **A file dropped on the page anywhere else is cancelled.** By default a browser opens a dropped file in place of
   the page, which loses whatever the person has typed. While the page has a drop target, the script cancels that for
   any file drag that misses every target, and the cursor shows the drop isn't allowed. Text drags, and drops on a
-  file input the script doesn't manage (one without a list), are left alone. The script stops guarding the page when
+  an enabled file input the script doesn't manage (one with neither a list nor a drop zone), are left alone. A
+  disabled file input takes no drop, so it is guarded like the rest of the page. The script stops guarding the page when
   the last form with a target leaves it. A drop zone of your own, outside these parts, has its file drops cancelled
   too; mark it with `data-astro-form-file-drop-for` and it becomes a target.
 

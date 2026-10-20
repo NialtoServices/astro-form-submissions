@@ -57,7 +57,7 @@
 //   input — the copy for each problem, with `{maxFiles}`, `{maxFileSize}`, `{maxTotalSize}` and `{types}`, which
 //   is the input's `data-astro-form-accepted-types` (written by `uploadInputAttributes`) when it has one.
 // - `[data-astro-form-file-drop-for="<name>"]` — an element in the form that takes files dropped on it as if they were
-//   picked; the file input itself takes drops too. A target shows `data-astro-form-file-drop="active"` while a file is
+//   picked; the file input itself takes drops too, and a drop zone alone, with no list, makes the field managed. A target shows `data-astro-form-file-drop="active"` while a file is
 //   dragged over it. A single-file input keeps the first file of a drop and says so, in
 //   `data-astro-form-message-only-one-file`. While any target exists, a file dropped anywhere else on the page is
 //   cancelled rather than opened by the browser.

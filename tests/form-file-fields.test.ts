@@ -559,7 +559,7 @@ describe('form script — file fields', () => {
     expect(slotElement?.hidden).toBe(false)
   })
 
-  it('without the list markup, the input is left as the browser provides it', async () => {
+  it('without a list or a drop zone, the input is left as the browser provides it', async () => {
     const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
     const { inputElement, statusElement, submit } = mountForm({ list: false })
 
@@ -775,6 +775,101 @@ describe('form script — dropping files', () => {
     const drop = drag('drop', otherInput, [pdf('cv.pdf', 2048)])
 
     expect(drop.defaultPrevented).toBe(false)
+  })
+
+  it('a drop zone without a list adds dropped files', async () => {
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { formElement, inputElement, statusElement, submit } = mountForm({
+      dropZone: true,
+      list: false,
+      summary: false
+    })
+
+    pick(inputElement, [pdf('cv.pdf', 2048)])
+    drag('drop', dropZoneOf(formElement), [pdf('cover-letter.pdf', 512)])
+    drag('drop', inputElement, [pdf('cv.pdf', 2048)])
+
+    expect(inputNames(inputElement)).toEqual(['cv.pdf', 'cover-letter.pdf'])
+
+    submit()
+    await vi.waitFor(() => expect(statusElement.dataset.astroFormState).toBe('success'))
+    expect(postedNames(fetchSpy)).toEqual(['cv.pdf', 'cover-letter.pdf'])
+  })
+
+  it('a drop zone without a list still flags a dropped file of the wrong type, and holds the form back', async () => {
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { formElement, inputElement, statusElement, submit } = mountForm({
+      dropZone: true,
+      list: false,
+      summary: false
+    })
+
+    drag('drop', dropZoneOf(formElement), [new File([new Uint8Array(100)], 'photo.png', { type: 'image/png' })])
+    submit()
+    await settle()
+
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(statusElement.textContent).toBe('That file type is not accepted. Please attach PDF or TXT.')
+    expect(inputElement.getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(inputElement)
+  })
+
+  it('a drop on an input inside its own drop zone is taken once', () => {
+    document.body.innerHTML = formMarkup({
+      inputAttributes: 'accept="application/pdf,.pdf" data-astro-form-max-files="1"'
+    }).replace(/(<input id="application-cv"[^>]*\/>)/, '<div data-astro-form-file-drop-for="cv" id="zone">$1</div>')
+    initializeForms()
+    const { inputElement, listElement, statusElement } = partsOf(document.querySelector('form'))
+    const statusWrites = new MutationObserver(() => {})
+    statusWrites.observe(statusElement, { childList: true })
+
+    drag('drop', inputElement, [pdf('cv.pdf', 2048), pdf('cover-letter.pdf', 512)])
+
+    expect(statusWrites.takeRecords()).toHaveLength(1)
+    expect(statusElement.textContent).toBe('Only one file can be added.')
+    expect(listedNames(listElement)).toEqual(['cv.pdf'])
+    statusWrites.disconnect()
+  })
+
+  it('clears the only-one-file notice once the next drop or pick is accepted', () => {
+    const { formElement, inputElement, statusElement } = mountForm({
+      dropZone: true,
+      inputAttributes: 'accept="application/pdf,.pdf" data-astro-form-max-files="1"'
+    })
+    const dropZoneElement = dropZoneOf(formElement)
+
+    drag('drop', dropZoneElement, [pdf('cv.pdf', 2048), pdf('cover-letter.pdf', 512)])
+    expect(statusElement.textContent).toBe('Only one file can be added.')
+    drag('drop', dropZoneElement, [pdf('references.pdf', 256)])
+    expect(statusElement.textContent).toBe('')
+
+    drag('drop', dropZoneElement, [pdf('cv.pdf', 2048), pdf('cover-letter.pdf', 512)])
+    pick(inputElement, [pdf('references.pdf', 256)])
+    expect(statusElement.textContent).toBe('')
+  })
+
+  it('leaves a status that has since changed alone when the next drop is accepted', () => {
+    const { formElement, statusElement } = mountForm({
+      dropZone: true,
+      inputAttributes: 'accept="application/pdf,.pdf" data-astro-form-max-files="1"'
+    })
+    const dropZoneElement = dropZoneOf(formElement)
+
+    drag('drop', dropZoneElement, [pdf('cv.pdf', 2048), pdf('cover-letter.pdf', 512)])
+    statusElement.textContent = 'Something went wrong.'
+    drag('drop', dropZoneElement, [pdf('references.pdf', 256)])
+
+    expect(statusElement.textContent).toBe('Something went wrong.')
+  })
+
+  it('guards a disabled file input nobody manages, which takes no drop', () => {
+    document.body.innerHTML = `${formMarkup()}<input id="other" type="file" name="other" disabled />`
+    initializeForms()
+    const otherInput = document.getElementById('other') as HTMLInputElement
+
+    const drop = drag('drop', otherInput, [pdf('cv.pdf', 2048)])
+
+    expect(drop.defaultPrevented).toBe(true)
   })
 
   it('stops guarding the page once the last form with a target has gone', async () => {

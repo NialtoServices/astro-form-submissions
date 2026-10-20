@@ -181,17 +181,79 @@ test('a text drag outside any target is not blocked', async ({ page }) => {
   expect([over, dropped]).toEqual([true, true])
 })
 
+test('a drop zone without a list adds dropped files', async ({ page }) => {
+  const typeMessage = 'That file type is not accepted. Please attach Text.'
+  await page.goto(DROP_PAGE_PATH)
+  const measurementsInput = page.getByLabel('Measurements file')
+  const heldFiles = () =>
+    measurementsInput.evaluate((input: HTMLInputElement) => Array.from(input.files ?? [], (file) => file.name))
+
+  await dragFiles(page.getByText('Drop measurements here'), 'drop', [NOTES])
+  await dragFiles(page.getByText('Drop measurements here'), 'drop', [SHED])
+
+  await expect.poll(heldFiles).toEqual(['notes.txt', 'shed.jpg'])
+
+  await page.getByRole('button', { name: 'Send' }).click()
+  await expect(page.getByRole('status')).toHaveText(typeMessage)
+  await expect(measurementsInput).toHaveAttribute('aria-invalid', 'true')
+})
+
+test('a drop on an input inside its drop zone announces a single file once', async ({ page }) => {
+  await page.goto(DROP_PAGE_PATH)
+  await page.getByLabel('Floor plan').evaluate((input) => {
+    const zone = document.createElement('div')
+    zone.setAttribute('data-astro-form-file-drop-for', 'cv')
+    input.replaceWith(zone)
+    zone.append(input)
+    ;(window as unknown as { statusWrites: number }).statusWrites = 0
+    new MutationObserver((records) => {
+      ;(window as unknown as { statusWrites: number }).statusWrites += records.length
+    }).observe(document.querySelector('[data-astro-form-status]') as Element, { childList: true })
+  })
+
+  await dragFiles(page.getByLabel('Floor plan'), 'drop', [FLOOR_PLAN, SECOND_PLAN])
+
+  await expect(page.getByRole('status')).toHaveText('Only one file can be added.')
+  await expect(listedItems(page, 'Chosen plan')).toHaveText([/floor-plan\.pdf/])
+  expect(await page.evaluate(() => (window as unknown as { statusWrites: number }).statusWrites)).toBe(1)
+})
+
+test('the only-one-file notice goes once the next drop is accepted', async ({ page }) => {
+  await page.goto(DROP_PAGE_PATH)
+
+  await dragFiles(planZone(page), 'drop', [FLOOR_PLAN, SECOND_PLAN])
+  await expect(page.getByRole('status')).toHaveText('Only one file can be added.')
+  await dragFiles(planZone(page), 'drop', [FLOOR_PLAN])
+
+  await expect(page.getByRole('status')).toHaveText('')
+})
+
+test('a disabled file input with no drop zone is guarded too', async ({ page }) => {
+  await page.goto(DROP_PAGE_PATH)
+  await page.evaluate(() => {
+    const unlistedInput = document.createElement('input')
+    unlistedInput.type = 'file'
+    unlistedInput.disabled = true
+    unlistedInput.setAttribute('aria-label', 'Disabled file')
+    document.querySelector('main')?.append(unlistedInput)
+  })
+
+  const dropped = await dragFiles(page.getByLabel('Disabled file'), 'drop', [NOTES])
+
+  expect(dropped).toBe(false)
+})
+
 test('a file dragged over a file input with no list is left to the browser', async ({ page }) => {
   await page.goto(DROP_PAGE_PATH)
   await page.evaluate(() => {
     const unlistedInput = document.createElement('input')
     unlistedInput.type = 'file'
     unlistedInput.name = 'notes'
-    unlistedInput.setAttribute('aria-label', 'Notes file')
+    unlistedInput.setAttribute('aria-label', 'Unlisted file')
     document.querySelector('main')?.append(unlistedInput)
   })
 
-  const dropped = await dragFiles(page.getByLabel('Notes file'), 'drop', [NOTES])
+  const dropped = await dragFiles(page.getByLabel('Unlisted file'), 'drop', [NOTES])
 
   expect(dropped).toBe(true)
 })

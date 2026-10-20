@@ -137,17 +137,18 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   does a server's refusal: the message in the status, the field's error, `astro-form:error`, and focus on the
   summary or the file's remove control. A flagged item carries `data-astro-form-file-state="invalid"`, and the list
   carries `data-astro-form-invalid` while the field is invalid. The files are kept after a refused submission and
-  cleared on success, on reset and when the field is disabled. A file input without a list is left as the browser
-  provides it. See "File fields" in the README.
-- A file field with a list takes files dropped on the input itself, or on any element in the form marked
+  cleared on success, on reset and when the field is disabled. A file input with neither a list nor a drop zone is left as the
+  browser provides it. See "File fields" in the README.
+- A file field takes files dropped on the input itself, or on any element in the form marked
   `data-astro-form-file-drop-for="<name>"`, as if they were picked: they join the selection, are listed once and are
-  checked like any other, and a file of the wrong type is listed and flagged. The target carries
+  checked like any other, and a file of the wrong type is listed and flagged. A drop zone makes a field managed
+  without a list, which then shows no items. The target carries
   `data-astro-form-file-drop="active"` while a file is dragged over it, for styling. A field without `multiple` keeps
   the first file of a drop and says "Only one file can be added." in the form's status, in the copy of the input's new
-  `data-astro-form-message-only-one-file`; it is not marked invalid. A disabled field ignores drops and shows no
+  `data-astro-form-message-only-one-file`; it is not marked invalid, and the notice goes once the next pick or drop is accepted. A disabled field ignores drops and shows no
   hover state. While any drop target is on the page, the script also stops the browser opening a file dropped
-  anywhere else, which would replace the page and lose what was typed; text drags, and drops on a file input with no
-  list, are left alone. A site's own drop zone outside these parts has its file drops cancelled: marking the zone
+  anywhere else, which would replace the page and lose what was typed; text drags, and drops on an enabled file input with
+  neither a list nor a drop zone, are left alone. A site's own drop zone outside these parts has its file drops cancelled: marking the zone
   `data-astro-form-file-drop-for` makes it a target. See "Dropping files" in the README.
 
 ### Changed

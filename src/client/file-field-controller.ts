@@ -34,11 +34,13 @@ function fileKey(file: File): string {
 // MARK: - File Field
 
 /**
- * Manages one file input that has a `[data-astro-form-file-list-for]` list: picks accumulate (a single-file
+ * Manages one file input that has a `[data-astro-form-file-list-for]` list, a `[data-astro-form-file-drop-for]`
+ * drop zone, or both: picks accumulate (a single-file
  * input's pick replaces), an identical file is listed once, each file can be removed, each is checked against
  * the input's limits, and the form won't send while any file has a problem. The input always holds exactly the
  * listed files, so the form, and a direct upload, sends what the person sees. Files dropped on the input, or on
- * any `[data-astro-form-file-drop-for]` element naming it, join the selection as a pick does.
+ * any drop zone naming it, join the selection as a pick does. A field with no list is still managed and checked,
+ * and shows no items.
  */
 export class FileFieldController {
   // MARK: - Properties
@@ -48,7 +50,8 @@ export class FileFieldController {
   private readonly host: FormPartHost
   private readonly dropTargetElements: Set<HTMLElement>
   private readonly releaseDropTargets: (() => void)[] = []
-  private readonly fileList: FileItemList
+  private readonly fileList: FileItemList | null
+  private onlyOneFileNotice: string | null = null
   private readonly files: File[] = []
   private readonly invalidObserver: MutationObserver
   private readonly disabledObserver: MutationObserver
@@ -56,36 +59,24 @@ export class FileFieldController {
   // MARK: - Object Lifecycle
 
   /**
-   * Bind the input to its list, list any files it already holds, and add the field's check to the form's.
+   * Bind the input to its list, if it has one, list any files it already holds, add the field's check to the
+   * form's, and make the input and its drop zones places a file can be dropped.
    *
    * @throws {Error} When the input has no name, or the list has no usable `<template>`.
    */
-  constructor(inputElement: HTMLInputElement, listElement: HTMLElement, host: FormPartHost) {
-    if (!inputElement.name) throw new Error('A file input with a file list has no name.')
+  constructor(inputElement: HTMLInputElement, listElement: HTMLElement | null, host: FormPartHost) {
+    if (!inputElement.name) throw new Error('A managed file input has no name.')
 
     this.inputElement = inputElement
     this.formElement = host.formElement
     this.host = host
-    this.fileList = new FileItemList(listElement)
+    this.fileList = listElement ? new FileItemList(listElement) : null
 
     const { signal } = host
     inputElement.addEventListener('change', () => this.addChosenFiles(), { signal })
-    listElement.addEventListener('click', (event) => this.handleListClick(event), { signal })
+    listElement?.addEventListener('click', (event) => this.handleListClick(event), { signal })
     host.formElement.addEventListener('reset', (event) => this.handleReset(event), { signal })
     host.addSubmitCheck(() => this.refusal())
-
-    this.dropTargetElements = new Set([
-      inputElement,
-      ...host.formElement.querySelectorAll<HTMLElement>(
-        `[data-astro-form-file-drop-for="${CSS.escape(inputElement.name)}"]`
-      )
-    ])
-    for (const dropTargetElement of this.dropTargetElements) {
-      this.releaseDropTargets.push(registerDropTarget(dropTargetElement))
-      for (const type of ['dragenter', 'dragover', 'dragleave', 'drop'] as const) {
-        dropTargetElement.addEventListener(type, (event) => this.handleDrag(event, dropTargetElement), { signal })
-      }
-    }
 
     // The server's refusals mark the input `aria-invalid` as well as the field's own checks, so the mirror
     // follows the attribute itself.
@@ -101,6 +92,21 @@ export class FileFieldController {
     this.files.push(...Array.from(inputElement.files ?? []))
     this.render()
     this.mirrorInvalidState()
+
+    // Registering a target changes the page's document-level listeners, which nothing here undoes if the
+    // constructor throws afterwards, so this is the last step.
+    this.dropTargetElements = new Set([
+      inputElement,
+      ...host.formElement.querySelectorAll<HTMLElement>(
+        `[data-astro-form-file-drop-for="${CSS.escape(inputElement.name)}"]`
+      )
+    ])
+    for (const dropTargetElement of this.dropTargetElements) {
+      this.releaseDropTargets.push(registerDropTarget(dropTargetElement))
+      for (const type of ['dragenter', 'dragover', 'dragleave', 'drop'] as const) {
+        dropTargetElement.addEventListener(type, (event) => this.handleDrag(event, dropTargetElement), { signal })
+      }
+    }
   }
 
   /** Stop following the field and remove its listed items, leaving the input holding its files. */
@@ -109,7 +115,7 @@ export class FileFieldController {
     this.disabledObserver.disconnect()
     for (const release of this.releaseDropTargets.splice(0)) release()
     for (const dropTargetElement of this.dropTargetElements) dropTargetElement.removeAttribute(DROP_STATE_ATTRIBUTE)
-    this.fileList.clear()
+    this.fileList?.clear()
   }
 
   // MARK: - Derived State
@@ -159,6 +165,8 @@ export class FileFieldController {
 
   /** Add files to the selection: all of them, less any already listed, or only the first for a single-file input. */
   private addFiles(files: readonly File[]): void {
+    this.withdrawOnlyOneFileNotice()
+
     if (!this.inputElement.multiple) {
       this.replaceFiles(files.slice(0, 1))
       return
@@ -191,7 +199,7 @@ export class FileFieldController {
     }
 
     const nextIndex = Math.min(index, this.files.length - 1)
-    ;(this.fileList.removeControl(nextIndex) ?? this.inputElement).focus()
+    ;(this.fileList?.removeControl(nextIndex) ?? this.inputElement).focus()
   }
 
   /** Make `files` the field's selection: what the list shows and the input holds. */
@@ -222,6 +230,14 @@ export class FileFieldController {
 
     if (!dragCarriesFiles(event)) return
 
+    if (event.type === 'drop') {
+      dropTargetElement.removeAttribute(DROP_STATE_ATTRIBUTE)
+
+      // A drop on an input inside a drop zone of its own field reaches both, and the first to see it takes the
+      // files.
+      if (event.defaultPrevented) return
+    }
+
     // Cancelling the event is what makes the element a place a file can be dropped.
     event.preventDefault()
 
@@ -237,8 +253,15 @@ export class FileFieldController {
       return
     }
 
-    dropTargetElement.removeAttribute(DROP_STATE_ATTRIBUTE)
     this.addDroppedFiles(Array.from(event.dataTransfer?.files ?? []))
+  }
+
+  /** Withdraw the only-one-file notice, if the status still shows it, once a later pick or drop is accepted. */
+  private withdrawOnlyOneFileNotice(): void {
+    if (this.onlyOneFileNotice === null) return
+
+    this.host.withdrawAnnouncement(this.onlyOneFileNotice)
+    this.onlyOneFileNotice = null
   }
 
   /** Take a drop as a pick, saying so when a single-file field was given several files and kept the first. */
@@ -247,14 +270,15 @@ export class FileFieldController {
 
     this.addFiles(files)
     if (!this.inputElement.multiple && files.length > 1) {
-      this.host.announce(message(this.inputElement, 'only-one-file', FILE_COPY.onlyOneFile, this.placeholders))
+      this.onlyOneFileNotice = message(this.inputElement, 'only-one-file', FILE_COPY.onlyOneFile, this.placeholders)
+      this.host.announce(this.onlyOneFileNotice)
     }
   }
 
   private handleListClick(event: MouseEvent): void {
     if (!(event.target instanceof Element)) return
 
-    const index = this.fileList.indexOfRemoveControl(event.target)
+    const index = this.fileList?.indexOfRemoveControl(event.target) ?? -1
     if (index === -1) return
 
     // A remove `<button>` without `type="button"` would otherwise submit the form.
@@ -297,7 +321,7 @@ export class FileFieldController {
     return {
       name,
       message: this.problemMessage(problem),
-      focusElement: this.fileList.removeControl(index) ?? inputElement
+      focusElement: this.fileList?.removeControl(index) ?? inputElement
     }
   }
 
@@ -305,7 +329,7 @@ export class FileFieldController {
 
   private render(): void {
     const problems = checkFiles(this.files, this.limits)
-    this.fileList.render(
+    this.fileList?.render(
       this.files.map((file, index) => {
         const problem = problems[index]
         return { file, problem: problem ? this.problemMessage(problem) : null }
@@ -342,7 +366,10 @@ export function attachFileFields(formElement: HTMLFormElement, host: FormPartHos
     const listElement = formElement.querySelector<HTMLElement>(
       `[data-astro-form-file-list-for="${CSS.escape(inputElement.name)}"]`
     )
-    if (!listElement) continue
+    const dropZoneElement = formElement.querySelector(
+      `[data-astro-form-file-drop-for="${CSS.escape(inputElement.name)}"]`
+    )
+    if (!listElement && !dropZoneElement) continue
 
     try {
       controllers.push(new FileFieldController(inputElement, listElement, host))

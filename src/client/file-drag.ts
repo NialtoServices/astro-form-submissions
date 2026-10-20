@@ -18,7 +18,7 @@ export function dragCarriesFiles(event: DragEvent): boolean {
 /**
  * Register an element as somewhere a file may be dropped. While any element is registered, the document stops
  * the browser opening a dropped file that misses every one of them, and the listeners are released with the
- * last element. A file input nobody registered keeps the browser's own handling of a drop on it.
+ * last element. An enabled file input nobody registered keeps the browser's own handling of a drop on it.
  *
  * @returns Unregisters the element.
  */
@@ -51,7 +51,9 @@ function guardStrayFileDrag(event: DragEvent): void {
 
   const { target } = event
   if (!(target instanceof Node)) return
-  if (target instanceof HTMLInputElement && target.type === 'file') return
+
+  // A disabled file input takes no drop, so a file dropped on it would be opened like one dropped on the page.
+  if (target instanceof HTMLInputElement && target.type === 'file' && !target.matches(':disabled')) return
 
   for (const dropTargetElement of dropTargetElements) {
     if (dropTargetElement.contains(target)) return

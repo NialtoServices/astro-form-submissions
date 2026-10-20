@@ -75,6 +75,20 @@
           </ul>
         </fieldset>
 
+        <fieldset>
+          <legend>Measurements</legend>
+          <label for="quote-measurements">Measurements file</label>
+          <input
+            id="quote-measurements"
+            type="file"
+            name="measurements"
+            accept="text/plain,.txt"
+            multiple
+            data-astro-form-max-files="2"
+            data-astro-form-accepted-types="Text" />
+          <div class="drop-zone" data-astro-form-file-drop-for="measurements">Drop measurements here</div>
+        </fieldset>
+
         <button type="submit">Send</button>
 
         <p data-astro-form-status data-astro-form-message-success="Thanks, we'll be in touch."></p>

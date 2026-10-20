@@ -53,6 +53,9 @@ export interface FormPartHost {
    * `pending`, `success` or `error` state, which belongs to a send.
    */
   announce(message: string): void
+
+  /** Remove `message` from the status region if it still shows it, leaving any other status untouched. */
+  withdrawAnnouncement(message: string): void
 }
 
 /**
@@ -149,6 +152,12 @@ export class FormController implements FormPartHost {
   announce(message: string): void {
     this.statusElement.textContent = message
     delete this.statusElement.dataset.astroFormState
+  }
+
+  withdrawAnnouncement(message: string): void {
+    if (this.statusElement.textContent !== message || this.statusElement.dataset.astroFormState) return
+
+    this.statusElement.textContent = ''
   }
 
   /**
