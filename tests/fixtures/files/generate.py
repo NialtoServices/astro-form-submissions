@@ -368,11 +368,13 @@ def balanced_tree(children, depth=0):
     return children[middle], [(children[middle], left, right, depth), *left_nodes, *right_nodes]
 
 
-def compound_file_bytes(items):
+def compound_file_bytes(items, split_directory=False):
     """A version 3 compound file (512-byte sectors) holding `items`, a list of (path, data) pairs in directory
     order: a path is a tuple of names, and data is bytes for a stream or None for a storage. Streams under the
     mini stream cutoff live in the mini stream, as a real producer stores them. The directory is written last,
-    so a reader has to follow the header's pointer to find it."""
+    so a reader has to follow the header's pointer to find it. With `split_directory`, the directory's first
+    sector comes straight after the FAT and the rest are written last, so a reader has to follow the FAT's chain
+    from the first directory sector to the second, as in a file a producer has rewritten in place."""
     names = ["Root Entry"] + [path[-1] for path, _data in items]
     kinds = [ROOT_STORAGE] + [STREAM if data is not None else STORAGE for _path, data in items]
     data_of = [None] + [data for _path, data in items]
@@ -394,6 +396,7 @@ def compound_file_bytes(items):
         return (length + size - 1) // size
 
     fat.append(FAT_SECTOR)
+    first_directory_sector = allocate(1) if split_directory else None
 
     starts = [0] * len(names)
     sizes = [0] * len(names)
@@ -428,7 +431,14 @@ def compound_file_bytes(items):
     sizes[0] = len(mini_stream)
 
     entry_count = sectors_for(len(names) * 128) * ENTRIES_PER_SECTOR
-    directory_start = allocate(entry_count // ENTRIES_PER_SECTOR)
+    directory_sector_count = entry_count // ENTRIES_PER_SECTOR
+    if first_directory_sector is None:
+        directory_start = allocate(directory_sector_count)
+        later_directory_start = None
+    else:
+        directory_start = first_directory_sector
+        later_directory_start = allocate(directory_sector_count - 1)
+        fat[directory_start] = later_directory_start
 
     if len(fat) > SECTOR_SIZE // 4:
         raise ValueError("The fixture needs more than one FAT sector.")
@@ -465,7 +475,11 @@ def compound_file_bytes(items):
         directory += b"\0" * 36
         start = starts[index] if kinds[index] != STORAGE else 0
         directory += struct.pack("<IQ", start, sizes[index])
-    sector_data[directory_start] = bytes(directory)
+    if later_directory_start is None:
+        sector_data[directory_start] = bytes(directory)
+    else:
+        sector_data[directory_start] = bytes(directory[:SECTOR_SIZE])
+        sector_data[later_directory_start] = bytes(directory[SECTOR_SIZE:])
 
     fat_bytes = struct.pack(f"<{len(fat)}I", *fat) + struct.pack("<I", FREE_SECTOR) * (SECTOR_SIZE // 4 - len(fat))
     sector_data[0] = fat_bytes
@@ -513,6 +527,36 @@ def word_binary_bytes():
             *SUMMARY_STREAMS,
             (("\x01CompObj",), padded(b"\x01\0\xfe\xff", 76)),
         ]
+    )
+
+
+def word6_binary_bytes():
+    """A Word 6 document's streams, in the order that puts `WordDocument` first in the second directory sector."""
+    return compound_file_bytes(
+        [
+            (("\x01CompObj",), padded(b"\x01\0\xfe\xff", 76)),
+            (("\x01Ole",), padded(b"\x01\0\0\x02", 20)),
+            (("\x05SummaryInformation",), PROPERTY_SET),
+            (("WordDocument",), WORD_STREAM),
+            (("\x05DocumentSummaryInformation",), PROPERTY_SET),
+        ],
+        split_directory=True,
+    )
+
+
+def word_with_object_pool_bytes():
+    """A Word 97 document whose `Data` stream, table and object pool come before `WordDocument`, pushing it into
+    the second directory sector."""
+    return compound_file_bytes(
+        [
+            (("Data",), padded(b"\0", 4096)),
+            (("1Table",), padded(b"\0", 4096)),
+            (("ObjectPool",), None),
+            (("WordDocument",), WORD_STREAM),
+            *SUMMARY_STREAMS,
+            (("\x01CompObj",), padded(b"\x01\0\xfe\xff", 76)),
+        ],
+        split_directory=True,
     )
 
 
@@ -594,6 +638,8 @@ def main():
         ),
         "truncated.docx": cv[: len(cv) // 2],
         "cv.doc": word_binary_bytes(),
+        "cv-word6.doc": word6_binary_bytes(),
+        "cv-object-pool.doc": word_with_object_pool_bytes(),
         "book.xls": workbook_binary_bytes(),
         "slides.ppt": presentation_binary_bytes(),
         "cv.odt": open_document_bytes(

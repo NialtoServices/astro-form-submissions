@@ -57,7 +57,9 @@ describe('document types', () => {
       expect(await sniffType(fixtureFile(name), DOCUMENT_MATCHERS), name).toBe(DOCX)
     }
 
-    expect(await sniffType(fixtureFile('cv.doc'), DOCUMENT_MATCHERS)).toBe(DOC)
+    for (const name of ['cv.doc', 'cv-word6.doc', 'cv-object-pool.doc']) {
+      expect(await sniffType(fixtureFile(name), DOCUMENT_MATCHERS), name).toBe(DOC)
+    }
   })
 
   it('refuses look-alikes', async () => {
@@ -184,8 +186,16 @@ describe('document types', () => {
     expect(await sniffType(new File([doc.subarray(0, directoryStart + 256)], 'cv.doc'), DOCUMENT_MATCHERS)).toBeNull()
   })
 
+  it('refuses a Word 97-2003 file cut short in the second sector of its directory', async () => {
+    const doc = fixture('cv.doc')
+
+    expect(await sniffType(new File([doc.subarray(0, doc.length - 256)], 'cv.doc'), DOCUMENT_MATCHERS)).toBeNull()
+  })
+
   it('never throws, and reads within the budget, whatever the bytes', async () => {
-    const fixtures = ['cv.docx', 'cv-data-descriptor.docx', 'cv.doc', 'book.xls', 'cv.odt', 'notes.txt'].map(fixture)
+    const fixtures = ['cv.docx', 'cv-data-descriptor.docx', 'cv.doc', 'cv-word6.doc', 'cv.odt', 'notes.txt'].map(
+      fixture
+    )
 
     await fc.assert(
       fc.asyncProperty(documentLikeBytes(fixtures), async (bytes) => {
