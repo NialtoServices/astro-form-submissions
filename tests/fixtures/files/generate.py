@@ -560,6 +560,21 @@ def word_with_object_pool_bytes():
     )
 
 
+def workbook_with_embedded_document_bytes():
+    """An Excel workbook embedding a Word document: the document's streams sit in an `MBD` storage, so a
+    `WordDocument` stream appears in the directory beside the workbook's own `Workbook` stream."""
+    return compound_file_bytes(
+        [
+            (("Workbook",), WORKBOOK_STREAM),
+            (("MBD0001A2B3",), None),
+            (("MBD0001A2B3", "WordDocument"), WORD_STREAM),
+            (("MBD0001A2B3", "1Table"), padded(b"\0", 4096)),
+            (("MBD0001A2B3", "\x01CompObj"), padded(b"\x01\0\xfe\xff", 76)),
+            *SUMMARY_STREAMS,
+        ]
+    )
+
+
 def workbook_binary_bytes():
     return compound_file_bytes([(("Workbook",), WORKBOOK_STREAM), *SUMMARY_STREAMS])
 
@@ -640,6 +655,7 @@ def main():
         "cv.doc": word_binary_bytes(),
         "cv-word6.doc": word6_binary_bytes(),
         "cv-object-pool.doc": word_with_object_pool_bytes(),
+        "book-with-document.xls": workbook_with_embedded_document_bytes(),
         "book.xls": workbook_binary_bytes(),
         "slides.ppt": presentation_binary_bytes(),
         "cv.odt": open_document_bytes(

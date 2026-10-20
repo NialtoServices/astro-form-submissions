@@ -29,6 +29,9 @@ const MAX_REGULAR_SECTOR = 0xfffffffa
 const ROOT_STORAGE_TYPE = 5
 const STREAM_TYPE = 2
 
+/** The main streams of an Excel or PowerPoint 97–2003 file, which a Word document never holds as its own. */
+const OTHER_APPLICATION_STREAMS = ['Workbook', 'Book', 'PowerPoint Document']
+
 /**
  * Reads a compound file header's sector size, holding it to the two the format defines: 512-byte sectors for
  * version 3 and 4,096-byte sectors for version 4.
@@ -123,8 +126,9 @@ async function firstDirectorySectors(
 
 /**
  * Word 97–2003 (`.doc`): a compound file whose first two directory sectors, following the header's pointer and
- * the FAT's chain, list a `WordDocument` stream. A `WordDocument` stream listed in a later directory sector
- * isn't seen, and the file is refused.
+ * the FAT's chain, list a `WordDocument` stream and no `Workbook`, `Book` or `PowerPoint Document` stream, so
+ * an Excel or PowerPoint file embedding a Word document isn't taken for one. A `WordDocument` stream listed in
+ * a later directory sector isn't seen, and the file is refused.
  */
 export const DOC_TYPE: FileMatcher = {
   contentType: 'application/msword',
@@ -142,13 +146,16 @@ export const DOC_TYPE: FileMatcher = {
     // The first directory sector always begins with the root storage's entry.
     if (!directory || directory[0]?.[66] !== ROOT_STORAGE_TYPE) return false
 
+    let listsWordDocument = false
     for (const sector of directory) {
       for (let offset = 0; offset < sectorSize; offset += DIRECTORY_ENTRY_BYTES) {
         const entry = sector.subarray(offset, offset + DIRECTORY_ENTRY_BYTES)
-        if (entry[66] === STREAM_TYPE && entryNameIs(entry, 'WordDocument')) return true
+        if (entry[66] !== STREAM_TYPE) continue
+        if (OTHER_APPLICATION_STREAMS.some((name) => entryNameIs(entry, name))) return false
+        if (entryNameIs(entry, 'WordDocument')) listsWordDocument = true
       }
     }
 
-    return false
+    return listsWordDocument
   }
 }

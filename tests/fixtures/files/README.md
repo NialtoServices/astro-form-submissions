@@ -30,22 +30,23 @@ the text is placeholder prose and the only document property is the title `Examp
 
 ## Refused
 
-| Fixture          | Produced by                                                                                                                               | Represents                                           |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `cv.docm`        | `cv.docx`'s parts with the macro-enabled main content type and a `word/vbaProject.bin` entry, itself a compound file with a `VBA` storage | A macro-enabled Word document                        |
-| `book.xlsx`      | `zipfile`: workbook, one worksheet and their relationships                                                                                | An Excel workbook, a ZIP that isn't Word             |
-| `slides.pptx`    | `zipfile`: presentation, one slide, its layout, master and theme                                                                          | A PowerPoint presentation, a ZIP that isn't Word     |
-| `plain.zip`      | `zipfile`: two text files                                                                                                                 | An archive that isn't an office document at all      |
-| `truncated.docx` | The first half of `cv.docx`'s bytes                                                                                                       | A Word document cut short, with no central directory |
-| `book.xls`       | A hand-built compound file: `Workbook` (starting with a BIFF8 beginning-of-file record) and both summary-information streams              | An Excel 97–2003 workbook                            |
-| `slides.ppt`     | A hand-built compound file: `PowerPoint Document`, `Current User` and both summary-information streams                                    | A PowerPoint 97–2003 presentation                    |
-| `sheet.ods`      | As `cv.odt`, declaring `application/vnd.oasis.opendocument.spreadsheet`                                                                   | Another OpenDocument type                            |
-| `template.ott`   | As `cv.odt`, declaring `application/vnd.oasis.opendocument.text-template`, which starts with the text type                                | The near miss for a prefix comparison                |
-| `utf16.txt`      | UTF-16LE with a byte-order mark                                                                                                           | Text in an encoding other than UTF-8                 |
+| Fixture                  | Produced by                                                                                                                               | Represents                                                                                     |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `cv.docm`                | `cv.docx`'s parts with the macro-enabled main content type and a `word/vbaProject.bin` entry, itself a compound file with a `VBA` storage | A macro-enabled Word document                                                                  |
+| `book.xlsx`              | `zipfile`: workbook, one worksheet and their relationships                                                                                | An Excel workbook, a ZIP that isn't Word                                                       |
+| `slides.pptx`            | `zipfile`: presentation, one slide, its layout, master and theme                                                                          | A PowerPoint presentation, a ZIP that isn't Word                                               |
+| `plain.zip`              | `zipfile`: two text files                                                                                                                 | An archive that isn't an office document at all                                                |
+| `truncated.docx`         | The first half of `cv.docx`'s bytes                                                                                                       | A Word document cut short, with no central directory                                           |
+| `book.xls`               | A hand-built compound file: `Workbook` (starting with a BIFF8 beginning-of-file record) and both summary-information streams              | An Excel 97–2003 workbook                                                                      |
+| `book-with-document.xls` | `book.xls`'s `Workbook` beside an `MBD` storage holding an embedded document's `WordDocument`, `1Table` and `\x01CompObj`                 | An Excel workbook embedding a Word document, which lists a `WordDocument` stream but isn't one |
+| `slides.ppt`             | A hand-built compound file: `PowerPoint Document`, `Current User` and both summary-information streams                                    | A PowerPoint 97–2003 presentation                                                              |
+| `sheet.ods`              | As `cv.odt`, declaring `application/vnd.oasis.opendocument.spreadsheet`                                                                   | Another OpenDocument type                                                                      |
+| `template.ott`           | As `cv.odt`, declaring `application/vnd.oasis.opendocument.text-template`, which starts with the text type                                | The near miss for a prefix comparison                                                          |
+| `utf16.txt`              | UTF-16LE with a byte-order mark                                                                                                           | Text in an encoding other than UTF-8                                                           |
 
 `.doc` detection reads the first two directory sectors, following the header's pointer and then the FAT's chain,
-and accepts a file whose `WordDocument` stream is listed there. The Word fixtures cover `WordDocument` in either
-sector.
+and accepts a file whose `WordDocument` stream is listed there beside no `Workbook`, `Book` or `PowerPoint Document`
+stream. The Word fixtures cover `WordDocument` in either sector.
 
 Some tests derive further cases from these at run time (a long archive comment, a file cut short partway through
 its directory), so the fixture set stays small.

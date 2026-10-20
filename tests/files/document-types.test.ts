@@ -69,6 +69,7 @@ describe('document types', () => {
       'slides.pptx',
       'plain.zip',
       'book.xls',
+      'book-with-document.xls',
       'slides.ppt',
       'sheet.ods',
       'template.ott',
@@ -193,9 +194,15 @@ describe('document types', () => {
   })
 
   it('never throws, and reads within the budget, whatever the bytes', async () => {
-    const fixtures = ['cv.docx', 'cv-data-descriptor.docx', 'cv.doc', 'cv-word6.doc', 'cv.odt', 'notes.txt'].map(
-      fixture
-    )
+    const fixtures = [
+      'cv.docx',
+      'cv-data-descriptor.docx',
+      'cv.doc',
+      'cv-word6.doc',
+      'book-with-document.xls',
+      'cv.odt',
+      'notes.txt'
+    ].map(fixture)
 
     await fc.assert(
       fc.asyncProperty(documentLikeBytes(fixtures), async (bytes) => {
