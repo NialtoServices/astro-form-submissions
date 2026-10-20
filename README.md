@@ -1496,6 +1496,7 @@ console warning, until the element is added. Each hook is an attribute you add t
 | `data-astro-form-success`                                               | an element right after the form | Optional — swap the whole form out for it on success (see [Swap on success](#swap-on-success)).                                                                            |
 | `data-astro-form-field-error-for="<name>"`                              | an element beside a field       | Optional co-located error slot (see [Presenting errors](#presenting-errors)).                                                                                              |
 | `data-astro-form-field-error-summary`                                   | an element inside the form      | Optional central error list (see [Presenting errors](#presenting-errors)).                                                                                                 |
+| `data-astro-form-file-list-for="<name>"`                                | an element inside the form      | Optional list of a file field's chosen files (see [File fields](#file-fields)).                                                                                            |
 | `data-astro-form-submit-timeout`                                        | the `<form>`                    | Optional per-form request timeout, in ms (default 30000).                                                                                                                  |
 | `data-astro-form-upload-action`                                         | the `<form>`                    | Optional — the upload route, opting into [direct uploads](#direct-uploads-in-the-form).                                                                                    |
 | `data-astro-form-upload`                                                | a file input                    | Its files upload directly and never join a submission (with `data-astro-form-upload-action`).                                                                              |
@@ -1513,6 +1514,112 @@ attributes. Don't conflate the two.
 The `initializeForms` module is plain client TypeScript imported from
 `@nialto-services/astro-form-submissions/form`; your Astro build bundles it into the page's client JS
 like any other `<script>`.
+
+### File fields
+
+A file input can list the files a person has chosen, let them add more and take any out, and check each one
+before the form sends anything. Give the field a list, tied to it by name with `data-astro-form-file-list-for`,
+holding a `<template>` for one item. The input takes its limits from the same [upload rules](#upload-rules) the
+route uses:
+
+```astro
+---
+import { describeUploadRules, uploadInputAttributes } from '@nialto-services/astro-form-submissions'
+import { applicationUploads } from '../lib/uploads'
+---
+
+<form data-astro-form action='/api/application' method='POST' enctype='multipart/form-data'>
+  <label for='application-cv'>CV and cover letter</label>
+  <input id='application-cv' type='file' name='cv' {...uploadInputAttributes(applicationUploads)} />
+  <p>{describeUploadRules(applicationUploads)}</p>
+
+  <ul data-astro-form-file-list-for='cv' aria-label='Chosen files'>
+    <template>
+      <li>
+        <span data-astro-form-file-name></span>
+        <span data-astro-form-file-size></span>
+        <span data-astro-form-file-problem hidden></span>
+        <button type='button' data-astro-form-file-remove>Remove</button>
+      </li>
+    </template>
+  </ul>
+  …
+</form>
+```
+
+The list can sit anywhere in the form, and two fields (or two forms, each with a `cv` field) never mix, because
+each list is found by its field's name within its own form. The template's first element is copied once per
+file and added to the list after the template; every slot in it is optional.
+
+| Attribute                                                          | On                     | Purpose                                                                                                    |
+| ------------------------------------------------------------------ | ---------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `data-astro-form-file-list-for="<name>"`                           | an element in the form | The list of the named field's files. Holds a `<template>` for one item.                                    |
+| `data-astro-form-file-name`                                        | an element in the item | Filled with the file's name, as text (never markup), with `dir="auto"` unless it has a `dir` of its own.   |
+| `data-astro-form-file-size`                                        | an element in the item | Filled with the file's size, such as `2.5 MB`.                                                             |
+| `data-astro-form-file-problem`                                     | an element in the item | Filled with what is wrong with the file, and hidden when nothing is.                                       |
+| `data-astro-form-file-remove`                                      | a button in the item   | Takes the file out of the selection.                                                                       |
+| `data-astro-form-max-files`, `-max-file-bytes`, `-max-total-bytes` | the file input         | The field's limits, as `uploadInputAttributes` writes them. A limit left out isn't checked in the browser. |
+| `data-astro-form-message-<key>`                                    | the file input         | Optional copy for each problem (below).                                                                    |
+| `data-astro-form-file-state="invalid"`                             | set on an item         | The file has a problem.                                                                                    |
+| `data-astro-form-invalid`                                          | set on the list        | The field is `aria-invalid`, whether the browser's check or the server flagged it.                         |
+
+How the field behaves:
+
+- **Picks add up.** Each time the person opens the picker, the files they choose join those already listed. The
+  same file chosen again (same name, size and modification time) is listed once; a different file that shares a
+  name is kept. An input without `multiple` takes one file, and a new pick replaces it.
+- **The input holds what the list shows.** Removing a file takes it out of the input too, so the form, or a
+  [direct upload](#direct-uploads-in-the-form), sends exactly the listed files. Focus moves to the next file's
+  remove control, or to the input once the list is empty.
+- **Each file is checked** against the input's `accept` and limits, in the order chosen: its type, its size, the
+  count, then the running total. Only files without a problem count towards the count and total, so taking out
+  every flagged file leaves a selection the field accepts. The server still checks every file's bytes, so the
+  browser's type check is lenient: a file the browser gives no type (HEIC on some systems) passes, and
+  extensions match whatever their case.
+- **The form isn't sent while a file has a problem**, or while a required field is empty. Nothing leaves the
+  browser, a direct upload included. The first problem is shown as the field's error, in its error slot and the
+  summary as a server's field error would be, and focus moves to that file's remove control (or the input, for
+  an empty field). The message shows on the item too when the template has a problem slot; leave the slot out
+  to show messages only in the summary.
+- **A refused submission keeps the files**, so the person can fix what the server flagged and send again. A
+  successful one clears them with the rest of the form, as does a reset. Disabling the field (directly or through
+  a `<fieldset>`, see [Fields that come and go](#fields-that-come-and-go)) clears its selection.
+
+The messages use the server's wording, so a limit reads the same wherever it is caught. Each can be replaced by
+an attribute on the input, and the site's copy can use the same placeholders: `{maxFiles}`, `{maxFileSize}`,
+`{maxTotalSize}` and `{types}`.
+
+| Attribute on the input                    | Default                                                                                        |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `data-astro-form-message-too-many-files`  | "Please attach no more than {maxFiles} files.", or "Please attach only one file." for one file |
+| `data-astro-form-message-file-too-large`  | "Each file must be {maxFileSize} or smaller."                                                  |
+| `data-astro-form-message-files-too-large` | "Your files add up to more than {maxTotalSize}."                                               |
+| `data-astro-form-message-file-type`       | "That file type is not accepted. Please attach {types}."                                       |
+| `data-astro-form-message-file-required`   | "Please attach a file."                                                                        |
+
+In the browser, `{types}` is read from the input's `accept`: its extensions, upper-cased (`PDF, TXT or MD`), or
+its content types when it lists no extensions. The server names types by their labels (`PDF or Text`), which the
+browser can't know, so set `data-astro-form-message-file-type` to use the same words in both places.
+
+Styling is yours. Key off the state attributes, and use `:has()` for a wrapper:
+
+```css
+[data-astro-form-file-list-for] li[data-astro-form-file-state='invalid'] {
+  color: var(--color-red);
+}
+
+[data-astro-form-file-list-for]:not(:has(li)) {
+  display: none;
+}
+
+.file-field:has([data-astro-form-invalid]) {
+  border-color: var(--color-red);
+}
+```
+
+Without JavaScript the template stays inert and the input is a plain file input: the browser posts whatever the
+last pick chose, every file of it for a `multiple` input, and the server's checks refuse what the field doesn't
+accept. A file input without a list is left exactly as the browser provides it, with JavaScript or without.
 
 ### Direct uploads in the form
 
@@ -1721,6 +1828,8 @@ Styling is **entirely yours** — the markup is too, so ordinary scoped `<style>
 - `data-astro-form-state` on the status element — `pending` / `success` / `error` while submitting.
 - `aria-invalid="true"` on each faulty field (plus your own `[data-astro-form-field-error-for]` /
   `[data-astro-form-field-error-summary]` elements, which the client fills).
+- `data-astro-form-file-state="invalid"` on a listed file with a problem, and `data-astro-form-invalid` on a file
+  field's list while the field is invalid (see [File fields](#file-fields)).
 
 ```css
 [data-astro-form-status][data-astro-form-state='error'] {

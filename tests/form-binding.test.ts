@@ -89,7 +89,8 @@ describe('form binding', () => {
   })
 
   it('calling initializeForms twice binds once', async () => {
-    // The re-entry guard hides a second submit listener, so this can't yet tell one binding from two.
+    // The re-entry guard hides a second submit listener, so a doubled binding shows only in a part's own markup;
+    // the file-list test below is the one that tells one binding from two.
     const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
     document.body.innerHTML = formMarkup()
     initializeForms()
@@ -104,6 +105,32 @@ describe('form binding', () => {
     await vi.waitFor(() => expect(statusOf(formElement).dataset.astroFormState).toBe('success'))
     await settle()
     expect(fetchSpy).toHaveBeenCalledOnce()
+  })
+
+  it('calling initializeForms twice lists a chosen file once', async () => {
+    document.body.innerHTML = `
+      <form data-astro-form action="/api/application" method="POST" enctype="multipart/form-data">
+        <input type="file" name="cv" multiple />
+        <ul data-astro-form-file-list-for="cv">
+          <template><li data-astro-form-file-name></li></template>
+        </ul>
+        <p data-astro-form-status></p>
+      </form>`
+    initializeForms()
+    initializeForms()
+    await settle()
+    initializeForms()
+
+    const inputElement = document.querySelector<HTMLInputElement>('input[type="file"]')
+    const listElement = document.querySelector('ul')
+    if (!inputElement || !listElement) throw new Error('The form is missing its file field')
+
+    const dataTransfer = new DataTransfer()
+    dataTransfer.items.add(new File(['%PDF-'], 'cv.pdf', { type: 'application/pdf' }))
+    inputElement.files = dataTransfer.files
+    inputElement.dispatchEvent(new Event('change', { bubbles: true }))
+
+    expect(Array.from(listElement.querySelectorAll('li'), (itemElement) => itemElement.textContent)).toEqual(['cv.pdf'])
   })
 
   it('a form moved into a drawer keeps working and keeps its state', async () => {

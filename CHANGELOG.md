@@ -119,6 +119,18 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   in its details, a definite failure that answers a required email's submission with `send` (502). `FileAttachments`'
   default total of 5 MB leaves room. Also exports `POSTMARK_MAX_MESSAGE_BYTES`.
 
+- The form script manages a file field that has a `data-astro-form-file-list-for` list: each chosen file is listed
+  from the list's `<template>`, filling its `data-astro-form-file-name`, `-file-size` and `-file-problem` slots and
+  wiring its `-file-remove` control. Picks add up (the same file is listed once, and a field without `multiple`
+  replaces its file), and the input always holds the listed files. Each file is checked in the browser against the
+  input's `accept`, `data-astro-form-max-files`, `-max-file-bytes` and `-max-total-bytes`, using the server's wording,
+  which the input's `data-astro-form-message-too-many-files`, `-file-too-large`, `-files-too-large`, `-file-type` and
+  `-file-required` replace. While a file has a problem, or a required field is empty, the form sends nothing, shows
+  the problem as the field's error and focuses the file's remove control. A flagged item carries
+  `data-astro-form-file-state="invalid"`, and the list carries `data-astro-form-invalid` while the field is invalid.
+  The files are kept after a refused submission and cleared on success, on reset and when the field is disabled. A
+  file input without a list is left as the browser provides it. See "File fields" in the README.
+
 ### Changed
 
 - The form script follows a field a site disables, directly or through a disabled `<fieldset>`: the field's

@@ -46,5 +46,21 @@
 //   `{current}`, `{total}` and `{percent}` filled in, as each file starts and at each 25%.
 // - `astro-form:upload-progress` — emitted on the form as bytes go up, with
 //   `{ current, total, loaded, size, percent }`.
+//
+// ## File fields (opt-in)
+//
+// - `[data-astro-form-file-list-for="<name>"]` — a list for the named file input, holding a `<template>` for one
+//   item, whose `data-astro-form-file-{name,size,problem,remove}` slots are filled or wired per chosen file. With
+//   it, picks accumulate, files can be removed, and each is checked against the input's `accept` and
+//   `data-astro-form-max-{files,file-bytes,total-bytes}`; the form sends nothing while a file has a problem.
+// - `data-astro-form-message-{too-many-files,file-too-large,files-too-large,file-type,file-required}` on the
+//   input — the copy for each problem, with `{maxFiles}`, `{maxFileSize}`, `{maxTotalSize}` and `{types}`.
+// - `data-astro-form-file-state="invalid"` on a flagged item, and `data-astro-form-invalid` on the list while the
+//   field is `aria-invalid`.
+
+import { registerFormPart } from './binding.js'
+import { attachFileFields } from './file-field-controller.js'
 
 export { initializeForms } from './binding.js'
+
+registerFormPart(attachFileFields)

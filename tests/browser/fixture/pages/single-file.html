@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Job application, one document</title>
+    <script type="module">
+      import { initializeForms } from '/client/form.js'
+
+      initializeForms()
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>Apply for the role</h1>
+
+      <form data-astro-form action="/api/application" method="POST" enctype="multipart/form-data" novalidate>
+        <label>Name <input name="name" /></label>
+
+        <label for="application-cv">CV</label>
+        <input
+          id="application-cv"
+          type="file"
+          name="cv"
+          accept="application/pdf,.pdf"
+          data-astro-form-max-files="1"
+          data-astro-form-max-file-bytes="65536"
+          data-astro-form-max-total-bytes="65536" />
+        <ul data-astro-form-file-list-for="cv" aria-label="Chosen file">
+          <template>
+            <li>
+              <span data-astro-form-file-name></span>
+              <button type="button" data-astro-form-file-remove>Remove</button>
+            </li>
+          </template>
+        </ul>
+
+        <button type="submit">Send</button>
+
+        <p
+          data-astro-form-status
+          data-astro-form-message-sending="Sending…"
+          data-astro-form-message-success="Thanks, we'll be in touch."
+          data-astro-form-message-generic-error="Something went wrong."></p>
+      </form>
+    </main>
+  </body>
+</html>

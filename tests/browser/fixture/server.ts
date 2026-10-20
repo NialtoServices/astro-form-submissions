@@ -84,6 +84,20 @@ const enquirySchema = z
     path: ['budget']
   })
 
+// A job application with up to three documents, each sent inside the email so a test can read back exactly the
+// files the browser posted. The file pages' inputs carry the attributes `uploadInputAttributes` writes for these
+// rules.
+const applicationSchema = z.object({
+  name: z.string('Please enter your name.').max(120)
+})
+
+const applicationUploads = toolkit.uploadRules({
+  maxFiles: 3,
+  maxFileBytes: 64 * 1024,
+  maxTotalBytes: 128 * 1024,
+  accept: [toolkit.FILE_TYPES.pdf, toolkit.FILE_TYPES.text]
+})
+
 const formRoutes: Record<string, APIRoute> = {
   '/api/contact': toolkit.createFormRoute({
     schema: contactSchema,
@@ -98,6 +112,19 @@ const formRoutes: Record<string, APIRoute> = {
         from: 'site@example.com',
         to: 'owner@example.com',
         replyTo: (submission) => submission.email as string
+      })
+    ]
+  }),
+  '/api/application': toolkit.createFormRoute({
+    schema: applicationSchema,
+    enrichers: [new toolkit.FileAttachments({ ...applicationUploads, field: 'cv', attachTo: 'cv' })],
+    dispatchers: [
+      new toolkit.EmailDispatcher({
+        transport: recordingTransport,
+        templates: toolkit.submissionNotificationTemplates({ fields: ['name'], formName: 'Job application' }),
+        from: 'site@example.com',
+        to: 'owner@example.com',
+        attach: 'cv'
       })
     ]
   }),

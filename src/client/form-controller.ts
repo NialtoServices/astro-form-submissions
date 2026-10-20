@@ -19,6 +19,21 @@ import { applyTurnstileTokens, resetTurnstileWidget, waitForTurnstileToken } fro
 /** Releases what a form part set up, once its form leaves the page for good. */
 export type FormTeardown = () => void
 
+/** Why a part keeps its form from sending: the field to flag, the field's message, and where to move focus. */
+export interface SubmitRefusal {
+  /** The name of the field at fault, flagged as a field error of the server's would be. */
+  name: string
+
+  /** The field's message, for its error slot and the summary. */
+  message: string
+
+  /** What to focus when this is the form's first refusal, such as the remove control of a file to take out. */
+  focusElement: HTMLElement
+}
+
+/** Asked before every send; a refusal stops the form sending anything. */
+export type SubmitCheck = () => SubmitRefusal | null
+
 /** What a part attached to a bound form (a file field, say) may use of the form's controller. */
 export interface FormPartHost {
   /** The bound form. */
@@ -29,6 +44,9 @@ export interface FormPartHost {
    * or `window`) passes it as its `signal`, so the listener goes with the form.
    */
   readonly signal: AbortSignal
+
+  /** Ask `check` before every send, before anything (a direct upload included) leaves the browser. */
+  addSubmitCheck(check: SubmitCheck): void
 }
 
 /**
@@ -44,6 +62,7 @@ export class FormController implements FormPartHost {
   private readonly messages: FormMessages
   private readonly abortController = new AbortController()
   private readonly teardowns: FormTeardown[] = []
+  private readonly submitChecks: SubmitCheck[] = []
   private readonly disabledObserver: MutationObserver
 
   // MARK: - Object Lifecycle
@@ -117,6 +136,27 @@ export class FormController implements FormPartHost {
     this.teardowns.push(teardown)
   }
 
+  addSubmitCheck(check: SubmitCheck): void {
+    this.submitChecks.push(check)
+  }
+
+  /**
+   * Every part's refusal of the coming send. A check that throws refuses nothing, so a broken part never locks
+   * the form.
+   */
+  private collectSubmitRefusals(): SubmitRefusal[] {
+    const refusals: SubmitRefusal[] = []
+    for (const check of this.submitChecks) {
+      try {
+        const refusal = check()
+        if (refusal) refusals.push(refusal)
+      } catch (error) {
+        console.warn('[astro-form-submissions] A form part failed to check the form before sending', error)
+      }
+    }
+    return refusals
+  }
+
   // MARK: - Derived State
 
   get signal(): AbortSignal {
@@ -136,6 +176,12 @@ export class FormController implements FormPartHost {
 
     // Guard overlapping submissions (rapid Enter/click) beyond any disabled control.
     if (formElement.dataset.astroFormSubmitting) return
+
+    const refusals = this.collectSubmitRefusals()
+    if (refusals.length > 0) {
+      this.showRefusals(refusals)
+      return
+    }
 
     // The control that actually triggered submission (click, Enter, `requestSubmit(control)`).
     // Standard HTML semantics: its name/value joins the payload and it is the one disabled.
@@ -228,6 +274,19 @@ export class FormController implements FormPartHost {
     // after any attempt — otherwise a retry resubmits a spent token, rejected as a duplicate.
     resetTurnstileWidget(formElement)
     formElement.dispatchEvent(new CustomEvent('astro-form:error', { bubbles: true, detail: { error, fieldErrors } }))
+  }
+
+  /**
+   * Present the parts' refusals of a send as field errors, and focus the first refusal's element. Nothing was
+   * sent, so the status and Turnstile widget are left as they were.
+   */
+  private showRefusals(refusals: readonly SubmitRefusal[]): void {
+    const { formElement } = this
+    const fieldErrors = Object.fromEntries(refusals.map((refusal) => [refusal.name, refusal.message]))
+    clearFieldErrors(formElement)
+    applyFieldErrors(formElement, fieldErrors)
+    renderFieldErrorSummary(formElement, fieldErrors)
+    refusals[0]?.focusElement.focus()
   }
 
   /**
