@@ -1,3 +1,4 @@
+import { isPlainAddress } from '#dispatchers/address-check.js'
 import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
 import { EmailRecipientError } from '#dispatchers/email-recipient-error.js'
 import type { AttachedFile } from '#enrichers/index.js'
@@ -77,9 +78,10 @@ export interface EmailTemplates<E extends FormSubmission = FormSubmission, A = o
 
 /**
  * Runs of control characters, any of which could end a header line in a transport that writes raw headers. The
- * C1 range counts too, since some software reads U+0085 (next line) as a line break.
+ * C1 range counts too, since some software reads U+0085 (next line) as a line break, and so do the line and
+ * paragraph separators U+2028 and U+2029. `NEVER_ALLOWED` in `address-check.ts` refuses the same set.
  */
-const CONTROL_CHARACTERS = /\p{Cc}+/gu
+const CONTROL_CHARACTERS = /[\p{Cc}\u2028\u2029]+/gu
 
 /**
  * Renders a submission into email content using the site's templates.
@@ -101,19 +103,6 @@ export function renderEmail<E extends FormSubmission, A>(
     text: templates.text(submission, context),
     html: templates.html(submission, context)
   }
-}
-
-/** A quoted display name, whose `\"` escapes stay inside it. */
-const QUOTED_STRING = /"(?:[^"\\]|\\.)*"/g
-
-/**
- * Whether a resolved address names one recipient and holds no control character that could end a header line.
- * Outside a quoted display name (`"Lovelace, Ada" <…>`), a comma or semicolon separates recipients, and a
- * second `@` is a second address that a lenient parser could split off.
- */
-function isSingleAddress(address: string): boolean {
-  const unquoted = address.replace(QUOTED_STRING, '')
-  return !/\p{Cc}/u.test(address) && !/[,;]/.test(unquoted) && unquoted.split('@').length <= 2
 }
 
 /**
@@ -253,16 +242,16 @@ export class EmailDispatcher<
    *
    * @param submission - The submission to email.
    * @param context - The dispatch context, threaded into the templates so computed field values can be resolved.
-   * @throws {EmailRecipientError} When a `to` or `replyTo` function returns more than one address, or a control
-   * character.
+   * @throws {EmailRecipientError} When a `to` or `replyTo` function returns anything but one plain address, bare
+   * or as `Name <address>` (see `isPlainAddress`).
    */
   async dispatch(submission: E, context: DispatchContext<A & AttachedResources<K>>): Promise<void> {
     const { from, to, replyTo } = this.options
     const recipient = typeof to === 'function' ? to(submission) : to
-    if (typeof to === 'function' && !isSingleAddress(recipient)) throw new EmailRecipientError('to')
+    if (typeof to === 'function' && !isPlainAddress(recipient)) throw new EmailRecipientError('to')
 
     const resolvedReplyTo = typeof replyTo === 'function' ? replyTo(submission) : replyTo
-    if (typeof replyTo === 'function' && resolvedReplyTo && !isSingleAddress(resolvedReplyTo)) {
+    if (typeof replyTo === 'function' && resolvedReplyTo && !isPlainAddress(resolvedReplyTo)) {
       throw new EmailRecipientError('replyTo')
     }
 

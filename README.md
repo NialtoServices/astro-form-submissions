@@ -925,11 +925,14 @@ they sent.
 > - **Leave `attachments` and `attach` unset.** The first would send links to files the poster uploaded,
 >   served from your domain; the second would send the files themselves.
 >
-> A `to` or `replyTo` function must return a single address: `EmailDispatcher` refuses one containing `,`, `;`
-> or a second `@` outside a quoted display name (`"Lovelace, Ada" <ada@example.com>` is fine), or a control
-> character such as a line break (an `EmailRecipientError`), so one submission can't fan out to many recipients
-> or add headers of its own. Control characters in a rendered subject, or in what a `from` function returns,
-> become spaces for the same reason.
+> A `to` or `replyTo` function must return one plain address: `ada@example.com`, or a name and an address,
+> `Ada Lovelace <ada@example.com>`. The address has one `@`, a dotted domain with no empty part, and no spaces or any of
+> `" ( ) , : ; < > @ [ \ ]`; the name has none of those characters either (spaces are fine) unless it's in double quotes
+> with no `"` or `\` inside (`"Lovelace, Ada" <ada@example.com>`). Control characters (U+2028 and U+2029 included),
+> whitespace other than a plain space, compatibility characters such as a fullwidth comma, and `=?` are refused
+> anywhere. Anything else throws an `EmailRecipientError`, so one submission can't fan out to many recipients or add
+> headers of its own; for another shape, pass a fixed string. Control characters in a rendered subject, or in what a
+> `from` function returns, become spaces for the same reason.
 
 ```ts
 new EmailDispatcher({

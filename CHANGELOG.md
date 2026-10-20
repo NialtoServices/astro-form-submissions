@@ -53,6 +53,11 @@ reason code, and a form posted without JavaScript gets a page a person can read.
     Add a `filesTooLarge` entry beside it.
 12. **A copy table typed `Record<ToolkitErrorKey, string>` needs two more entries**, `filesTooLarge` and
     `fileRequired` (`DEFAULT_ERROR_COPY` has the default wording).
+13. **Check what `to` and `replyTo` functions return.** Each must return `local@domain` or `Name <local@domain>`;
+    anything else now throws `EmailRecipientError`. The name must be plain text without `" ( ) , : ; < > @ [ \ ]`, or
+    quoted with no `"` or `\` inside, and either way hold no control character, no whitespace but spaces, no
+    compatibility character (such as a fullwidth comma) and no `=?`. The simplest fix is to drop the name and return the
+    bare address (`to: (submission) => submission.email`).
 
 ### Added
 
@@ -190,9 +195,14 @@ reason code, and a form posted without JavaScript gets a page a person can read.
 - A Worker upload grant is write-once, and no upload can rewrite a key a submission has claimed.
 - Stored filenames and download names lose every control character and bidirectional text control, and
   trailing dots and spaces; the plain-ASCII download name keeps no `%`.
-- A `to` or `replyTo` resolver that returns several addresses (a `,`, `;` or second `@` outside a quoted
-  display name) or any control character is refused with `EmailRecipientError`, which now names the field.
-  Control characters in a rendered subject or a resolved `from` become spaces.
+- A `to` or `replyTo` resolver must return one plain address, `local@domain` or `Name <local@domain>`, or it is refused
+  with `EmailRecipientError`, which names the field and never the address. The address has one `@`, a dotted domain with
+  no empty part, and no spaces or `" ( ) , : ; < > @ [ \ ]`; the name is plain text without those characters, or one
+  quoted string with no `"` or `\` inside. Control characters (U+2028 and U+2029 included), whitespace other than a
+  plain space, compatibility characters (any that NFKC normalisation changes, such as a fullwidth comma) and `=?` are
+  refused anywhere. Every other shape (several addresses, comments, groups, domain literals, quoted local parts, encoded
+  words) is refused, since some mail parser reads each as more than one recipient. Control characters in a rendered
+  subject or a resolved `from`, U+2028 and U+2029 included, become spaces.
 - Signed tokens verify only in the exact spelling they were issued in.
 - `TurnstileInspector` fails closed on an unexpected error, and refuses tokens longer than 2,048 characters
   without calling Siteverify.

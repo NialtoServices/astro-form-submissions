@@ -6,7 +6,7 @@ import emailAddresses from 'email-addresses'
 import fc from 'fast-check'
 import { describe, expect, it, vi } from 'vitest'
 import { dispatchContext } from '../dispatch-context.js'
-import { addressLike, displayName, quoted, textWithControlCharacter } from '../support/addresses.js'
+import { addressLike, displayName, textWithControlCharacter } from '../support/addresses.js'
 import { deliveredMessage } from '../support/harness.js'
 
 const templates: EmailTemplates = {
@@ -167,8 +167,9 @@ describe('EmailDispatcher', () => {
     '"Ada\r\nBcc: eve@example.com" <ada@example.com>',
     'ada@example.com eve@example.com',
     'Ada <ada@example.com> <eve@example.com>',
-    'ada@example.com\u0085X-Priority: 1'
-  ])('refuses a `to` function that resolves to several addresses or a header break (%j)', async (address) => {
+    'ada@example.com\u0085X-Priority: 1',
+    ''
+  ])('refuses a `to` function that resolves to several addresses, a header break or nothing (%j)', async (address) => {
     const deliver = vi.fn()
     const dispatcher = new EmailDispatcher({
       transport: { deliver },
@@ -204,22 +205,180 @@ describe('EmailDispatcher', () => {
   })
 
   it.each([
+    'ada@example.com',
+    "o'brien@example.com",
+    'ada.lovelace+forms@example.co.uk',
+    'Ada Lovelace <ada@example.com>',
+    'Ada L. Lovelace <ada@example.com>',
+    'Zoë <zoë@exämple.com>',
     '"Lovelace, Ada" <ada@example.com>',
     '"Ada; Byron" <ada@example.com>',
-    '"Ada \\"A, L\\"" <ada@example.com>',
-    '"ada@home" <ada@example.com>'
-  ])('accepts a comma, semicolon or @ inside a quoted display name (%j)', async (address) => {
-    const deliver = vi.fn()
-    await new EmailDispatcher({
-      transport: { deliver },
-      templates,
-      from: 'noreply@acme.test',
-      to: (submission) => submission.email as string,
-      replyTo: (submission) => submission.email as string
-    }).dispatch({ email: address }, dispatchContext())
+    '"ada@home" <ada@example.com>',
+    '"Ada (x" <ada@example.com>',
+    'Ada<ada@example.com>',
+    'Ada   <ada@example.com>',
+    '<ada@example.com>',
+    '  ada@example.com  ',
+    '  "Lovelace, Ada" <ada@example.com>  '
+  ])('delivers a bare address, or a plain or quoted name with one address, unchanged (%j)', async (address) => {
+    for (const field of ['to', 'replyTo'] as const) {
+      const { refusal, message } = await deliverResolving(field, address)
 
-    expect(deliveredMessage(deliver)).toMatchObject({ to: address, replyTo: address })
+      expect(refusal).toBeUndefined()
+      expect(message?.[field]).toBe(address)
+    }
   })
+
+  it.each(['to', 'replyTo'] as const)(
+    'refuses a second address hidden behind a quote inside a comment, for `%s`',
+    async (field) => {
+      const address = 'Ada ("x) <ada@example.com>,ada@example.com,"\u{10000}  " <ada@example.com>'
+      const { refusal, message } = await deliverResolving(field, address)
+
+      expect(refusal).toMatchObject({ name: 'EmailRecipientError', field })
+      expect(message).toBeUndefined()
+    }
+  )
+
+  it.each([
+    '   ',
+    'ada',
+    '@example.com',
+    'ada@',
+    'ada@@example.com',
+    'ada@localhost',
+    'ada@.com',
+    'ada@example.',
+    'ada@example.com.',
+    'ada@.example.com',
+    'ada@example..com',
+    'Ada <ada@example.com.>',
+    'ada@example.com\u00a0',
+    '\u3000ada@example.com',
+    '\ufeffada@example.com',
+    'Ada\u00a0Lovelace <ada@example.com>',
+    'ada @example.com',
+    'ada@ example.com',
+    'ada\u00a0eve@example.com',
+    'ada@example.com\u3000eve',
+    'ada@example.com\uff0ceve\uff20example.org',
+    'a,b@c.d',
+    'a(b@c.d',
+    'a)b@c.d',
+    'a>b@c.d',
+    'a\\b@c.d',
+    'a]b@c.d',
+    'A<b> <ada@example.com>',
+    '"x\\" <ada@example.com>',
+    'ada\u0085@example.com',
+    'ada\u0000@example.com',
+    'Ada <ada@localhost>',
+    'Ada <ada@example.com eve>',
+    'Ada <ada@example.com (x) eve>',
+    'Ada <ada @example.com>',
+    'Lovelace, Ada <ada@example.com>',
+    'Ada; Byron <ada@example.com>',
+    'Team: Ada <ada@example.com>',
+    'Ada @ home <ada@example.com>',
+    '"Ada \\"A, L\\"" <ada@example.com>',
+    '"Ada" Lovelace <ada@example.com>',
+    'Ada "Lovelace" <ada@example.com>',
+    '"Ada" "Lovelace" <ada@example.com>',
+    'Ada (a (b c) d) <ada@example.com>',
+    'Ada (a \\) b) <ada@example.com>',
+    'Ada (home) <ada@example.com>',
+    'Ada (x@y) <ada@example.com>',
+    'Ada (x, eve@example.org) <ada@example.com>',
+    'Ada (a; b) <ada@example.com>',
+    'Ada (x, "y) <ada@example.com>',
+    'Ada (<eve@example.org>) <ada@example.com>',
+    'Ada (x\\, eve\\@example.org) <ada@example.com>',
+    'Ada ("y) <ada@example.com>',
+    'Ada (") "x, eve@example.org" <ada@example.com>',
+    'Ada (a (b "c) d) <ada@example.com>',
+    'ada@example.com (Ada)',
+    'ada@example.com (home) (work)',
+    'ada@example.com (eve@example.org)',
+    'ada@example.com (Ada "x)',
+    'Ada <ada@example.com> (home)',
+    'ada@example.com "eve@example.org"',
+    'ada@example.com (x) "eve@example.org"',
+    'ada@example.com:"eve@example.org"',
+    'ada@example.com."eve@example.org"',
+    'ada@"eve@example.org"',
+    'ada@example.com eve',
+    'ada@example.com <eve>',
+    'ada@example.com:eve',
+    'ada@example.com:eve:x',
+    'ada@example.com:',
+    ':x@y.z:e',
+    'x:ada@example.com',
+    '"eve@example.org" ada@example.com',
+    '"eve@example.org":ada@example.com',
+    '"x"@example.com',
+    '" eve@example.org,eve "@example.com',
+    '"eve@example.org,ada"@example.com',
+    'Ada <"eve@example.org,ada"@example.com>',
+    '"eve@example.org;ada"@example.com',
+    'g:"x;eve@example.org"@example.com',
+    'Ada <g:"x;eve@example.org"@example.com>',
+    'g:"ada@example.com" "x;eve@example.org"@example.com',
+    'Team:"eve@example.org" <ada@example.com>',
+    '"eve@example.org, ada@example.com"',
+    'Ada "<eve@example.org>, <ada@example.com>"',
+    '"Ada <eve@example.org>"',
+    '=?utf-8?q?eve=40example.org=2C?=ada@example.com',
+    'Ada <=?utf-8?q?eve=40example.org=2C?=ada@example.com>',
+    'ada@=?utf-8?q?example.com=2C_eve=40example.org?=',
+    'Ada <ada@=?utf-8?q?example.com=2C_eve=40example.org?=>',
+    '=""?utf-8?q?eve=40example.org=2C?=ada@example.com',
+    '=(x)?utf-8?q?eve=40example.org=2C?=ada@example.com',
+    '= ?utf-8?q?eve=40example.org=2C?=ada@example.com',
+    'Ada <=""?utf-8?q?eve=40example.org=2C?=ada@example.com>',
+    'Ada <ada@example.com=(x)?utf-8?q?=2C_eve=40example.org?=>',
+    'Ada <"=?utf-8?q?eve=40example.org=2C?="@example.com>',
+    '"=?utf-8?q?eve=40example.org=2C?=ada"@example.com',
+    '=?utf-8?q?Ada?= <ada@example.com>',
+    '=?utf-8?q?eve=40example.org=2C?= <ada@example.com>',
+    '=?utf-8?b?ZXZlQGV4YW1wbGUub3JnLA==?= <ada@example.com>',
+    '"=?utf-8?q?eve=40example.org=2C?=" <ada@example.com>',
+    'ada@[1"], eve@example.org, x@["]',
+    'ada@[1(], eve@example.org, x@[)]',
+    'ada@[192.0.2.1]',
+    'Ada <ada@example.com> eve',
+    'Ada <ada@example.com> "eve"',
+    'ada@example.com\u2028Bcc: eve@example.com',
+    '"Ada\u2029Bcc: eve@example.com" <ada@example.com>',
+    'Ada (x <ada@example.com>',
+    'Ada (a (b) <ada@example.com>, eve@example.org',
+    'Ada x) <ada@example.com>',
+    'Ada (x)) <ada@example.com>',
+    '"Ada <ada@example.com>',
+    'Ada <ada@example.com',
+    'Ada ada@example.com>',
+    'Ada <<ada@example.com>>',
+    'Ada \\", eve@example.org, \\\\" <ada@example.com>',
+    '"abc\\',
+    '(abc\\',
+    'abc\\'
+  ])('refuses any other shape (%j)', async (address) => {
+    for (const field of ['to', 'replyTo'] as const) {
+      const { refusal, message } = await deliverResolving(field, address)
+
+      expect(refusal).toMatchObject({ name: 'EmailRecipientError', field })
+      expect(message).toBeUndefined()
+    }
+  })
+
+  it.each(['to', 'replyTo'] as const)(
+    'refuses a `%s` resolver that returns something other than a string',
+    async (field) => {
+      const { refusal, message } = await deliverResolving(field, 42 as unknown as string)
+
+      expect(refusal).toMatchObject({ name: 'EmailRecipientError', field })
+      expect(message).toBeUndefined()
+    }
+  )
 
   it('turns control characters in a resolved `from` into spaces', async () => {
     const deliver = vi.fn()
@@ -228,12 +387,12 @@ describe('EmailDispatcher', () => {
       templates,
       from: (submission) => `${submission.name as string} via Example <forms@example.com>`,
       to: 'owner@acme.test'
-    }).dispatch({ name: 'Ada\r\n\u0085Bcc: eve@example.org' }, dispatchContext())
+    }).dispatch({ name: 'Ada\r\n\u0085\u2028Bcc:\u2029eve@example.org' }, dispatchContext())
 
     expect(deliveredMessage(deliver).from).toBe('Ada Bcc: eve@example.org via Example <forms@example.com>')
   })
 
-  it.each(['\r\n', '\u0085', '\u0000\u009b'])(
+  it.each(['\r\n', '\u0085', '\u0000\u009b', '\u2028', '\u2029'])(
     'turns control characters in a rendered subject into spaces (%j)',
     (breaker) => {
       const content = renderEmail(
@@ -260,7 +419,7 @@ describe('EmailDispatcher', () => {
   it('delivers any quoted display name with one address, unchanged', async () => {
     await fc.assert(
       fc.asyncProperty(fc.constantFrom('to', 'replyTo'), displayName, async (field, name) => {
-        const address = `${quoted(name)} <ada@example.com>`
+        const address = `"${name}" <ada@example.com>`
         const { refusal, message } = await deliverResolving(field, address)
 
         expect(refusal).toBeUndefined()
@@ -297,14 +456,18 @@ describe('EmailDispatcher', () => {
         }).dispatch({}, dispatchContext())
 
         const message = deliveredMessage(deliver)
-        expect(message.subject).not.toMatch(/\p{Cc}/u)
-        expect(message.from).not.toMatch(/\p{Cc}/u)
+        expect(message.subject).not.toMatch(/[\p{Cc}\u2028\u2029]/u)
+        expect(message.from).not.toMatch(/[\p{Cc}\u2028\u2029]/u)
       })
     )
   })
 
   it('keeps the address out of the recipient error', () => {
     expect(new EmailRecipientError().message).not.toContain('@')
+  })
+
+  it('names the field in the recipient error', () => {
+    expect(new EmailRecipientError('replyTo').message).toContain('`replyTo` resolver')
   })
 
   it('lets a fixed `to` string list several of the site’s own inboxes', async () => {
