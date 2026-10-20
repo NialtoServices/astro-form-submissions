@@ -1,5 +1,11 @@
 import { formDataWithoutUploads, submitWithUploads, uploadInputs } from './direct-uploads.js'
-import { applyFieldErrors, clearFieldError, clearFieldErrors, renderFieldErrorSummary } from './field-errors.js'
+import {
+  applyFieldErrors,
+  clearDisabledFieldErrors,
+  clearFieldError,
+  clearFieldErrors,
+  renderFieldErrorSummary
+} from './field-errors.js'
 import { FormMarkupError } from './form-markup-error.js'
 import {
   postForm,
@@ -38,6 +44,7 @@ export class FormController implements FormPartHost {
   private readonly messages: FormMessages
   private readonly abortController = new AbortController()
   private readonly teardowns: FormTeardown[] = []
+  private readonly disabledObserver: MutationObserver
 
   // MARK: - Object Lifecycle
 
@@ -78,6 +85,11 @@ export class FormController implements FormPartHost {
     formElement.dataset.astroFormBound = 'true'
     formElement.addEventListener('input', (event) => this.recoverField(event), { signal: this.signal })
     formElement.addEventListener('submit', (event) => void this.submit(event), { signal: this.signal })
+
+    // A site disables a field, or a whole `<fieldset>`, when it hides a section that no longer applies; the
+    // disabled attribute can change on any descendant, so the form is watched as a whole.
+    this.disabledObserver = new MutationObserver(() => clearDisabledFieldErrors(formElement))
+    this.disabledObserver.observe(formElement, { attributes: true, attributeFilter: ['disabled'], subtree: true })
   }
 
   /**
@@ -86,6 +98,7 @@ export class FormController implements FormPartHost {
    */
   disconnect(): void {
     this.abortController.abort()
+    this.disabledObserver.disconnect()
     for (const teardown of this.teardowns.splice(0)) {
       try {
         teardown()

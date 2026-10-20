@@ -69,6 +69,21 @@ const contactSchema = z.object({
   message: z.string('Please enter a message.').max(5000)
 })
 
+// A quote needs a budget, which the other enquiry types never send. Without JavaScript every section is shown and
+// submitted, so the schema accepts every field at once.
+const enquirySchema = z
+  .object({
+    name: z.string('Please enter your name.').max(120),
+    enquiry: z.enum(['general', 'quote']),
+    topic: z.string().max(500).optional(),
+    budget: z.string().max(500).optional(),
+    reference: z.string().max(50).optional()
+  })
+  .refine((enquiry) => enquiry.enquiry !== 'quote' || enquiry.budget !== undefined, {
+    message: 'Please enter a budget.',
+    path: ['budget']
+  })
+
 const formRoutes: Record<string, APIRoute> = {
   '/api/contact': toolkit.createFormRoute({
     schema: contactSchema,
@@ -83,6 +98,20 @@ const formRoutes: Record<string, APIRoute> = {
         from: 'site@example.com',
         to: 'owner@example.com',
         replyTo: (submission) => submission.email as string
+      })
+    ]
+  }),
+  '/api/conditional': toolkit.createFormRoute({
+    schema: enquirySchema,
+    dispatchers: [
+      new toolkit.EmailDispatcher({
+        transport: recordingTransport,
+        templates: toolkit.submissionNotificationTemplates({
+          fields: ['name', 'enquiry', 'topic', 'budget', 'reference'],
+          formName: 'Enquiry form'
+        }),
+        from: 'site@example.com',
+        to: 'owner@example.com'
       })
     ]
   })

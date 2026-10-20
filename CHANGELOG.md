@@ -121,6 +121,10 @@ reason code, and a form posted without JavaScript gets a page a person can read.
 
 ### Changed
 
+- The form script follows a field a site disables, directly or through a disabled `<fieldset>`: the field's
+  `aria-invalid` mark, error slot and summary entry are cleared at once, and a disabled field is never focused or
+  listed when errors are shown. A field that is only `hidden` is unaffected. See "Fields that come and go" in the
+  README.
 - Forms added to the page after `initializeForms()` bind themselves. Calling it again is harmless, and a form
   moved within the page (into a drawer, say) keeps its state. A form missing its status element warns once, and
   binds once the element is added.

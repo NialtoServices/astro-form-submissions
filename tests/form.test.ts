@@ -948,3 +948,129 @@ describe('form script events', () => {
     expect(detail!.error).toBe('Could not reach the server.')
   })
 })
+
+describe('form script disabled fields', () => {
+  /**
+   * A form with a quote section, error slots and a summary. happy-dom doesn't carry a disabled `<fieldset>` down
+   * to its controls, so these tests disable fields directly and the browser suite covers the `<fieldset>`.
+   */
+  function mountConditionalForm() {
+    document.body.innerHTML = `
+      <form data-astro-form action="/api/contact" method="POST">
+        <div class="error-summary" data-astro-form-field-error-summary hidden></div>
+        <input id="contact-email" name="email" type="email" aria-describedby="email-hint" />
+        <p data-astro-form-field-error-for="email" id="contact-email-error" hidden></p>
+        <fieldset id="quote-section">
+          <input id="quote-budget" name="budget" aria-describedby="budget-hint" />
+          <p data-astro-form-field-error-for="budget" id="quote-budget-error" hidden></p>
+          <input id="quote-deadline" name="deadline" />
+        </fieldset>
+        <button type="submit">Send</button>
+        <p data-astro-form-status data-astro-form-message-generic-error="Something went wrong."></p>
+      </form>`
+    initializeForms()
+    const form = document.querySelector<HTMLFormElement>('form[data-astro-form]')!
+    const section = document.querySelector<HTMLFieldSetElement>('#quote-section')!
+    const email = document.querySelector<HTMLInputElement>('[name="email"]')!
+    const budget = document.querySelector<HTMLInputElement>('[name="budget"]')!
+    const deadline = document.querySelector<HTMLInputElement>('[name="deadline"]')!
+    const summary = document.querySelector<HTMLElement>('[data-astro-form-field-error-summary]')!
+    const budgetSlot = document.querySelector<HTMLElement>('[data-astro-form-field-error-for="budget"]')!
+    const submit = () => form.dispatchEvent(new Event('submit', { cancelable: true }))
+    return { form, section, email, budget, deadline, summary, budgetSlot, submit }
+  }
+
+  const quoteErrorsResponse = () =>
+    jsonResponse(
+      {
+        error: 'Please correct the highlighted fields.',
+        fieldErrors: { email: 'Enter a valid email.', budget: 'Enter a budget.', deadline: 'Enter a deadline.' }
+      },
+      400
+    )
+
+  it('disabling a field clears its error mark, slot and summary entry', async () => {
+    stubFetch(async () => quoteErrorsResponse())
+    const { email, budget, summary, budgetSlot, submit } = mountConditionalForm()
+
+    submit()
+    await vi.waitFor(() => expect(summary.querySelectorAll('li')).toHaveLength(3))
+    expect(budget.getAttribute('aria-describedby')).toBe('budget-hint quote-budget-error')
+
+    budget.disabled = true
+    await vi.waitFor(() => expect(budget.getAttribute('aria-invalid')).toBeNull())
+
+    expect(budget.getAttribute('aria-describedby')).toBe('budget-hint')
+    expect(budgetSlot.hidden).toBe(true)
+    expect(budgetSlot.textContent).toBe('')
+    expect(summary.textContent).not.toContain('Enter a budget.')
+    expect(summary.querySelectorAll('li')).toHaveLength(2)
+    expect(email.getAttribute('aria-invalid')).toBe('true')
+  })
+
+  it('clears the summary once every flagged field is disabled', async () => {
+    stubFetch(async () =>
+      jsonResponse(
+        {
+          error: 'Please correct the highlighted fields.',
+          fieldErrors: { budget: 'Enter a budget.', deadline: 'Enter a deadline.' }
+        },
+        400
+      )
+    )
+    const { budget, deadline, summary, submit } = mountConditionalForm()
+
+    submit()
+    await vi.waitFor(() => expect(summary.querySelectorAll('li')).toHaveLength(2))
+
+    budget.disabled = true
+    deadline.disabled = true
+    await vi.waitFor(() => expect(budget.getAttribute('aria-invalid')).toBeNull())
+
+    expect(deadline.getAttribute('aria-invalid')).toBeNull()
+    expect(summary.querySelectorAll('li')).toHaveLength(0)
+    expect(summary.hidden).toBe(true)
+  })
+
+  it('keeps the errors of a field that is only hidden', async () => {
+    stubFetch(async () => quoteErrorsResponse())
+    const { section, budget, summary, budgetSlot, submit } = mountConditionalForm()
+
+    submit()
+    await vi.waitFor(() => expect(summary.querySelectorAll('li')).toHaveLength(3))
+
+    section.hidden = true
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(budget.getAttribute('aria-invalid')).toBe('true')
+    expect(budgetSlot.textContent).toBe('Enter a budget.')
+    expect(summary.querySelectorAll('li')).toHaveLength(3)
+  })
+
+  it('a disabled field is never focused or reported', async () => {
+    stubFetch(async () => quoteErrorsResponse())
+    const { email, budget, deadline, summary, budgetSlot, submit } = mountConditionalForm()
+
+    budget.disabled = true
+    deadline.disabled = true
+    submit()
+    await vi.waitFor(() => expect(summary.querySelectorAll('li')).toHaveLength(1))
+
+    expect(summary.textContent).toBe('Enter a valid email.')
+    expect(budget.getAttribute('aria-invalid')).toBeNull()
+    expect(deadline.getAttribute('aria-invalid')).toBeNull()
+    expect(budgetSlot.hidden).toBe(true)
+    expect(budgetSlot.textContent).toBe('')
+    expect(email.getAttribute('aria-invalid')).toBe('true')
+  })
+
+  it('focuses the first enabled faulty field when an earlier one is disabled, without a summary', async () => {
+    stubFetch(async () => quoteErrorsResponse())
+    const { email, budget, summary, submit } = mountConditionalForm()
+    summary.remove()
+
+    email.disabled = true
+    submit()
+    await vi.waitFor(() => expect(document.activeElement).toBe(budget))
+  })
+})

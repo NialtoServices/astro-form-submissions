@@ -1650,6 +1650,48 @@ messages are linked with `aria-describedby` so they're read **on focus**, not ma
 are deliberately **not** `role="alert"`); and focus lands on the summary list when present, otherwise
 the first invalid field.
 
+### Fields that come and go
+
+A form can show a section only when it applies: a quote request that asks for a budget and photos, a job
+application that asks for a visa status only of some applicants. You write the listener, since the toolkit
+knows nothing of your fields, and it toggles `hidden` and `disabled` together, on a `<fieldset>` for a whole
+section:
+
+```astro
+<select id='enquiry' name='enquiry'>
+  <option value='general'>General question</option>
+  <option value='quote'>Quote request</option>
+</select>
+
+<fieldset data-section='quote' hidden disabled>
+  <legend>Your quote</legend>
+  <label>Budget <input name='budget' /></label>
+  <p data-astro-form-field-error-for='budget' id='quote-budget-error' hidden></p>
+</fieldset>
+
+<script>
+  const enquiry = document.querySelector('#enquiry')
+  const quote = document.querySelector('[data-section="quote"]')
+
+  enquiry.addEventListener('change', () => {
+    const applies = enquiry.value === 'quote'
+    quote.hidden = !applies
+    quote.disabled = !applies
+  })
+</script>
+```
+
+`disabled` is what takes a field out of the submission: the browser leaves a disabled field out of the data it
+sends, and the script follows it. A disabled field, or one inside a disabled `<fieldset>`, loses its
+`aria-invalid` mark, its error slot and its summary entry the moment it is disabled, and is never focused or
+listed when errors are shown, even if your own `fieldErrors` or a late response names it. A field that is only
+`hidden` is still sent, and its errors stay, so `hidden` alone suits a field the person doesn't need to see but
+the route should still receive.
+
+Without JavaScript your listener doesn't run, so every section shows and every field is submitted. The schema
+must therefore accept all of them at once: mark each section's fields optional, and check in the schema that
+the section the visitor chose is complete.
+
 ### Without JavaScript
 
 A form posted by the browser itself, with JavaScript turned off, still reaches the route, and the browser

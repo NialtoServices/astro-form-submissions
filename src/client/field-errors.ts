@@ -35,13 +35,34 @@ function clearDescribedBy(inputElement: HTMLElement): void {
   delete inputElement.dataset[DESCRIBED_MARKER]
 }
 
+// MARK: - Disabled Controls
+
+/**
+ * The controls sharing `name` that can take an error: those not disabled, directly or through a disabled
+ * `<fieldset>`. A disabled control is left out of the submission, so no error of the server's can be about it.
+ */
+function enabledControls(formElement: HTMLFormElement, name: string): HTMLElement[] {
+  return Array.from(formElement.querySelectorAll<HTMLElement>(`[name="${CSS.escape(name)}"]`)).filter(
+    (inputElement) => !inputElement.matches(':disabled')
+  )
+}
+
+/** Whether the form has controls named `name`, and every one of them is disabled. */
+function isEveryControlDisabled(formElement: HTMLFormElement, name: string): boolean {
+  return (
+    formElement.querySelector(`[name="${CSS.escape(name)}"]`) !== null &&
+    enabledControls(formElement, name).length === 0
+  )
+}
+
 // MARK: - Presentation
 
 /**
  * Mark each faulty field `aria-invalid` and, where a co-located `[data-astro-form-field-error-for]` slot
  * sits beside it, fill that slot and link it via `aria-describedby` (read on focus, so it is deliberately
  * not a live region — the summary already announces). Every control sharing the name is marked, so a
- * radio or checkbox group is flagged as a whole. Returns the first invalid control, for focus.
+ * radio or checkbox group is flagged as a whole. A disabled control is skipped, and a field with none enabled
+ * is passed over. Returns the first invalid control, for focus.
  */
 export function applyFieldErrors(
   formElement: HTMLFormElement,
@@ -49,7 +70,7 @@ export function applyFieldErrors(
 ): HTMLElement | null {
   let firstInvalidElement: HTMLElement | null = null
   for (const [name, message] of Object.entries(fieldErrors)) {
-    const inputElements = Array.from(formElement.querySelectorAll<HTMLElement>(`[name="${CSS.escape(name)}"]`))
+    const inputElements = enabledControls(formElement, name)
     if (inputElements.length === 0) continue
 
     for (const inputElement of inputElements) inputElement.setAttribute('aria-invalid', 'true')
@@ -71,7 +92,8 @@ export function applyFieldErrors(
 
 /**
  * Fill the central `[data-astro-form-field-error-summary]` element with a list of every field's message,
- * each linking to its field. Returns the summary to focus, or `null` when the markup provides none.
+ * each linking to its field. A field whose controls are all disabled is left out. Returns the summary to focus,
+ * or `null` when the markup provides none or there is nothing to list.
  */
 export function renderFieldErrorSummary(
   formElement: HTMLFormElement,
@@ -81,7 +103,7 @@ export function renderFieldErrorSummary(
   if (!summaryElement) return null
 
   summaryElement.textContent = ''
-  const entries = Object.entries(fieldErrors)
+  const entries = Object.entries(fieldErrors).filter(([name]) => !isEveryControlDisabled(formElement, name))
   if (entries.length === 0) {
     summaryElement.hidden = true
     return null
@@ -93,7 +115,7 @@ export function renderFieldErrorSummary(
 
     // Tag the item with its field so progressive recovery can remove exactly this entry on input.
     itemElement.dataset.astroFormSummaryItem = name
-    const inputElement = formElement.querySelector<HTMLElement>(`[name="${CSS.escape(name)}"]`)
+    const inputElement = enabledControls(formElement, name)[0]
     if (inputElement) {
       // An anchor without `href` isn't a link to a keyboard or a screen reader, so a field with no `id` still
       // gets one; the click handler, which Enter also fires, does the focusing either way.
@@ -152,6 +174,36 @@ export function clearFieldError(formElement: HTMLFormElement, name: string): voi
     clearDescribedBy(invalidElement)
   }
 
+  clearFieldMessages(formElement, name)
+}
+
+/**
+ * Drop the disabled controls' invalid marks, and for each field left with no invalid control, its inline message
+ * and summary entry. Called when a site disables a field or a `<fieldset>`: the field is no longer part of the
+ * submission, so an error about it no longer applies.
+ */
+export function clearDisabledFieldErrors(formElement: HTMLFormElement): void {
+  const clearedNames = new Set<string>()
+  for (const invalidElement of formElement.querySelectorAll<HTMLElement>('[aria-invalid="true"]')) {
+    if (!invalidElement.matches(':disabled')) continue
+
+    invalidElement.removeAttribute('aria-invalid')
+    clearDescribedBy(invalidElement)
+
+    const name = invalidElement.getAttribute('name')
+    if (name) clearedNames.add(name)
+  }
+
+  // A radio group with an option still enabled keeps its message.
+  for (const name of clearedNames) {
+    if (formElement.querySelector(`[name="${CSS.escape(name)}"][aria-invalid="true"]`)) continue
+
+    clearFieldMessages(formElement, name)
+  }
+}
+
+/** Empty one field's inline slot and remove its summary entry, hiding the summary once its last entry goes. */
+function clearFieldMessages(formElement: HTMLFormElement, name: string): void {
   const slotElement = formElement.querySelector<HTMLElement>(`[data-astro-form-field-error-for="${CSS.escape(name)}"]`)
   if (slotElement) {
     slotElement.textContent = ''
