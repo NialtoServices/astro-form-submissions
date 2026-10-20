@@ -77,8 +77,7 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   `VIDEO_TYPES`, `MEDIA_TYPES`, `WORD_TYPES` and `TEXT_TYPES` beside `IMAGE_TYPES`, `DOCUMENT_TYPES` and `ALL_TYPES`.
   The README's **File types** section lists what each type guarantees and when it is refused.
 - File types: Word (`.docx` and `.doc`), OpenDocument text, RTF, plain text (which includes Markdown), and the
-  video containers QuickTime, MP4, 3GP, WebM and Matroska. Each is recognised from the file's bytes, and a
-  stored file gains the extension of its type when its name lacks one.
+  video containers QuickTime, MP4, 3GP, WebM and Matroska. Each is recognised from the file's bytes.
 - Every built-in matcher has a `label`, such as `PDF`, `JPEG` and `Word`, for hint text.
 
 ### Changed

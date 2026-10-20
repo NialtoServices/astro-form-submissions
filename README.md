@@ -1083,7 +1083,9 @@ shaped like, not that it is safe, so what it guarantees is deliberately narrow:
 | WebM              | `video/webm`                                                              | `webm`       | container type only                                          |
 | Matroska          | `video/x-matroska`                                                        | `mkv`        | container type only                                          |
 
-Images and PDF are recognised from their signatures alone.
+Images and PDF are recognised from their signatures alone. Video is a container check, so an audio-only file in
+the MP4 family (an `.m4a` listing `mp42` or `isom`) can match `FILE_TYPES.mp4`. `FILE_TYPES.mp4` refuses a file that
+also declares a 3GP brand, which `FILE_TYPES.threeGPP` claims instead.
 
 Anything that falls outside what can be read is refused rather than guessed at. The limits worth knowing:
 

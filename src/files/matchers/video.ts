@@ -29,6 +29,24 @@ const MP4_BRANDS = [
 const LEGACY_QUICKTIME_ATOMS = ['moov', 'mdat', 'wide']
 
 /**
+ * Tests whether a header opens with one of the atoms a QuickTime file starts with when it has no `ftyp`.
+ *
+ * Text can carry the same four letters at offset 4 ("The wide road"), so the atom's size, the four bytes before its
+ * type, must be a plausible one: at least 8, and not four printable ASCII characters.
+ *
+ * @param bytes - The file's leading bytes.
+ * @returns `true` when the header opens with a legacy QuickTime atom.
+ */
+function opensWithLegacyQuickTimeAtom(bytes: Uint8Array): boolean {
+  if (!LEGACY_QUICKTIME_ATOMS.some((atom) => hasSignature(bytes, atom, 4))) return false
+
+  const size = new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0)
+  const sizeLooksLikeText = [...bytes.subarray(0, 4)].every((byte) => byte >= 0x20 && byte <= 0x7e)
+
+  return size >= 8 && !sizeLooksLikeText
+}
+
+/**
  * Tests whether a brand belongs to the 3GPP or 3GPP2 families (`3gp4`, `3g2a`, …).
  *
  * @param brand - A brand from an `ftyp` atom.
@@ -43,14 +61,13 @@ export const QUICKTIME_TYPE: FileMatcher = {
   contentType: 'video/quicktime',
   extensions: ['mov'],
   label: 'QuickTime',
-  test: (bytes) =>
-    ftypBrandsIncludeAny(ftypBrands(bytes), ['qt  ']) ||
-    LEGACY_QUICKTIME_ATOMS.some((atom) => hasSignature(bytes, atom, 4))
+  test: (bytes) => ftypBrandsIncludeAny(ftypBrands(bytes), ['qt  ']) || opensWithLegacyQuickTimeAtom(bytes)
 }
 
 /**
- * MP4 (`.mp4`, `.m4v`): an `ftyp` brand from the MP4 family. A file that also declares a 3GP brand is 3GP, which
- * many encoders write beside `isom`.
+ * MP4 (`.mp4`, `.m4v`): an `ftyp` brand from the MP4 family, which audio-only files such as `.m4a` can also declare,
+ * since only the container is checked. A file that also declares a 3GP brand is refused here and left to
+ * {@link THREE_GPP_TYPE}, because many encoders write `isom` beside a 3GP brand.
  */
 export const MP4_TYPE: FileMatcher = {
   contentType: 'video/mp4',

@@ -24,7 +24,7 @@ function ascii(text: string): number[] {
 }
 
 /** The leading bytes of an ISO-BMFF file: an `ftyp` box naming `majorBrand` and `compatibleBrands`. */
-function ftypHeader(majorBrand: string, compatibleBrands: string[] = []): Uint8Array {
+function ftypHeader(majorBrand: string, compatibleBrands: string[] = []): Uint8Array<ArrayBuffer> {
   const size = 16 + compatibleBrands.length * 4
   return new Uint8Array([
     0,
@@ -166,6 +166,17 @@ describe('type groups', () => {
     }
   })
 
+  it('resolve a header declaring an image brand and a video brand to the image', async () => {
+    for (const [major, compatible, contentType] of [
+      ['avif', 'isom', 'image/avif'],
+      ['heic', 'mp42', 'image/heic']
+    ] as const) {
+      const file = new File([ftypHeader(major, [compatible])], 'upload.bin')
+      expect(await sniffType(file, ALL_TYPES), major).toBe(contentType)
+      expect(await sniffType(file, MEDIA_TYPES), major).toBe(contentType)
+    }
+  })
+
   it('keep an Office file, a macro-enabled document and a spreadsheet out of the types they resemble', async () => {
     for (const name of ['book.xlsx', 'slides.pptx', 'cv.docm', 'plain.zip', 'book.xls', 'slides.ppt']) {
       expect(await sniffType(fixtureFile(name), ALL_TYPES), name).toBeNull()
@@ -228,6 +239,20 @@ describe('video types', () => {
     expect(sniffBytes(new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]), VIDEO_TYPES)).toBeNull()
     expect(sniffBytes(ebmlHeader('webm').subarray(0, 9), VIDEO_TYPES)).toBeNull()
     expect(sniffBytes(new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x80]), VIDEO_TYPES)).toBeNull()
+  })
+
+  it('do not mistake text for a legacy QuickTime atom', async () => {
+    for (const text of [
+      'The wide road runs north.\n',
+      'Some moov notes about the film.\n',
+      'Data mdat for the report.\n'
+    ]) {
+      const file = new File([text], 'notes.txt')
+      expect(await sniffType(file, ALL_TYPES), text).toBe('text/plain')
+      expect(sniffBytes(new TextEncoder().encode(text), VIDEO_TYPES), text).toBeNull()
+    }
+
+    expect(sniffBytes(new Uint8Array([0, 0, 0, 7, ...ascii('wide')]), VIDEO_TYPES)).toBeNull()
   })
 
   it('never throw on a header too short to hold their signatures', () => {
