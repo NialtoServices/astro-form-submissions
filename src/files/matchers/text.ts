@@ -41,8 +41,8 @@ function isText(bytes: Uint8Array, continuesBefore: boolean, continuesAfter: boo
 }
 
 /**
- * Plain text (`.txt`, `.md`): UTF-8, with or without a byte-order mark, whose first and last 4 KiB hold no control
- * characters but tab, line feed, form feed and carriage return. Almost any other format is also valid text at
+ * Plain text (`.txt`, `.md`): UTF-8, with or without a byte-order mark, whose first and last 4 KiB (the whole file,
+ * up to 8 KiB) hold no control characters but tab, line feed, form feed and carriage return. Almost any other format is also valid text at
  * one end or the other, so an allow-list checks this matcher last.
  */
 export const TEXT_TYPE: FileMatcher = {
@@ -53,13 +53,17 @@ export const TEXT_TYPE: FileMatcher = {
   inspect: async (reader) => {
     if (reader.size === 0) return false
 
-    const headLength = Math.min(reader.size, TEXT_SAMPLE_BYTES)
-    const head = await reader.read(0, headLength)
-    if (head.length !== headLength || !isText(head, false, headLength < reader.size)) return false
-    if (headLength === reader.size) return true
+    // A file no longer than both samples is read whole, so no character straddles a gap between them unchecked.
+    if (reader.size <= 2 * TEXT_SAMPLE_BYTES) {
+      const whole = await reader.read(0, reader.size)
+      return whole.length === reader.size && isText(whole, false, false)
+    }
 
-    const tailStart = Math.max(headLength, reader.size - TEXT_SAMPLE_BYTES)
-    const tail = await reader.read(tailStart, reader.size - tailStart)
-    return tail.length === reader.size - tailStart && isText(tail, true, false)
+    const head = await reader.read(0, TEXT_SAMPLE_BYTES)
+    if (head.length !== TEXT_SAMPLE_BYTES || !isText(head, false, true)) return false
+
+    const tailStart = reader.size - TEXT_SAMPLE_BYTES
+    const tail = await reader.read(tailStart, TEXT_SAMPLE_BYTES)
+    return tail.length === TEXT_SAMPLE_BYTES && isText(tail, true, false)
   }
 }

@@ -141,6 +141,14 @@ describe('document types', () => {
     expect(await sniffType(new File([withBrokenEnd], 'notes.txt'), DOCUMENT_MATCHERS)).toBeNull()
   })
 
+  it('refuses text whose only broken character straddles the end of the first 4 KiB', async () => {
+    // A three-byte lead at the last byte of the first 4 KiB, followed by plain letters.
+    const straddling = new TextEncoder().encode(`${'a'.repeat(4095)}\u20ac${'b'.repeat(2000)}`)
+    straddling.set([0x41, 0x42], 4096)
+
+    expect(await sniffType(new File([straddling], 'notes.txt'), DOCUMENT_MATCHERS)).toBeNull()
+  })
+
   it('accepts tab, line and page breaks in text, and a byte-order mark', async () => {
     const text = new TextEncoder().encode('\uFEFFHeading\fColumn\tvalue\r\n')
 
