@@ -94,10 +94,11 @@ reason code, and a form posted without JavaScript gets a page a person can read.
 - The new error keys `filesTooLarge` and `fileRequired` join `ToolkitErrorKey` and `DEFAULT_ERROR_COPY`.
 - `uploadRules`, which validates and freezes a file field's limits and accepted types (`maxFiles`, `maxFileBytes`,
   `maxTotalBytes`, `accept`, `required`) so one shared definition spreads into `FileUploads`, `UploadedFiles` and
-  `createUploadRoute`; `uploadInputAttributes`, which gives the file input its `accept`, `multiple`, `required` and
-  limit attributes from the same rules; and `describeUploadRules`, which writes the hint ("Up to 5 files, 10 MB
-  each, 50 MB in total. Accepted: JPEG, PNG or PDF.") or fills a template of your own using `{maxFiles}`,
-  `{maxFileSize}`, `{maxTotalSize}` and `{types}`. Also exports the `UploadRules` type. Rules that omit
+  `createUploadRoute`; `uploadInputAttributes`, which gives the file input its `accept`, `multiple`, `required`,
+  limit attributes and `data-astro-form-accepted-types` (the types in the server's words) from the same rules;
+  and `describeUploadRules`, which writes the hint ("Up to 5 files, 10 MB each, 50 MB in total. Accepted: JPEG,
+  PNG or PDF.") or fills a template of your own using `{maxFiles}`, `{maxFileSize}`, `{maxTotalSize}` and
+  `{types}`. Also exports the `UploadRules` type. Rules that omit
   `maxFileBytes` get `maxTotalBytes` as their per-file limit, so no enricher default applies behind them.
 - `FileAttachments`, an enricher for files that go with the submission instead of into storage. It checks the form's
   files as `FileUploads` does, holds them in memory as `AttachedFile`s (`name`, `contentType`, `size` and `bytes()`)
@@ -120,16 +121,19 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   default total of 5 MB leaves room. Also exports `POSTMARK_MAX_MESSAGE_BYTES`.
 
 - The form script manages a file field that has a `data-astro-form-file-list-for` list: each chosen file is listed
-  from the list's `<template>`, filling its `data-astro-form-file-name`, `-file-size` and `-file-problem` slots and
-  wiring its `-file-remove` control. Picks add up (the same file is listed once, and a field without `multiple`
-  replaces its file), and the input always holds the listed files. Each file is checked in the browser against the
-  input's `accept`, `data-astro-form-max-files`, `-max-file-bytes` and `-max-total-bytes`, using the server's wording,
-  which the input's `data-astro-form-message-too-many-files`, `-file-too-large`, `-files-too-large`, `-file-type` and
-  `-file-required` replace. While a file has a problem, or a required field is empty, the form sends nothing, shows
-  the problem as the field's error and focuses the file's remove control. A flagged item carries
-  `data-astro-form-file-state="invalid"`, and the list carries `data-astro-form-invalid` while the field is invalid.
-  The files are kept after a refused submission and cleared on success, on reset and when the field is disabled. A
-  file input without a list is left as the browser provides it. See "File fields" in the README.
+  from the list's `<template>`, filling every `data-astro-form-file-name` slot and its `-file-size` and
+  `-file-problem` slots, and wiring its `-file-remove` control, which is described by the file's name and problem.
+  Picks add up (the same file is listed once, and a field without `multiple` replaces its file), and the input
+  always holds the listed files. Each file is checked in the browser against the input's `accept`,
+  `data-astro-form-max-files`, `-max-file-bytes` and `-max-total-bytes`, in the server's wording: the same default
+  copy, with `{types}` from the new `data-astro-form-accepted-types`. The input's
+  `data-astro-form-message-too-many-files`, `-file-too-large`, `-files-too-large`, `-file-type` and `-file-required`
+  replace it. While a file has a problem, or a required field is empty, the form sends nothing and answers as it
+  does a server's refusal: the message in the status, the field's error, `astro-form:error`, and focus on the
+  summary or the file's remove control. A flagged item carries `data-astro-form-file-state="invalid"`, and the list
+  carries `data-astro-form-invalid` while the field is invalid. The files are kept after a refused submission and
+  cleared on success, on reset and when the field is disabled. A file input without a list is left as the browser
+  provides it. See "File fields" in the README.
 
 ### Changed
 

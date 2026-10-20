@@ -104,8 +104,8 @@ function nameContentType(token: string): string {
 
 /**
  * Name the accepted types for a sentence, from an `accept` list: its extensions when it has any (`JPG, PNG or
- * PDF`), otherwise its content types. The server names types by their labels (`Word`), which the browser can't
- * know; a site wanting the same words sets the input's `data-astro-form-message-file-type`.
+ * PDF`), otherwise its content types. The fallback for an input without `data-astro-form-accepted-types`, which
+ * `uploadInputAttributes` writes in the server's own wording (`PDF or Word`).
  *
  * @param accept - The input's `accept` tokens.
  * @returns The types joined as alternatives, empty when the list is.

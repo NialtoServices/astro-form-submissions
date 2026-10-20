@@ -3,6 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <title>Job application, one document</title>
+    <style>
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+      }
+    </style>
     <script type="module">
       import { initializeForms } from '/client/form.js'
 
@@ -24,12 +34,16 @@
           accept="application/pdf,.pdf"
           data-astro-form-max-files="1"
           data-astro-form-max-file-bytes="65536"
-          data-astro-form-max-total-bytes="65536" />
+          data-astro-form-max-total-bytes="65536"
+          data-astro-form-accepted-types="PDF" />
         <ul data-astro-form-file-list-for="cv" aria-label="Chosen file">
           <template>
             <li>
               <span data-astro-form-file-name></span>
-              <button type="button" data-astro-form-file-remove>Remove</button>
+              <span data-astro-form-file-problem hidden></span>
+              <button type="button" data-astro-form-file-remove>
+                Remove <span class="visually-hidden" data-astro-form-file-name></span>
+              </button>
             </li>
           </template>
         </ul>

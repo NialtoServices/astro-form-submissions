@@ -54,7 +54,8 @@
 //   it, picks accumulate, files can be removed, and each is checked against the input's `accept` and
 //   `data-astro-form-max-{files,file-bytes,total-bytes}`; the form sends nothing while a file has a problem.
 // - `data-astro-form-message-{too-many-files,file-too-large,files-too-large,file-type,file-required}` on the
-//   input — the copy for each problem, with `{maxFiles}`, `{maxFileSize}`, `{maxTotalSize}` and `{types}`.
+//   input — the copy for each problem, with `{maxFiles}`, `{maxFileSize}`, `{maxTotalSize}` and `{types}`, which
+//   is the input's `data-astro-form-accepted-types` (written by `uploadInputAttributes`) when it has one.
 // - `data-astro-form-file-state="invalid"` on a flagged item, and `data-astro-form-invalid` on the list while the
 //   field is `aria-invalid`.
 

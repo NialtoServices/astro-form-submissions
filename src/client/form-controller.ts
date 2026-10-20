@@ -277,16 +277,21 @@ export class FormController implements FormPartHost {
   }
 
   /**
-   * Present the parts' refusals of a send as field errors, and focus the first refusal's element. Nothing was
-   * sent, so the status and Turnstile widget are left as they were.
+   * Present the parts' refusals of a send as a server's refusal is presented: the first refusal's message in the
+   * status, the fields marked and annotated, `astro-form:error` emitted, and focus on the summary, or else on the
+   * first refusal's element. Nothing was sent, so the Turnstile widget keeps its token.
    */
   private showRefusals(refusals: readonly SubmitRefusal[]): void {
-    const { formElement } = this
+    const { formElement, statusElement } = this
+    const error = refusals[0]?.message ?? ''
     const fieldErrors = Object.fromEntries(refusals.map((refusal) => [refusal.name, refusal.message]))
     clearFieldErrors(formElement)
+    statusElement.textContent = error
+    statusElement.dataset.astroFormState = 'error'
     applyFieldErrors(formElement, fieldErrors)
-    renderFieldErrorSummary(formElement, fieldErrors)
-    refusals[0]?.focusElement.focus()
+    const summaryElement = renderFieldErrorSummary(formElement, fieldErrors)
+    ;(summaryElement ?? refusals[0]?.focusElement)?.focus()
+    formElement.dispatchEvent(new CustomEvent('astro-form:error', { bubbles: true, detail: { error, fieldErrors } }))
   }
 
   /**

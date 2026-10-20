@@ -1,4 +1,4 @@
-import { clearFieldError } from './field-errors.js'
+import { clearFieldError, replaceFieldErrorMessage } from './field-errors.js'
 import { checkFiles, describeAcceptedTypes, readFileLimits, type FileLimits, type FileProblem } from './file-checks.js'
 import { FILE_COPY } from './file-copy.js'
 import { FileItemList } from './file-list.js'
@@ -98,14 +98,17 @@ export class FileFieldController {
     return readFileLimits(this.inputElement)
   }
 
-  /** The values the field's messages may use: `{maxFiles}`, `{maxFileSize}`, `{maxTotalSize}` and `{types}`. */
+  /**
+   * The values the field's messages may use: `{maxFiles}`, `{maxFileSize}`, `{maxTotalSize}` and `{types}`, which
+   * is the server's wording from `data-astro-form-accepted-types` when the input has it.
+   */
   private get placeholders(): Record<string, string> {
     const { maxFiles, maxFileBytes, maxTotalBytes, accept } = this.limits
     return {
       maxFiles: String(maxFiles),
       maxFileSize: formatFileSize(maxFileBytes),
       maxTotalSize: formatFileSize(maxTotalBytes),
-      types: describeAcceptedTypes(accept)
+      types: this.inputElement.getAttribute('data-astro-form-accepted-types')?.trim() || describeAcceptedTypes(accept)
     }
   }
 
@@ -143,10 +146,20 @@ export class FileFieldController {
     this.replaceFiles([...this.files, ...addedFiles])
   }
 
-  /** Remove the file at `index`, moving focus to the next file's remove control, or the input once none is left. */
+  /**
+   * Remove the file at `index`, moving focus to the next file's remove control, or the input once none is left.
+   * The field's error stays while another file still has a problem, now naming that file's, and clears once none
+   * does.
+   */
   private removeFile(index: number): void {
     this.replaceFiles(this.files.filter((_file, fileIndex) => fileIndex !== index))
-    clearFieldError(this.formElement, this.name)
+
+    const remainingProblem = checkFiles(this.files, this.limits).find((problem) => problem !== null)
+    if (remainingProblem) {
+      replaceFieldErrorMessage(this.formElement, this.name, this.problemMessage(remainingProblem))
+    } else {
+      clearFieldError(this.formElement, this.name)
+    }
 
     const nextIndex = Math.min(index, this.files.length - 1)
     ;(this.fileList.removeControl(nextIndex) ?? this.inputElement).focus()

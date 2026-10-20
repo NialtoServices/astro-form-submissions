@@ -57,8 +57,9 @@ export function uploadRules(rules: UploadRules): Readonly<UploadRules & { maxFil
 
 /**
  * The attributes a file input needs to agree with the server: `accept` (content types, then extensions),
- * `multiple`, `required`, and the limit attributes the form script reads (the per-file limit is
- * `maxTotalBytes` for rules that set none). Boolean attributes are `true`, so
+ * `multiple`, `required`, the limit attributes the form script reads (the per-file limit is
+ * `maxTotalBytes` for rules that set none), and `data-astro-form-accepted-types`, the accepted types named as
+ * the server's refusals name them. Boolean attributes are `true`, so
  * the object spreads onto an `<input>` in an Astro component.
  *
  * @param rules - The upload rules.
@@ -77,6 +78,10 @@ export function uploadInputAttributes(rules: UploadRules): Record<string, string
   attributes['data-astro-form-max-files'] = String(rules.maxFiles)
   attributes['data-astro-form-max-file-bytes'] = String(rules.maxFileBytes ?? rules.maxTotalBytes)
   attributes['data-astro-form-max-total-bytes'] = String(rules.maxTotalBytes)
+
+  // The browser can't read the matchers' labels, so the `{types}` wording the server's refusals use travels with
+  // the input, and the browser's own type message reads the same.
+  attributes['data-astro-form-accepted-types'] = describeAcceptedTypes(rules.accept)
 
   return attributes
 }

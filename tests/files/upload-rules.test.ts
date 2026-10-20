@@ -147,7 +147,8 @@ describe('uploadInputAttributes', () => {
       multiple: true,
       'data-astro-form-max-files': '5',
       'data-astro-form-max-file-bytes': String(10 * MB),
-      'data-astro-form-max-total-bytes': String(50 * MB)
+      'data-astro-form-max-total-bytes': String(50 * MB),
+      'data-astro-form-accepted-types': 'AVIF, GIF, HEIC, JPEG, PNG, WebP or PDF'
     })
   })
 
@@ -161,7 +162,8 @@ describe('uploadInputAttributes', () => {
       required: true,
       'data-astro-form-max-files': '1',
       'data-astro-form-max-file-bytes': String(5 * MB),
-      'data-astro-form-max-total-bytes': String(5 * MB)
+      'data-astro-form-max-total-bytes': String(5 * MB),
+      'data-astro-form-accepted-types': 'PDF'
     })
   })
 
@@ -179,6 +181,12 @@ describe('uploadInputAttributes', () => {
     const attributes = uploadInputAttributes(uploadRules({ maxFiles: 1, maxTotalBytes: MB, accept: [custom] }))
 
     expect(attributes.accept).toBe('application/x-custom')
+  })
+
+  it("names the accepted types by their labels, as the server's refusals do", () => {
+    const rules = uploadRules({ maxFiles: 3, maxTotalBytes: MB, accept: [FILE_TYPES.pdf, ...WORD_TYPES] })
+
+    expect(uploadInputAttributes(rules)['data-astro-form-accepted-types']).toBe('PDF or Word')
   })
 })
 

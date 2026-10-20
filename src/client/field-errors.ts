@@ -202,6 +202,22 @@ export function clearDisabledFieldErrors(formElement: HTMLFormElement): void {
   }
 }
 
+/**
+ * Replace the message of a field already shown as invalid, in its inline slot and its summary entry, leaving its
+ * marks as they are. Does nothing for a field no control of which is marked invalid.
+ */
+export function replaceFieldErrorMessage(formElement: HTMLFormElement, name: string, message: string): void {
+  if (!formElement.querySelector(`[name="${CSS.escape(name)}"][aria-invalid="true"]`)) return
+
+  const slotElement = formElement.querySelector<HTMLElement>(`[data-astro-form-field-error-for="${CSS.escape(name)}"]`)
+  if (slotElement && !slotElement.hidden) slotElement.textContent = message
+
+  const itemElement = formElement.querySelector<HTMLElement>(
+    `[data-astro-form-field-error-summary] [data-astro-form-summary-item="${CSS.escape(name)}"]`
+  )
+  if (itemElement) (itemElement.querySelector('a') ?? itemElement).textContent = message
+}
+
 /** Empty one field's inline slot and remove its summary entry, hiding the summary once its last entry goes. */
 function clearFieldMessages(formElement: HTMLFormElement, name: string): void {
   const slotElement = formElement.querySelector<HTMLElement>(`[data-astro-form-field-error-for="${CSS.escape(name)}"]`)

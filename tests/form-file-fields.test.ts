@@ -29,15 +29,23 @@ interface FieldOptions {
 
   /** Whether the form has an error slot beside the field. */
   slot?: boolean
+
+  /** Whether the form has an error summary. */
+  summary?: boolean
+
+  /** The list's `<template>`, as written in markup. */
+  template?: string
 }
 
-/** Markup for a job application form with a `cv` file field, its file list and an error summary. */
+/** Markup for a job application form with a `cv` file field, and by default its file list and an error summary. */
 function formMarkup({
   id = 'application',
   inputAttributes = `multiple accept="application/pdf,text/plain,.pdf,.txt" data-astro-form-max-files="3"
     data-astro-form-max-file-bytes="1048576" data-astro-form-max-total-bytes="2097152"`,
   list = true,
-  slot = false
+  slot = false,
+  summary = true,
+  template = ITEM_TEMPLATE
 }: FieldOptions = {}) {
   return `
     <form id="${id}" data-astro-form action="/api/${id}" method="POST" enctype="multipart/form-data">
@@ -45,8 +53,8 @@ function formMarkup({
       <label for="${id}-cv">CV</label>
       <input id="${id}-cv" type="file" name="cv" ${inputAttributes} />
       ${slot ? `<p data-astro-form-field-error-for="cv" id="${id}-cv-error" hidden></p>` : ''}
-      ${list ? `<ul data-astro-form-file-list-for="cv">${ITEM_TEMPLATE}</ul>` : ''}
-      <div data-astro-form-field-error-summary hidden></div>
+      ${list ? `<ul data-astro-form-file-list-for="cv">${template}</ul>` : ''}
+      ${summary ? '<div data-astro-form-field-error-summary hidden></div>' : ''}
       <button type="submit">Send</button>
       <p
         data-astro-form-status
@@ -66,9 +74,9 @@ function mountForm(options: FieldOptions = {}) {
 function partsOf(formElement: HTMLFormElement | null) {
   const inputElement = formElement?.querySelector<HTMLInputElement>('input[type="file"]')
   const statusElement = formElement?.querySelector<HTMLElement>('[data-astro-form-status]')
-  const summaryElement = formElement?.querySelector<HTMLElement>('[data-astro-form-field-error-summary]')
-  if (!formElement || !inputElement || !statusElement || !summaryElement) throw new Error('The form is missing parts')
+  if (!formElement || !inputElement || !statusElement) throw new Error('The form is missing parts')
 
+  const summaryElement = formElement.querySelector<HTMLElement>('[data-astro-form-field-error-summary]')
   const listElement = formElement.querySelector<HTMLElement>('[data-astro-form-file-list-for]')
   return {
     formElement,
@@ -108,6 +116,12 @@ function slotOf(itemElement: HTMLElement | undefined, slot: 'name' | 'size' | 'p
   if (!slotElement) throw new Error(`The item has no ${slot} slot`)
 
   return slotElement
+}
+
+/** An element's accessible description, from the elements its `aria-describedby` names. */
+function descriptionOf(element: HTMLElement): string {
+  const ids = (element.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean)
+  return ids.map((id) => document.getElementById(id)?.textContent ?? '').join(' ')
 }
 
 function listedNames(listElement: HTMLElement | null): string[] {
@@ -260,8 +274,10 @@ describe('form script — file fields', () => {
 
   it('blocks submission while a file has a problem and focuses its remove control', async () => {
     const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
-    const { inputElement, listElement, statusElement, summaryElement, submit } = mountForm({
-      inputAttributes: 'multiple accept="image/jpeg,image/png,.jpg,.jpeg,.png" data-astro-form-max-files="3"'
+    const { formElement, inputElement, listElement, statusElement, submit } = mountForm({
+      inputAttributes: 'multiple accept="image/jpeg,image/png,.jpg,.jpeg,.png" data-astro-form-max-files="3"',
+      slot: true,
+      summary: false
     })
     pick(inputElement, [
       new File([new Uint8Array(100)], 'kitchen.jpg', { type: 'image/jpeg' }),
@@ -272,27 +288,143 @@ describe('form script — file fields', () => {
     await settle()
 
     const typeMessage = 'That file type is not accepted. Please attach JPG, JPEG or PNG.'
+    const slotElement = formElement.querySelector<HTMLElement>('[data-astro-form-field-error-for="cv"]')
     expect(fetchSpy).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(slotOf(listedItems(listElement)[1], 'remove'))
     expect(inputElement.getAttribute('aria-invalid')).toBe('true')
     expect(listElement?.dataset.astroFormInvalid).toBe('true')
-    expect(summaryElement.hidden).toBe(false)
-    expect(Array.from(summaryElement.querySelectorAll('li'), (itemElement) => itemElement.textContent)).toEqual([
-      typeMessage
-    ])
+    expect(slotElement?.textContent).toBe(typeMessage)
     expect(slotOf(listedItems(listElement)[1], 'problem').textContent).toBe(typeMessage)
+    expect(statusElement.textContent).toBe(typeMessage)
+    expect(statusElement.dataset.astroFormState).toBe('error')
 
     slotOf(listedItems(listElement)[1], 'remove').click()
     await settle()
 
     expect(inputElement.hasAttribute('aria-invalid')).toBe(false)
     expect(listElement?.hasAttribute('data-astro-form-invalid')).toBe(false)
-    expect(summaryElement.hidden).toBe(true)
+    expect(slotElement?.hidden).toBe(true)
     expect(document.activeElement).toBe(slotOf(listedItems(listElement)[0], 'remove'))
 
     submit()
     await vi.waitFor(() => expect(statusElement.dataset.astroFormState).toBe('success'))
     expect(postedNames(fetchSpy)).toEqual(['kitchen.jpg'])
+  })
+
+  it('a blocked send with a summary lists the problem once, focuses it and emits astro-form:error', async () => {
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    const { formElement, inputElement, summaryElement, submit } = mountForm()
+    const errorListener = vi.fn()
+    formElement.addEventListener('astro-form:error', errorListener)
+    pick(inputElement, [new File([new Uint8Array(100)], 'photo.png', { type: 'image/png' })])
+
+    submit()
+    await settle()
+
+    const typeMessage = 'That file type is not accepted. Please attach PDF or TXT.'
+    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(summaryElement?.hidden).toBe(false)
+    expect(Array.from(summaryElement?.querySelectorAll('li') ?? [], (itemElement) => itemElement.textContent)).toEqual([
+      typeMessage
+    ])
+    expect(document.activeElement).toBe(summaryElement)
+    expect(errorListener).toHaveBeenCalledOnce()
+    expect(errorListener.mock.calls[0]?.[0].detail).toEqual({ error: typeMessage, fieldErrors: { cv: typeMessage } })
+  })
+
+  it('a bare form announces a blocked send through its status, replacing an earlier one', async () => {
+    const fetchSpy = stubFetch(async () => jsonResponse({ error: 'Something went wrong.' }, 500))
+    const { inputElement, listElement, statusElement, submit } = mountForm({
+      summary: false,
+      template: `<template><li>
+        <span data-astro-form-file-name></span>
+        <button type="button" data-astro-form-file-remove>Remove</button>
+      </li></template>`
+    })
+
+    submit()
+    await vi.waitFor(() => expect(statusElement.textContent).toBe('Something went wrong.'))
+
+    pick(inputElement, [new File([new Uint8Array(100)], 'photo.png', { type: 'image/png' })])
+    submit()
+    await settle()
+
+    expect(fetchSpy).toHaveBeenCalledOnce()
+    expect(statusElement.textContent).toBe('That file type is not accepted. Please attach PDF or TXT.')
+    expect(statusElement.dataset.astroFormState).toBe('error')
+    expect(document.activeElement).toBe(slotOf(listedItems(listElement)[0], 'remove'))
+  })
+
+  it('removing one flagged file keeps the field error while another file has a problem', async () => {
+    stubFetch(async () => jsonResponse({ ok: true }))
+    const { inputElement, listElement, summaryElement, submit } = mountForm({
+      inputAttributes: `multiple accept="application/pdf,.pdf" data-astro-form-max-files="3"
+        data-astro-form-max-file-bytes="1024" data-astro-form-max-total-bytes="4096"`
+    })
+    pick(inputElement, [
+      new File([new Uint8Array(100)], 'photo.png', { type: 'image/png' }),
+      pdf('scan.pdf', 2048),
+      pdf('cv.pdf', 100)
+    ])
+    submit()
+    await settle()
+
+    const summaryTexts = () =>
+      Array.from(summaryElement?.querySelectorAll('li') ?? [], (itemElement) => itemElement.textContent)
+    expect(summaryTexts()).toEqual(['That file type is not accepted. Please attach PDF.'])
+
+    slotOf(listedItems(listElement)[0], 'remove').click()
+    await settle()
+
+    expect(inputElement.getAttribute('aria-invalid')).toBe('true')
+    expect(listElement?.dataset.astroFormInvalid).toBe('true')
+    expect(summaryTexts()).toEqual(['Each file must be 1 KB or smaller.'])
+
+    slotOf(listedItems(listElement)[0], 'remove').click()
+    await settle()
+
+    expect(inputElement.hasAttribute('aria-invalid')).toBe(false)
+    expect(summaryElement?.hidden).toBe(true)
+  })
+
+  it("describes each remove control by its file's name and problem", () => {
+    const { inputElement, listElement } = mountForm({
+      inputAttributes: 'multiple accept="application/pdf,.pdf" data-astro-form-max-files="3"'
+    })
+    pick(inputElement, [pdf('cv.pdf', 100), new File([new Uint8Array(100)], 'photo.png', { type: 'image/png' })])
+
+    const [cvItem, photoItem] = listedItems(listElement)
+    expect(descriptionOf(slotOf(cvItem, 'remove'))).toBe('cv.pdf')
+    expect(descriptionOf(slotOf(photoItem, 'remove'))).toBe(
+      'photo.png That file type is not accepted. Please attach PDF.'
+    )
+    expect(slotOf(cvItem, 'name').id).not.toBe(slotOf(photoItem, 'name').id)
+  })
+
+  it('fills a name slot inside the remove control, which then names the file itself', () => {
+    const { inputElement, listElement } = mountForm({
+      template: `<template><li>
+        <span data-astro-form-file-name></span>
+        <button type="button" data-astro-form-file-remove>Remove <span data-astro-form-file-name></span></button>
+      </li></template>`
+    })
+    pick(inputElement, [pdf('cv.pdf', 100)])
+
+    const removeElement = slotOf(listedItems(listElement)[0], 'remove')
+    expect(removeElement.textContent).toBe('Remove cv.pdf')
+    expect(descriptionOf(removeElement)).toBe('cv.pdf')
+  })
+
+  it("names the accepted types in the server's words when the input carries them", () => {
+    const { inputElement, listElement } = mountForm({
+      inputAttributes: `multiple accept="application/pdf,text/plain,.pdf,.txt,.md" data-astro-form-max-files="3"
+        data-astro-form-accepted-types="PDF or Text"`
+    })
+    pick(inputElement, [new File([new Uint8Array(100)], 'photo.png', { type: 'image/png' })])
+
+    expect(slotOf(listedItems(listElement)[0], 'problem').textContent).toBe(
+      'That file type is not accepted. Please attach PDF or Text.'
+    )
   })
 
   it('keeps the files after a refused submission and clears them after success or reset', async () => {
@@ -378,7 +510,8 @@ describe('form script — file fields', () => {
     const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
     const { formElement, inputElement, submit } = mountForm({
       inputAttributes: 'required accept="application/pdf,.pdf" data-astro-form-max-files="1"',
-      slot: true
+      slot: true,
+      summary: false
     })
 
     expect(submit()).toBe(false)

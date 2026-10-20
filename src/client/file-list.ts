@@ -24,6 +24,24 @@ function findSlot(itemElement: Element, selector: string): HTMLElement | null {
   return itemElement.querySelector<HTMLElement>(selector)
 }
 
+/** Every slot in an item, the item element itself included when it is one. */
+function findSlots(itemElement: Element, selector: string): HTMLElement[] {
+  const slotElements = Array.from(itemElement.querySelectorAll<HTMLElement>(selector))
+  return itemElement instanceof HTMLElement && itemElement.matches(selector)
+    ? [itemElement, ...slotElements]
+    : slotElements
+}
+
+/** Counts the ids given to item slots, so each is unique on the page however many lists and forms it has. */
+let slotIdCount = 0
+
+/** Give a slot an id of its own: an id written in the template would repeat in every item. */
+function assignSlotId(slotElement: HTMLElement): string {
+  slotIdCount++
+  slotElement.id = `astro-form-file-slot-${slotIdCount}`
+  return slotElement.id
+}
+
 // MARK: - File List
 
 /**
@@ -45,8 +63,9 @@ export class FileItemList {
    */
   constructor(listElement: HTMLElement) {
     const templateElement = listElement.querySelector('template')
-    if (!templateElement)
+    if (!templateElement) {
       throw new Error(`The file list for "${listElement.dataset.astroFormFileListFor}" has no <template>.`)
+    }
 
     const itemTemplateElement = templateElement.content.firstElementChild
     if (!itemTemplateElement) {
@@ -78,10 +97,10 @@ export class FileItemList {
   }
 
   private fillItem(itemElement: Element, file: File, problem: string | null): void {
-    const nameElement = findSlot(itemElement, NAME_SLOT)
-    if (nameElement) {
-      // Text, never markup, so a name such as `<img onerror=…>.pdf` shows as typed; `dir="auto"` keeps a
-      // right-to-left name from reordering the text around it.
+    // Text, never markup, so a name such as `<img onerror=…>.pdf` shows as typed; `dir="auto"` keeps a
+    // right-to-left name from reordering the text around it.
+    const nameElements = findSlots(itemElement, NAME_SLOT)
+    for (const nameElement of nameElements) {
       nameElement.textContent = file.name
       if (!nameElement.hasAttribute('dir')) nameElement.dir = 'auto'
     }
@@ -100,6 +119,28 @@ export class FileItemList {
     } else {
       itemElement.setAttribute('data-astro-form-file-state', 'invalid')
     }
+
+    const removeElement = findSlot(itemElement, REMOVE_SLOT)
+    if (removeElement) this.describeRemoveControl(removeElement, nameElements, problem === null ? null : problemElement)
+  }
+
+  /**
+   * Describe a remove control by its file's name, then its problem, so a person who reaches it (as a blocked
+   * send's focus does) hears which file it removes and why. A name slot inside the control already names it.
+   */
+  private describeRemoveControl(
+    removeElement: HTMLElement,
+    nameElements: readonly HTMLElement[],
+    problemElement: HTMLElement | null
+  ): void {
+    const nameElement = nameElements.find((slotElement) => !removeElement.contains(slotElement))
+    const describingIds = [nameElement, problemElement].flatMap((slotElement) =>
+      slotElement ? [assignSlotId(slotElement)] : []
+    )
+    if (describingIds.length === 0) return
+
+    const siteIds = (removeElement.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean)
+    removeElement.setAttribute('aria-describedby', [...siteIds, ...describingIds].join(' '))
   }
 
   // MARK: - Lookup
