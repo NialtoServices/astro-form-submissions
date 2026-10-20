@@ -34,7 +34,7 @@ export {
 } from '#dispatchers/fields.js'
 export { mustacheTemplates, type MustacheTemplatesOptions } from '#dispatchers/mustache.js'
 export { PostmarkDeliveryError } from '#dispatchers/postmark-delivery-error.js'
-export { PostmarkTransport, type PostmarkTransportOptions } from '#dispatchers/postmark.js'
+export { POSTMARK_MAX_MESSAGE_BYTES, PostmarkTransport, type PostmarkTransportOptions } from '#dispatchers/postmark.js'
 export {
   submissionAcknowledgementTemplates,
   type AcknowledgementContact,

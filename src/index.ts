@@ -105,6 +105,7 @@ export {
   EmailDispatcher,
   EmailRecipientError,
   mustacheTemplates,
+  POSTMARK_MAX_MESSAGE_BYTES,
   PostmarkDeliveryError,
   PostmarkTransport,
   renderEmail,

@@ -902,8 +902,9 @@ files and the message's text still fit under 10,000,000 bytes (`POSTMARK_MAX_MES
 of "10 MB"). The transport checks the size itself before sending: an oversized message is refused without calling
 Postmark, logged as `postmark.message-too-large` (see [Logs](#logs)), and fails the delivery like any other, so a
 required email answers the sender with `send` (502). Postmark also rejects files by extension (`exe`, `bat`, `vbs`
-and similar); none collides with an accepted type, because a stored name always ends in the extension of the type
-its bytes matched.
+and similar); none collides with an accepted type, because a stored name ends in the extension of the type its
+bytes matched, as it does for every built-in type (a matcher of your own that declares no `extensions` gives no such
+guarantee).
 
 #### Acknowledging the sender
 

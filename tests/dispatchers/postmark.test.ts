@@ -153,6 +153,14 @@ describe('PostmarkTransport attachments', () => {
     expect(body).not.toHaveProperty('Attachments')
   })
 
+  it('sends no Attachments property for an empty attachment list', async () => {
+    const captured = captureSend()
+    await new PostmarkTransport({ token: 'tok' }).deliver({ ...message, attachments: [] })
+
+    const { body } = await captured
+    expect(body).not.toHaveProperty('Attachments')
+  })
+
   it('encodes a 6 MB file so Postmark receives its bytes', async () => {
     const captured = captureSend()
     const content = pdfOfSize(6 * 1024 * 1024)

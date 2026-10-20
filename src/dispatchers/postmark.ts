@@ -68,7 +68,7 @@ export class PostmarkTransport implements EmailTransport {
       TextBody: message.text,
       HtmlBody: message.html,
       MessageStream: this.options.messageStream || 'outbound',
-      ...(message.attachments
+      ...(message.attachments?.length
         ? {
             Attachments: message.attachments.map((attachment) => ({
               Name: attachment.filename,

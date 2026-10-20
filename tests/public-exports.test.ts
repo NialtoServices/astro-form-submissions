@@ -46,6 +46,7 @@ describe('package entry', () => {
       'MissingEnvError',
       'ObjectExistsError',
       'OperationalError',
+      'POSTMARK_MAX_MESSAGE_BYTES',
       'PostmarkDeliveryError',
       'PostmarkTransport',
       'R2PresignedUploadTarget',
