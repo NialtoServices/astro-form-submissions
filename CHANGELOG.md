@@ -112,6 +112,12 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   `EmailMessage.attachments` as `EmailAttachment`s (`filename`, `contentType`, `content`); a message without any has
   no `attachments` property. A key no enricher provides, or one holding `FileUploads` links, fails to compile.
   Attaching leaves `exposesResources` alone. Also exports `EmailAttachment`.
+- `PostmarkTransport` sends a message's attachments (`Name`, base64 `Content`, `ContentType`) and leaves `Attachments`
+  out of a message without any. Postmark accepts at most 10 MB per message after base64, which makes a file about a
+  third larger, so the transport measures the request and refuses an oversized message itself, without calling
+  Postmark: it throws an `OperationalError` with the code `postmark.message-too-large` and the `bytes` and `limit`
+  in its details, a definite failure that answers a required email's submission with `send` (502). `FileAttachments`'
+  default total of 5 MB leaves room. Also exports `POSTMARK_MAX_MESSAGE_BYTES`.
 
 ### Changed
 

@@ -1,11 +1,18 @@
 import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
-import type { EmailMessage } from '#dispatchers/email.js'
+import { EmailDispatcher, type EmailMessage } from '#dispatchers/email.js'
 import { PostmarkDeliveryError } from '#dispatchers/postmark-delivery-error.js'
-import { PostmarkTransport } from '#dispatchers/postmark.js'
+import { POSTMARK_MAX_MESSAGE_BYTES, PostmarkTransport } from '#dispatchers/postmark.js'
+import { submissionNotificationTemplates } from '#dispatchers/submission-notification.js'
+import { FileAttachments } from '#enrichers/file-attachments.js'
+import { OperationalError } from '#operational-error.js'
+import { createFormRoute } from '#route.js'
+import fc from 'fast-check'
 import { delay, http, HttpResponse } from 'msw'
 import { setupServer } from 'msw/node'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { stubFetch } from '../support/harness.js'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
+import { attachmentBytes } from '../support/attachment-bytes.js'
+import { makeRouteContext, stubFetch } from '../support/harness.js'
 
 const POSTMARK_URL = 'https://api.postmarkapp.com/email'
 
@@ -106,6 +113,161 @@ describe('PostmarkTransport', () => {
 
     expect(failure).toBeInstanceOf(PostmarkDeliveryError)
     expect(failure).toMatchObject({ code: 406, status: 422 })
+  })
+})
+
+describe('PostmarkTransport attachments', () => {
+  const PDF_HEADER = [0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x0a]
+
+  /** A PDF-headed file of the given size, filled with a pattern so a mis-encoded chunk is noticed. */
+  function pdfOfSize(size: number): Uint8Array<ArrayBuffer> {
+    const bytes = new Uint8Array(size)
+    for (let index = 0; index < size; index += 1) bytes[index] = (index * 31 + 7) % 256
+    bytes.set(PDF_HEADER)
+    return bytes
+  }
+
+  it('sends attachments as Name, base64 Content and ContentType', async () => {
+    const captured = captureSend()
+    const content = new TextEncoder().encode('Ada Lovelace, curriculum vitae')
+    await new PostmarkTransport({ token: 'tok' }).deliver({
+      ...message,
+      attachments: [
+        { filename: 'cv.pdf', contentType: 'application/pdf', content },
+        { filename: 'photo.png', contentType: 'image/png', content: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) }
+      ]
+    })
+
+    const { body } = await captured
+    expect(body.Attachments).toEqual([
+      { Name: 'cv.pdf', Content: 'QWRhIExvdmVsYWNlLCBjdXJyaWN1bHVtIHZpdGFl', ContentType: 'application/pdf' },
+      { Name: 'photo.png', Content: 'iVBORw==', ContentType: 'image/png' }
+    ])
+  })
+
+  it('sends no Attachments property when the message has none', async () => {
+    const captured = captureSend()
+    await new PostmarkTransport({ token: 'tok' }).deliver(message)
+
+    const { body } = await captured
+    expect(body).not.toHaveProperty('Attachments')
+  })
+
+  it('encodes a 6 MB file so Postmark receives its bytes', async () => {
+    const captured = captureSend()
+    const content = pdfOfSize(6 * 1024 * 1024)
+    await new PostmarkTransport({ token: 'tok' }).deliver({
+      ...message,
+      attachments: [{ filename: 'cv.pdf', contentType: 'application/pdf', content }]
+    })
+
+    const { body } = await captured
+    const [attachment] = body.Attachments as { Content: string }[]
+    expect(Buffer.from(attachment!.Content, 'base64').equals(content)).toBe(true)
+  })
+
+  it('encodes any bytes as the platform encodes them', async () => {
+    await fc.assert(
+      fc.asyncProperty(attachmentBytes, async (content) => {
+        const captured = captureSend()
+        await new PostmarkTransport({ token: 'tok' }).deliver({
+          ...message,
+          attachments: [{ filename: 'file.bin', contentType: 'application/octet-stream', content }]
+        })
+
+        const { body } = await captured
+        const [attachment] = body.Attachments as { Content: string }[]
+        expect(attachment!.Content).toBe(Buffer.from(content).toString('base64'))
+      }),
+      { numRuns: 60 }
+    )
+  })
+
+  describe('past the size Postmark accepts', () => {
+    let interceptedFetch: typeof fetch
+
+    beforeAll(() => {
+      interceptedFetch = globalThis.fetch
+    })
+
+    afterEach(() => {
+      globalThis.fetch = interceptedFetch
+      vi.restoreAllMocks()
+    })
+
+    // Base64 makes a file a third larger, so 7.6 MB of bytes cross the limit that 7.4 MB stay under.
+    const OVERSIZED_BYTES = 7_600_000
+    const UNDERSIZED_BYTES = 7_400_000
+
+    it('refuses the message itself, without calling Postmark', async () => {
+      const fetchMock = stubFetch(() => Response.json({ ErrorCode: 0, Message: 'OK' }))
+      const failure = await new PostmarkTransport({ token: 'tok' })
+        .deliver({
+          ...message,
+          attachments: [{ filename: 'cv.pdf', contentType: 'application/pdf', content: pdfOfSize(OVERSIZED_BYTES) }]
+        })
+        .catch((error: unknown) => error)
+
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(failure).toBeInstanceOf(OperationalError)
+      expect(failure).toMatchObject({
+        code: 'postmark.message-too-large',
+        details: { limit: POSTMARK_MAX_MESSAGE_BYTES }
+      })
+      expect((failure as OperationalError).details!.bytes).toBeGreaterThan(POSTMARK_MAX_MESSAGE_BYTES)
+    })
+
+    it('sends a message that fits once base64 has made the file a third larger', async () => {
+      const fetchMock = stubFetch(() => Response.json({ ErrorCode: 0, Message: 'OK' }))
+      await new PostmarkTransport({ token: 'tok' }).deliver({
+        ...message,
+        attachments: [{ filename: 'cv.pdf', contentType: 'application/pdf', content: pdfOfSize(UNDERSIZED_BYTES) }]
+      })
+
+      expect(fetchMock).toHaveBeenCalledOnce()
+    })
+
+    it('measures the message in bytes, not characters', async () => {
+      const fetchMock = stubFetch(() => Response.json({ ErrorCode: 0, Message: 'OK' }))
+      const failure = await new PostmarkTransport({ token: 'tok' })
+        .deliver({ ...message, text: '\u{1F600}'.repeat(POSTMARK_MAX_MESSAGE_BYTES / 4 + 1) })
+        .catch((error: unknown) => error)
+
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(failure).toMatchObject({ code: 'postmark.message-too-large' })
+    })
+
+    it('fails a required email on the route with a 502, logging the code and leaving Postmark uncalled', async () => {
+      const fetchMock = stubFetch(() => Response.json({ ErrorCode: 0, Message: 'OK' }))
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const route = createFormRoute({
+        schema: z.object({ name: z.string() }),
+        enrichers: [new FileAttachments({ field: 'cv', attachTo: 'cv', maxTotalBytes: 12 * 1024 * 1024 })],
+        dispatchers: [
+          new EmailDispatcher({
+            transport: new PostmarkTransport({ token: 'tok' }),
+            templates: submissionNotificationTemplates({ fields: ['name'] }),
+            from: 'site@example.com',
+            to: 'office@example.com',
+            attach: 'cv',
+            required: true
+          })
+        ]
+      })
+      const data = new FormData()
+      data.set('name', 'Ada')
+      data.append('cv', new File([pdfOfSize(OVERSIZED_BYTES)], 'cv.pdf'))
+
+      const response = await route(makeRouteContext({ body: data }))
+
+      expect(response.status).toBe(502)
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^\[astro-form-submissions\] delivery error: OperationalError code=postmark\.message-too-large bytes=\d+ limit=10000000$/
+        )
+      )
+    })
   })
 })
 

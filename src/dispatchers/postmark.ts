@@ -1,10 +1,19 @@
+import { encodeBase64 } from '#dispatchers/base64.js'
 import { DestinationUnreachableError, isGatewayFailure } from '#dispatchers/destination-unreachable-error.js'
 import type { EmailMessage, EmailTransport } from '#dispatchers/email.js'
 import { PostmarkDeliveryError } from '#dispatchers/postmark-delivery-error.js'
 import { assertPositiveNumberOption } from '#numeric-options.js'
+import { OperationalError } from '#operational-error.js'
 
 /** Postmark's single-message send endpoint. */
 const POSTMARK_EMAIL_URL = 'https://api.postmarkapp.com/email'
+
+/**
+ * The most bytes Postmark accepts in one message, attachments included and measured after base64, as its "Send a
+ * single email" guide states (10 MB). Read as 10,000,000 bytes, the smaller of the two meanings of "MB", so a
+ * message under it is under the limit either way.
+ */
+export const POSTMARK_MAX_MESSAGE_BYTES = 10_000_000
 
 /** Options for constructing a {@link PostmarkTransport}. */
 export interface PostmarkTransportOptions {
@@ -45,10 +54,40 @@ export class PostmarkTransport implements EmailTransport {
    * Sends the message through Postmark. Errors propagate to the dispatcher.
    *
    * @param message - The complete email message to deliver.
+   * @throws {OperationalError} With code `postmark.message-too-large` when the message, attachments included,
+   * is over {@link POSTMARK_MAX_MESSAGE_BYTES}. Postmark is not called, so this is a definite failure.
    * @throws {PostmarkDeliveryError} When Postmark refuses the message.
    * @throws {DestinationUnreachableError} When Postmark can't be reached or doesn't answer in time.
    */
   async deliver(message: EmailMessage): Promise<void> {
+    const body = JSON.stringify({
+      From: message.from,
+      To: message.to,
+      ReplyTo: message.replyTo,
+      Subject: message.subject,
+      TextBody: message.text,
+      HtmlBody: message.html,
+      MessageStream: this.options.messageStream || 'outbound',
+      ...(message.attachments
+        ? {
+            Attachments: message.attachments.map((attachment) => ({
+              Name: attachment.filename,
+              Content: encodeBase64(attachment.content),
+              ContentType: attachment.contentType
+            }))
+          }
+        : {})
+    })
+
+    const bytes = new TextEncoder().encode(body).length
+    if (bytes > POSTMARK_MAX_MESSAGE_BYTES) {
+      throw new OperationalError(
+        'postmark.message-too-large',
+        `The message is ${bytes} bytes, over the ${POSTMARK_MAX_MESSAGE_BYTES} Postmark accepts once attachments are base64 encoded, so it was not sent.`,
+        { details: { bytes, limit: POSTMARK_MAX_MESSAGE_BYTES } }
+      )
+    }
+
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), (this.options.timeoutSeconds ?? 10) * 1000)
     let response: Response
@@ -62,15 +101,7 @@ export class PostmarkTransport implements EmailTransport {
           'Content-Type': 'application/json',
           'X-Postmark-Server-Token': this.options.token
         },
-        body: JSON.stringify({
-          From: message.from,
-          To: message.to,
-          ReplyTo: message.replyTo,
-          Subject: message.subject,
-          TextBody: message.text,
-          HtmlBody: message.html,
-          MessageStream: this.options.messageStream || 'outbound'
-        }),
+        body,
         signal: controller.signal
       })
 

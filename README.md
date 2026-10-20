@@ -446,20 +446,21 @@ The toolkit's own handled failures arrive as `OperationalError`s, which the defa
 [astro-form-submissions] enrichment error: OperationalError code=storage.delete-failed keys=[1b4e28ba-2fa1-41d2-883f-0016d3cca427]
 ```
 
-| Stage        | Code                              | Details | Meaning                                                                                                                                                                                       |
-| ------------ | --------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `guard`      | `rate-limit.no-client-key`        | none    | No client address resolved and no custom `key`, so the limit was skipped for this request. Logged on every such request; see [Trusting the client address](#trusting-the-client-address).     |
-| `guard`      | `rate-limit.limiter-unavailable`  | none    | The limiter threw, so the request went through unthrottled.                                                                                                                                   |
-| `inspection` | `turnstile.siteverify-failed`     | none    | Siteverify was unreachable or answered badly. The submission was refused; its verdict line says how.                                                                                          |
-| `inspection` | `turnstile.hostname-unconfigured` | none    | Hostname verification has no hostname to check against, so every submission is refused. An empty `verifyHostname` is logged once per instance; `true` with no Astro `site`, on every request. |
-| `inspection` | `turnstile.hostname-invalid`      | none    | A `verifyHostname` entry isn't a bare hostname, so every submission is refused.                                                                                                               |
-| `unexpected` | `schema.non-object`               | none    | The schema's output wasn't an object; the sender was told the service is unavailable.                                                                                                         |
-| `enrichment` | `signed-link.no-base-url`         | none    | `signedLink` has neither Astro `site` nor `baseURL`, so no submission with files can be sent.                                                                                                 |
-| `enrichment` | `file-link.invalid-url`           | none    | A `link` builder returned something other than an absolute http(s) URL, so the files were rolled back.                                                                                        |
-| `enrichment` | `storage.delete-failed`           | `keys`  | Uploaded objects that couldn't be deleted. Delete them by key, or leave them to the bucket's lifecycle rule.                                                                                  |
-| `enrichment` | `uploaded-files.read-failed`      | `key`   | The storage failed to read the object under `key` while its type was checked, so the submission was refused as unfinished, not as the wrong type.                                             |
-| `delivery`   | `delivery.links-kept`             | none    | A delivery carrying upload links failed in a way that may have reached the recipient, so the files were kept.                                                                                 |
-| `unexpected` | `quarantine.undeliverable`        | none    | A submission was quarantined, but no dispatcher accepts quarantined submissions, so nothing was delivered.                                                                                    |
+| Stage        | Code                              | Details          | Meaning                                                                                                                                                                                                          |
+| ------------ | --------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `guard`      | `rate-limit.no-client-key`        | none             | No client address resolved and no custom `key`, so the limit was skipped for this request. Logged on every such request; see [Trusting the client address](#trusting-the-client-address).                        |
+| `guard`      | `rate-limit.limiter-unavailable`  | none             | The limiter threw, so the request went through unthrottled.                                                                                                                                                      |
+| `inspection` | `turnstile.siteverify-failed`     | none             | Siteverify was unreachable or answered badly. The submission was refused; its verdict line says how.                                                                                                             |
+| `inspection` | `turnstile.hostname-unconfigured` | none             | Hostname verification has no hostname to check against, so every submission is refused. An empty `verifyHostname` is logged once per instance; `true` with no Astro `site`, on every request.                    |
+| `inspection` | `turnstile.hostname-invalid`      | none             | A `verifyHostname` entry isn't a bare hostname, so every submission is refused.                                                                                                                                  |
+| `unexpected` | `schema.non-object`               | none             | The schema's output wasn't an object; the sender was told the service is unavailable.                                                                                                                            |
+| `enrichment` | `signed-link.no-base-url`         | none             | `signedLink` has neither Astro `site` nor `baseURL`, so no submission with files can be sent.                                                                                                                    |
+| `enrichment` | `file-link.invalid-url`           | none             | A `link` builder returned something other than an absolute http(s) URL, so the files were rolled back.                                                                                                           |
+| `enrichment` | `storage.delete-failed`           | `keys`           | Uploaded objects that couldn't be deleted. Delete them by key, or leave them to the bucket's lifecycle rule.                                                                                                     |
+| `enrichment` | `uploaded-files.read-failed`      | `key`            | The storage failed to read the object under `key` while its type was checked, so the submission was refused as unfinished, not as the wrong type.                                                                |
+| `delivery`   | `postmark.message-too-large`      | `bytes`, `limit` | The message was over the 10 MB Postmark accepts once its attachments were base64 encoded, so `PostmarkTransport` didn't send it. The delivery failed, and a required email answers the sender with `send` (502). |
+| `delivery`   | `delivery.links-kept`             | none             | A delivery carrying upload links failed in a way that may have reached the recipient, so the files were kept.                                                                                                    |
+| `unexpected` | `quarantine.undeliverable`        | none             | A submission was quarantined, but no dispatcher accepts quarantined submissions, so nothing was delivered.                                                                                                       |
 
 A custom `onError` receives each verdict as a `SubmissionVerdictError` carrying `action`, `code` and
 `details` exactly as the stage gave them. To keep forwarding only real failures to an error tracker, hand
@@ -893,6 +894,16 @@ provides, or one that holds `FileUploads` links rather than attachable files, fa
 Attaching doesn't change `exposesResources`: the files are held in memory and never stored, so there is nothing
 to keep or roll back for them, and the flag still follows the links the templates render. Quarantine works as it
 does for any delivery: a quarantined submission's files reach only dispatchers with `acceptsQuarantined`.
+
+`PostmarkTransport` sends each attachment as Postmark's `Name`, base64 `Content` and `ContentType`. Postmark accepts
+at most 10 MB for the whole message, **measured after base64**, which makes a file about a third larger. So that a
+message stays within it, `FileAttachments` defaults to a 5 MB total; raise `maxTotalBytes` only as far as the encoded
+files and the message's text still fit under 10,000,000 bytes (`POSTMARK_MAX_MESSAGE_BYTES`, the smaller reading
+of "10 MB"). The transport checks the size itself before sending: an oversized message is refused without calling
+Postmark, logged as `postmark.message-too-large` (see [Logs](#logs)), and fails the delivery like any other, so a
+required email answers the sender with `send` (502). Postmark also rejects files by extension (`exe`, `bat`, `vbs`
+and similar); none collides with an accepted type, because a stored name always ends in the extension of the type
+its bytes matched.
 
 #### Acknowledging the sender
 
