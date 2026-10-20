@@ -111,7 +111,7 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   attachments, such as a `FileAttachments` enricher's `attachTo`. They reach the transport on the new
   `EmailMessage.attachments` as `EmailAttachment`s (`filename`, `contentType`, `content`); a message without any has
   no `attachments` property. A key no enricher provides, or one holding `FileUploads` links, fails to compile.
-  Attaching leaves `exposesResources` alone. Also exports `EmailAttachment` and `AttachableKey`.
+  Attaching leaves `exposesResources` alone. Also exports `EmailAttachment`.
 
 ### Changed
 

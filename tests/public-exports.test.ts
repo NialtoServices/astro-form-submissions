@@ -118,7 +118,6 @@ export type {
   AcknowledgementContact,
   AddressInput,
   AdmittingRoute,
-  AttachableKey,
   AttachedFile,
   ByteRangeReader,
   ClientAddressResolver,

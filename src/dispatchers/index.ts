@@ -17,7 +17,6 @@ export {
   EmailDispatcher,
   renderEmail,
   type AddressInput,
-  type AttachableKey,
   type EmailAttachment,
   type EmailContent,
   type EmailDispatcherOptions,

@@ -114,7 +114,6 @@ export {
   submissionNotificationTemplates,
   type AcknowledgementContact,
   type AddressInput,
-  type AttachableKey,
   type DiscordDispatcherOptions,
   type DiscordDispatcherSettings,
   type DiscordField,

@@ -23,7 +23,10 @@ export interface EmailAttachment {
   /** The content type the file's bytes matched, never the sender's claim. */
   contentType: string
 
-  /** The file's bytes. */
+  /**
+   * The file's bytes. The same array is shared by every message attaching this file, so a transport treats it as
+   * read-only.
+   */
   content: Uint8Array
 }
 
@@ -44,13 +47,6 @@ export interface EmailMessage extends EmailContent {
    */
   attachments?: EmailAttachment[]
 }
-
-/**
- * The keys of a resources type `A` that hold files an email can attach (an {@link AttachedFile} list, as a
- * `FileAttachments` enricher provides), never `FileLink`s or anything else. These are the keys an
- * {@link EmailDispatcher}'s `attach` option can name for a route whose enrichers provide `A`.
- */
-export type AttachableKey<A> = { [K in keyof A]: A[K] extends readonly AttachedFile[] ? K : never }[keyof A] & string
 
 /**
  * The resources an email attaching key `K` reads: that key's attachable files. `Record<never, …>` is `{}`, so an
@@ -172,7 +168,10 @@ export interface EmailDispatcherOptions<
   /**
    * The `context.resources` key whose files this email carries as attachments, such as the `attachTo` of a
    * `FileAttachments` enricher. The route refuses, at compile time, a key no enricher provides or one that holds
-   * links rather than attachable files (see {@link AttachableKey}). Omitted, the email attaches nothing.
+   * links rather than attachable files. Omitted, the email attaches nothing.
+   *
+   * Pass no explicit type arguments (`new EmailDispatcher<Application>(...)`): the key's type parameter defaults
+   * to `never`, so naming the others by hand leaves `attach` accepting nothing. Let the types infer.
    *
    * Never attach to an address the sender typed (a `to` that returns `submission.email`, say): the files would go
    * wherever they point it, from your sender. A `to` resolved on the server, such as a tracking address looked up

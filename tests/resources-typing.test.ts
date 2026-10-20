@@ -1,6 +1,6 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { Dispatcher } from '#dispatchers/dispatcher.js'
-import { EmailDispatcher, type AttachableKey, type EmailTransport } from '#dispatchers/index.js'
+import { EmailDispatcher, type EmailTransport } from '#dispatchers/index.js'
 import { submissionNotificationTemplates } from '#dispatchers/submission-notification.js'
 import { FileAttachments, FileUploads, type AttachedFile, type Enricher, type FileLink } from '#enrichers/index.js'
 import { createFormRoute } from '#route.js'
@@ -116,12 +116,6 @@ describe('resource threading types', () => {
     const fileUploads = new FileUploads<Enquiry>({
       storage: { put: async () => {}, get: async () => null, delete: async () => {} },
       link: async (stored) => `https://example.com/files/${stored.objectKey}/`
-    })
-
-    it('names the resource keys that hold attachable files', () => {
-      expectTypeOf<
-        AttachableKey<{ cv: AttachedFile[]; photos: readonly AttachedFile[]; links: FileLink[] }>
-      >().toEqualTypeOf<'cv' | 'photos'>()
     })
 
     it("checks an email's attach key against what the enrichers provide", () => {
