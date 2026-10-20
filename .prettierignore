@@ -1,2 +1,6 @@
 # Prettier already skips everything in .gitignore; this lists only tracked files it mustn't touch.
 pnpm-lock.yaml
+
+# Generated fixtures, whose exact bytes the tests depend on.
+tests/fixtures/files/*
+!tests/fixtures/files/README.md

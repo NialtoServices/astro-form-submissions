@@ -19,6 +19,10 @@ export default defineConfig({
   resolve: {
     alias: [{ find: /^#(.*)\.js$/, replacement: `${SRC_DIR}/$1.ts` }]
   },
+
+  // workerd has no file system to read a fixture from, so a test imports one with `?inline`, which needs the
+  // bundler to treat the fixture as an asset rather than a module.
+  assetsInclude: ['**/tests/fixtures/files/*'],
   test: {
     include: ['tests/workers/**/*.workers-test.ts']
   }

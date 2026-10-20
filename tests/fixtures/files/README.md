@@ -1,0 +1,45 @@
+# File-type fixtures
+
+Small but structurally real files for the document matchers' tests. `generate.py` writes every one of them, using
+only Python's standard library, and the outputs are committed so the tests never need Python. To change a fixture,
+change the script and run it from anywhere:
+
+```sh
+python3 tests/fixtures/files/generate.py
+```
+
+The script is deterministic: every ZIP entry carries the earliest date the format allows, and nothing else records
+when or where it ran, so running it again reproduces the committed bytes exactly. No fixture holds personal data:
+the text is placeholder prose and the only document property is the title `Example`.
+
+## Accepted
+
+| Fixture                   | Produced by                                                                                                                                                                                         | Represents                                                         |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `cv.docx`                 | `zipfile`, deflated entries in the order Word writes them: `[Content_Types].xml` first, document properties last                                                                                    | A one-page Word document as Word saves it                          |
+| `cv-libreoffice.docx`     | The same parts, in the order LibreOffice writes them: package relationships and properties first, `[Content_Types].xml` last                                                                        | The same document from another producer                            |
+| `cv-with-comment.docx`    | `cv.docx`'s entries, with an archive comment after the end-of-central-directory record                                                                                                              | An archive whose end record isn't the file's last 22 bytes         |
+| `cv-data-descriptor.docx` | `cv.docx`'s entries written to a stream that can't seek, so each entry's sizes follow its data in a data descriptor and its local header carries none                                               | An archive written on the fly, readable only from its index        |
+| `cv.doc`                  | A hand-built version 3 compound file (512-byte sectors): `1Table`, `WordDocument`, both summary-information streams and `\x01CompObj`, small streams in the mini stream, the directory written last | A Word 97–2003 document                                            |
+| `cv.odt`                  | `zipfile`: `mimetype` first, stored uncompressed with no extra field, then the deflated content, styles, meta, settings and manifest                                                                | An OpenDocument text document                                      |
+| `cv.rtf`                  | Written as bytes                                                                                                                                                                                    | A short RTF document                                               |
+| `notes.txt`               | About 10 KB of UTF-8 prose with accented letters and `£`, padded so the 4 KiB boundaries from either end fall inside a multi-byte character                                                         | Plain text long enough to be checked at both ends                  |
+| `notes.md`                | Written as UTF-8                                                                                                                                                                                    | A Markdown file, which is accepted as text and keeps its extension |
+
+## Refused
+
+| Fixture          | Produced by                                                                                                                               | Represents                                           |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `cv.docm`        | `cv.docx`'s parts with the macro-enabled main content type and a `word/vbaProject.bin` entry, itself a compound file with a `VBA` storage | A macro-enabled Word document                        |
+| `book.xlsx`      | `zipfile`: workbook, one worksheet and their relationships                                                                                | An Excel workbook, a ZIP that isn't Word             |
+| `slides.pptx`    | `zipfile`: presentation, one slide, its layout, master and theme                                                                          | A PowerPoint presentation, a ZIP that isn't Word     |
+| `plain.zip`      | `zipfile`: two text files                                                                                                                 | An archive that isn't an office document at all      |
+| `truncated.docx` | The first half of `cv.docx`'s bytes                                                                                                       | A Word document cut short, with no central directory |
+| `book.xls`       | A hand-built compound file: `Workbook` (starting with a BIFF8 beginning-of-file record) and both summary-information streams              | An Excel 97–2003 workbook                            |
+| `slides.ppt`     | A hand-built compound file: `PowerPoint Document`, `Current User` and both summary-information streams                                    | A PowerPoint 97–2003 presentation                    |
+| `sheet.ods`      | As `cv.odt`, declaring `application/vnd.oasis.opendocument.spreadsheet`                                                                   | Another OpenDocument type                            |
+| `template.ott`   | As `cv.odt`, declaring `application/vnd.oasis.opendocument.text-template`, which starts with the text type                                | The near miss for a prefix comparison                |
+| `utf16.txt`      | UTF-16LE with a byte-order mark                                                                                                           | Text in an encoding other than UTF-8                 |
+
+Some tests derive further cases from these at run time (a long archive comment, a file cut short partway through
+its directory), so the fixture set stays small.

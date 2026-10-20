@@ -8,6 +8,7 @@
 
 import { ByteRangeReadError } from '#files/byte-range-read-error.js'
 import { readerForFile, type ByteRangeReader } from '#files/byte-range-reader.js'
+import { hasSignature } from '#files/matchers/bytes.js'
 
 /**
  * Number of leading bytes read and handed to each matcher.
@@ -53,25 +54,6 @@ export interface FileMatcher {
    * nothing about the file's type: its rejection propagates out of the type check, so a matcher should let it.
    */
   inspect?: (reader: ByteRangeReader) => Promise<boolean>
-}
-
-/**
- * Tests whether `bytes` contains `signature` at `offset`.
- *
- * @param bytes - The file's leading bytes.
- * @param signature - The expected bytes, one per character. Every character must be U+00FF or below; anything higher
- *   cannot appear in a byte and will never match.
- * @param offset - Offset the signature starts at. Defaults to the start of the header.
- * @returns `true` if every byte matches; `false` if any differs or the header is too short to hold the signature.
- */
-function hasSignature(bytes: Uint8Array, signature: string, offset = 0): boolean {
-  if (offset + signature.length > bytes.length) return false
-
-  for (let index = 0; index < signature.length; index++) {
-    if (bytes[offset + index] !== signature.charCodeAt(index)) return false
-  }
-
-  return true
 }
 
 /**

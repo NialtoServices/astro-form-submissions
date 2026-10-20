@@ -4,3 +4,9 @@ declare module 'cloudflare:workers' {
 
   export const env: { UPLOADS: R2BucketLike }
 }
+
+// A fixture imported with `?inline`, which the bundler hands over as a base64 `data:` URL.
+declare module '*?inline' {
+  const dataURL: string
+  export default dataURL
+}
