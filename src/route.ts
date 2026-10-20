@@ -7,7 +7,7 @@ import {
   type ClientAddressResolver
 } from '#admission.js'
 import { DestinationUnreachableError, type DispatchContext, type Dispatcher } from '#dispatchers/index.js'
-import { FileUploads, UploadedFiles, type Enricher, type EnrichmentContext } from '#enrichers/index.js'
+import { FileAttachments, FileUploads, UploadedFiles, type Enricher, type EnrichmentContext } from '#enrichers/index.js'
 import type { FormError, FormErrors, ToolkitErrorKey } from '#errors.js'
 import { RateLimitGuard, type Guard } from '#guards/index.js'
 import { TurnstileInspector, type Inspector } from '#inspectors/index.js'
@@ -92,14 +92,14 @@ export interface FormRouteConfig<
   /**
    * The most request-body bytes the route reads. A larger body is refused with `requestTooLarge` (413)
    * before it's parsed, and reading stops as soon as the limit is passed. Default
-   * {@link DEFAULT_MAX_BODY_BYTES} plus each {@link FileUploads} enricher's `maxTotalBytes`; raise it for a
-   * custom enricher that reads files from the body.
+   * {@link DEFAULT_MAX_BODY_BYTES} plus each {@link FileUploads} and {@link FileAttachments} enricher's
+   * `maxTotalBytes`; raise it for a custom enricher that reads files from the body.
    */
   maxBodyBytes?: number
 
   /**
    * The most bytes the route reads from a body that isn't multipart, such as an urlencoded form, within
-   * `maxBodyBytes`. Such a body can't carry files, so `FileUploads` never widens it. Default
+   * `maxBodyBytes`. Such a body can't carry files, so the file enrichers never widen it. Default
    * {@link DEFAULT_MAX_TEXT_BODY_BYTES}.
    */
   maxTextBodyBytes?: number
@@ -212,11 +212,12 @@ export function createFormRoute<
 
   const reporter = containedReporter(config.onError)
 
-  // A multipart body carries FileUploads' files themselves, so each one widens the default by what it accepts.
+  // A multipart body carries these enrichers' files themselves, so each one widens the default by what it accepts.
   const maxBodyBytes =
     config.maxBodyBytes ??
     (config.enrichers ?? []).reduce(
-      (total, enricher) => (enricher instanceof FileUploads ? total + enricher.maxTotalBytes : total),
+      (total, enricher) =>
+        enricher instanceof FileUploads || enricher instanceof FileAttachments ? total + enricher.maxTotalBytes : total,
       DEFAULT_MAX_BODY_BYTES
     )
 

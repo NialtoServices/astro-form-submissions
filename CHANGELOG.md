@@ -99,6 +99,12 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   each, 50 MB in total. Accepted: JPEG, PNG or PDF.") or fills a template of your own using `{maxFiles}`,
   `{maxFileSize}`, `{maxTotalSize}` and `{types}`. Also exports the `UploadRules` type. Rules that omit
   `maxFileBytes` get `maxTotalBytes` as their per-file limit, so no enricher default applies behind them.
+- `FileAttachments`, an enricher for files that go with the submission instead of into storage. It checks the form's
+  files as `FileUploads` does, holds them in memory as `AttachedFile`s (`name`, `contentType`, `size` and `bytes()`)
+  under `context.resources[attachTo]`, and has nothing to roll back. Its total defaults to 5 MB
+  (`DEFAULT_ATTACHMENT_TOTAL_BYTES`), `maxFileBytes` applies only when given, and its reason codes are
+  `file-attachments.*`. The route's default `maxBodyBytes` also adds each `FileAttachments` enricher's total.
+  Also exports `AttachedFile` and `FileAttachmentsOptions`.
 - The `accept` option of `FileUploads`, `UploadedFiles` and `createUploadRoute`, and the `sniffBytes`, `sniffType`
   and `sniffWithReader` parameters, take a `readonly FileMatcher[]`.
 

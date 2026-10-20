@@ -1,3 +1,4 @@
+import { FileAttachments } from '#enrichers/file-attachments.js'
 import { FileUploads } from '#enrichers/file-uploads.js'
 import { UploadedFiles } from '#enrichers/uploaded-files.js'
 import { R2Storage } from '#storage/r2.js'
@@ -22,6 +23,10 @@ const schema = {
 describe('numeric options at construction', () => {
   it.each(['maxFiles', 'maxFileBytes', 'maxTotalBytes'] as const)('FileUploads refuses a NaN `%s`', (option) => {
     expect(() => new FileUploads({ storage, link, [option]: Number.NaN })).toThrow(`FileUploads \`${option}\``)
+  })
+
+  it.each(['maxFiles', 'maxFileBytes', 'maxTotalBytes'] as const)('FileAttachments refuses a NaN `%s`', (option) => {
+    expect(() => new FileAttachments({ [option]: Number.NaN })).toThrow(`FileAttachments \`${option}\``)
   })
 
   it.each(['maxFiles', 'maxFileBytes', 'maxTotalBytes'] as const)('UploadedFiles refuses a NaN `%s`', (option) => {

@@ -1,6 +1,7 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
+import { FileAttachments } from '#enrichers/file-attachments.js'
 import { FileUploads } from '#enrichers/file-uploads.js'
 import { formError } from '#errors.js'
 import { RateLimitGuard } from '#guards/rate-limit.js'
@@ -643,6 +644,23 @@ describe('createFormRoute body limit', () => {
       (await createFormRoute({ ...baseConfig, enrichers: [fileUploads(3 * 1024 * 1024)] })(await twoMegabyteForm()))
         .status
     ).toBe(200)
+  })
+
+  it('widens the default body cap by the attachment limit', async () => {
+    const route = createFormRoute({ ...baseConfig, enrichers: [new FileAttachments()] })
+    const bodyOf = async (megabytes: number) => encodedContext(formWithFile(megabytes * 1024 * 1024))
+
+    expect((await route(await bodyOf(4))).status).toBe(200)
+
+    // 5.5 MiB passes the 6 MiB body cap, so the enricher's own total (5 MiB) refuses it.
+    const overTotal = await route(await bodyOf(5.5))
+    expect(overTotal.status).toBe(400)
+    expect(await overTotal.json()).toMatchObject({ fieldErrors: { file: expect.stringContaining('5 MB') } })
+
+    // 7 MiB is past the body cap, which runs before any enricher.
+    const overBody = await route(await bodyOf(7))
+    expect(overBody.status).toBe(413)
+    expect(await overBody.json()).toEqual({ error: ERRORS.requestTooLarge.message })
   })
 
   it('refuses a limit that would never limit', () => {

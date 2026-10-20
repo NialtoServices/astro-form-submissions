@@ -23,14 +23,18 @@ export {
 export type { FormSubmission, Verdict, VerdictDetail, VerdictDetails, VerdictReason } from '#pipeline.js'
 
 export {
+  DEFAULT_ATTACHMENT_TOTAL_BYTES,
   DEFAULT_MAX_FILE_BYTES,
   DEFAULT_MAX_FILES,
   DEFAULT_MAX_TOTAL_BYTES,
+  FileAttachments,
   FileUploads,
   UploadedFiles,
+  type AttachedFile,
   type Enricher,
   type EnrichmentContext,
   type EnrichmentResult,
+  type FileAttachmentsOptions,
   type FileLink,
   type FileUploadsOptions,
   type UploadedFilesOptions

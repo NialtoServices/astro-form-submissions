@@ -1,5 +1,11 @@
 export type { Enricher, EnrichmentContext, EnrichmentResult } from '#enrichers/enricher.js'
 export {
+  DEFAULT_ATTACHMENT_TOTAL_BYTES,
+  FileAttachments,
+  type AttachedFile,
+  type FileAttachmentsOptions
+} from '#enrichers/file-attachments.js'
+export {
   DEFAULT_MAX_FILE_BYTES,
   DEFAULT_MAX_FILES,
   DEFAULT_MAX_TOTAL_BYTES,

@@ -19,6 +19,7 @@ describe('package entry', () => {
   it('exports exactly the published runtime surface, so a dropped export fails here rather than in a site', () => {
     expect(Object.keys(toolkit).sort()).toEqual([
       'ALL_TYPES',
+      'DEFAULT_ATTACHMENT_TOTAL_BYTES',
       'DEFAULT_ERROR_COPY',
       'DEFAULT_MAX_BODY_BYTES',
       'DEFAULT_MAX_FILES',
@@ -33,6 +34,7 @@ describe('package entry', () => {
       'EmailDispatcher',
       'EmailRecipientError',
       'FILE_TYPES',
+      'FileAttachments',
       'FileUploads',
       'HEADER_BYTES',
       'HoneypotInspector',
@@ -116,6 +118,7 @@ export type {
   AcknowledgementContact,
   AddressInput,
   AdmittingRoute,
+  AttachedFile,
   ByteRangeReader,
   ClientAddressResolver,
   CopyContext,
@@ -143,6 +146,7 @@ export type {
   ErrorReporter,
   FieldInput,
   FieldSpec,
+  FileAttachmentsOptions,
   FileLink,
   FileMatcher,
   FilePayload,
