@@ -45,6 +45,9 @@ reason code, and a form posted without JavaScript gets a page a person can read.
    `plainSubmitted` and `plainRetry` (`DEFAULT_ERROR_COPY` has the default wording).
 9. **An `onError` hook that checks for `PostmarkDeliveryError` or `DiscordDeliveryError`** no longer sees a 502
    or 504: those arrive as `DestinationUnreachableError`, with the provider's error as its `cause`.
+10. **`DOCUMENT_TYPES` and `ALL_TYPES` now accept Word, OpenDocument text, RTF and plain text, and `ALL_TYPES`
+    also phone video.** A site relying on either default that wants the previous list sets
+    `accept: [...IMAGE_TYPES, FILE_TYPES.pdf]`.
 
 ### Added
 
@@ -69,6 +72,14 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   `R2Storage` implements it. Also exports `ByteRangeReader`, `MAX_INSPECTED_BYTES` and `MAX_INSPECTED_READS`.
 - A direct upload the storage fails to read while checking its type is refused with `uploadMissing` and
   reported as an `OperationalError` (`uploaded-files.read-failed`) naming the object's key.
+- `FILE_TYPES`, a frozen object naming every built-in matcher (`avif`, `gif`, `heic`, `jpeg`, `png`, `webp`, `pdf`,
+  `docx`, `doc`, `odt`, `rtf`, `text`, `quicktime`, `mp4`, `threeGPP`, `webm`, `matroska`), and the groups
+  `VIDEO_TYPES`, `MEDIA_TYPES`, `WORD_TYPES` and `TEXT_TYPES` beside `IMAGE_TYPES`, `DOCUMENT_TYPES` and `ALL_TYPES`.
+  The README's **File types** section lists what each type guarantees and when it is refused.
+- File types: Word (`.docx` and `.doc`), OpenDocument text, RTF, plain text (which includes Markdown), and the
+  video containers QuickTime, MP4, 3GP, WebM and Matroska. Each is recognised from the file's bytes, and a
+  stored file gains the extension of its type when its name lacks one.
+- Every built-in matcher has a `label`, such as `PDF`, `JPEG` and `Word`, for hint text.
 
 ### Changed
 

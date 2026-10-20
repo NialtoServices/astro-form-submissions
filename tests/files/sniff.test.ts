@@ -108,10 +108,10 @@ describe('sniffType', () => {
       expect(await sniffType(fileWithHeader(ftypHeader('mif1')))).toBeNull()
     })
 
-    it('rejects sequence and non-image brands (hevc, msf1, plain mp4)', async () => {
+    it('rejects sequence and non-image brands (hevc, msf1, plain mp4) as images', async () => {
       expect(await sniffType(fileWithHeader(ftypHeader('hevc')))).toBeNull()
       expect(await sniffType(fileWithHeader(ftypHeader('msf1')))).toBeNull()
-      expect(await sniffType(fileWithHeader(ftypHeader('mp42')))).toBeNull()
+      expect(await sniffType(fileWithHeader(ftypHeader('mp42')), IMAGE_TYPES)).toBeNull()
     })
 
     it('declines an ftyp box whose declared size is too small to hold a brand', async () => {
@@ -141,7 +141,7 @@ describe('sniffType', () => {
     })
 
     it('requires the full GIF version signature, not just GIF8', async () => {
-      expect(await sniffType(fileWithHeader(ascii('GIF8')))).toBeNull()
+      expect(await sniffType(fileWithHeader(ascii('GIF8')), IMAGE_TYPES)).toBeNull()
     })
   })
 

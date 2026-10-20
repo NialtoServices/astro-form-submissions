@@ -11,9 +11,14 @@ export {
 export {
   ALL_TYPES,
   DOCUMENT_TYPES,
+  FILE_TYPES,
   HEADER_BYTES,
   IMAGE_TYPES,
+  MEDIA_TYPES,
   sniffBytes,
   sniffType,
+  TEXT_TYPES,
+  VIDEO_TYPES,
+  WORD_TYPES,
   type FileMatcher
 } from '#files/sniff.js'

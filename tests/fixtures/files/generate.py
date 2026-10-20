@@ -601,6 +601,56 @@ def macro_project_bytes():
     )
 
 
+# MARK: - Media
+
+
+def atom(kind, payload=b""):
+    """An ISO base media or QuickTime atom: a big-endian size covering the whole atom, a four-character type, then the payload."""
+    return struct.pack(">I", 8 + len(payload)) + kind + payload
+
+
+def ftyp_atom(major_brand, minor_version, compatible_brands):
+    """A file type atom declaring a major brand, a minor version and the compatible brands."""
+    return atom(b"ftyp", major_brand + struct.pack(">I", minor_version) + b"".join(compatible_brands))
+
+
+def ebml_element(identifier, payload):
+    """An EBML element with a one-byte size, enough for every element a test header holds."""
+    return identifier + bytes([0x80 | len(payload)]) + payload
+
+
+def matroska_header(doc_type):
+    """The EBML header of a Matroska or WebM file, followed by the start of an unknown-size Segment."""
+    header = b"".join(
+        [
+            ebml_element(b"\x42\x86", b"\x01"),
+            ebml_element(b"\x42\xf7", b"\x01"),
+            ebml_element(b"\x42\xf2", b"\x04"),
+            ebml_element(b"\x42\xf3", b"\x08"),
+            ebml_element(b"\x42\x82", doc_type),
+            ebml_element(b"\x42\x87", b"\x04"),
+            ebml_element(b"\x42\x85", b"\x02"),
+        ]
+    )
+    return ebml_element(b"\x1a\x45\xdf\xa3", header) + b"\x18\x53\x80\x67\x01\xff\xff\xff\xff\xff\xff\xff"
+
+
+def media_fixtures():
+    """Headers of each video container and of the two images that share its `ftyp` structure."""
+    movie_data = atom(b"mdat", b"\x00" * 8)
+
+    return {
+        "clip.mov": ftyp_atom(b"qt  ", 0x20050300, [b"qt  "]) + atom(b"wide") + movie_data,
+        "legacy.mov": atom(b"wide") + movie_data + atom(b"moov", atom(b"mvhd", b"\x00" * 8)),
+        "clip.mp4": ftyp_atom(b"isom", 0x200, [b"isom", b"iso2", b"avc1", b"mp41"]) + atom(b"free") + movie_data,
+        "clip.3gp": ftyp_atom(b"3gp4", 0, [b"3gp4", b"isom"]) + movie_data,
+        "clip.webm": matroska_header(b"webm"),
+        "clip.mkv": matroska_header(b"matroska"),
+        "photo.heic": ftyp_atom(b"heic", 0, [b"mif1", b"heic"]) + atom(b"meta", b"\x00" * 8),
+        "photo.avif": ftyp_atom(b"avif", 0, [b"mif1", b"miaf", b"avif"]) + atom(b"meta", b"\x00" * 8),
+    }
+
+
 # MARK: - Text
 
 
@@ -677,6 +727,7 @@ def main():
         "notes.md": NOTES_MARKDOWN.encode("utf-8"),
         "utf16.txt": b"\xff\xfe" + "Notes saved as UTF-16.\r\nCafé opening hours.\r\n".encode("utf-16-le"),
     }
+    fixtures.update(media_fixtures())
     for name, data in fixtures.items():
         (OUTPUT_DIR / name).write_bytes(data)
 

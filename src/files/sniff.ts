@@ -9,6 +9,12 @@
 import { ByteRangeReadError } from '#files/byte-range-read-error.js'
 import { readerForFile, type ByteRangeReader } from '#files/byte-range-reader.js'
 import { hasSignature } from '#files/matchers/bytes.js'
+import { ftypBrands, ftypBrandsIncludeAny } from '#files/matchers/ftyp.js'
+import { DOC_TYPE } from '#files/matchers/ole.js'
+import { RTF_TYPE } from '#files/matchers/rtf.js'
+import { TEXT_TYPE } from '#files/matchers/text.js'
+import { MATROSKA_TYPE, MP4_TYPE, QUICKTIME_TYPE, THREE_GPP_TYPE, WEBM_TYPE } from '#files/matchers/video.js'
+import { DOCX_TYPE, ODT_TYPE } from '#files/matchers/zip.js'
 
 /**
  * Number of leading bytes read and handed to each matcher.
@@ -56,140 +62,147 @@ export interface FileMatcher {
   inspect?: (reader: ByteRangeReader) => Promise<boolean>
 }
 
-/**
- * Reads the four-character code at `offset` as a string.
- *
- * @param bytes - The file's leading bytes.
- * @param offset - Offset of the first of the four bytes.
- * @returns The four-character code, or `null` if the header is too short to contain it.
- */
-function fourCCAt(bytes: Uint8Array, offset: number): string | null {
-  if (offset + 4 > bytes.length) return null
+const AVIF_TYPE: FileMatcher = {
+  contentType: 'image/avif',
+  extensions: ['avif'],
+  label: 'AVIF',
 
-  return String.fromCharCode(...bytes.subarray(offset, offset + 4))
+  // A conformant AVIF must declare 'avif' (still) or 'avis' (sequence), so their absence is decisive. The registered
+  // `image/avif` covers sequences too, hence no separate matcher for 'avis'.
+  test: (bytes) => ftypBrandsIncludeAny(ftypBrands(bytes), ['avif', 'avis'])
+}
+
+const GIF_TYPE: FileMatcher = {
+  contentType: 'image/gif',
+  extensions: ['gif'],
+  label: 'GIF',
+
+  // Those are the only two versions ever published, so matching the full signature costs nothing over 'GIF8'.
+  test: (bytes) => hasSignature(bytes, 'GIF87a') || hasSignature(bytes, 'GIF89a')
+}
+
+const HEIC_TYPE: FileMatcher = {
+  contentType: 'image/heic',
+  extensions: ['heic', 'heif'],
+  label: 'HEIC',
+
+  // Per IANA's `image/heic` registration, the subtype applies only to files declaring 'heic', 'heix', 'heim' or
+  // 'heis'. Excluded on purpose: 'mif1'/'msf1' are HEIF's structural (container, not codec) brands that every
+  // conformant AVIF also declares, so a file carrying only those is `image/heif`, whose codec the header doesn't
+  // reveal; 'hevc'/'hevx' are image *sequence* brands (`image/heic-sequence`); 'heif' was never a brand.
+  //
+  // A multi-codec HEIF can declare both an HEVC and an AVIF brand; its primary item — well past the header — decides
+  // which it is. AVIF is matched first and takes the tie by position.
+  test: (bytes) => ftypBrandsIncludeAny(ftypBrands(bytes), ['heic', 'heix', 'heim', 'heis'])
+}
+
+const JPEG_TYPE: FileMatcher = {
+  contentType: 'image/jpeg',
+  extensions: ['jpg', 'jpeg', 'jpe', 'jfif'],
+  label: 'JPEG',
+
+  // \xff\xd8 is the SOI marker; the trailing \xff is the lead byte of whichever marker follows, and rules out a bare
+  // two-byte SOI with nothing after it.
+  test: (bytes) => hasSignature(bytes, '\xff\xd8\xff')
+}
+
+const PNG_TYPE: FileMatcher = {
+  contentType: 'image/png',
+  extensions: ['png'],
+  label: 'PNG',
+
+  // The bytes around 'PNG' are a deliberate corruption trap: the high bit catches 7-bit-stripping transports, and the
+  // \r\n / \n pair catches CRLF translation.
+  test: (bytes) => hasSignature(bytes, '\x89PNG\r\n\x1a\n')
+}
+
+const WEBP_TYPE: FileMatcher = {
+  contentType: 'image/webp',
+  extensions: ['webp'],
+  label: 'WebP',
+
+  // Bytes 4–7 are the RIFF chunk size, hence the gap.
+  test: (bytes) => hasSignature(bytes, 'RIFF') && hasSignature(bytes, 'WEBP', 8)
+}
+
+const PDF_TYPE: FileMatcher = {
+  contentType: 'application/pdf',
+  extensions: ['pdf'],
+  label: 'PDF',
+
+  // Readers tolerate junk before the header; the allow-list deliberately does not.
+  test: (bytes) => hasSignature(bytes, '%PDF-')
 }
 
 /**
- * Returns every brand declared by a leading ISO-BMFF `ftyp` box — the major brand plus all compatible brands.
- *
- * Box layout: size (4 bytes, big-endian), `ftyp` (4), major brand (4), minor version (4, an integer — *not* a brand),
- * then compatible brands (4 each) until the end of the box.
- *
- * The compatible brands are where the answer usually lives. AVIF requires `avif` or `avis` in the compatible list, not
- * the major slot, and conformant encoders put `mif1` in the major slot often enough that a major-brand-only check
- * misfiles them.
- *
- * @param bytes - The file's leading bytes.
- * @returns The declared brands, or an empty array if the header isn't an `ftyp` box we can parse.
+ * Every built-in matcher, by name. Each value is the matcher itself, so one drops straight into an `accept` list
+ * beside a matcher of your own: `accept: [...IMAGE_TYPES, FILE_TYPES.pdf]`.
  */
-function ftypBrands(bytes: Uint8Array): string[] {
-  if (!hasSignature(bytes, 'ftyp', 4)) return []
-
-  // Indices 0–3 are present: the check above passed, and a Uint8Array is contiguous.
-  const size = new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0)
-
-  // size === 1 means a 64-bit largesize occupies offsets 8–15 and shifts the brands; size === 0 means "box runs to EOF".
-  // Neither is legal for `ftyp`, and misparsing one would read brands from the wrong offsets, so decline to guess.
-  if (size < 16) return []
-
-  // The box also needs 16 actual bytes present (size + type + major brand + minor version); a file declaring them but
-  // ending at the major brand (offsets 8–11) is truncated, so don't trust the brand it appears to carry.
-  if (bytes.length < 16) return []
-
-  const major = fourCCAt(bytes, 8)
-  if (major === null) return []
-
-  // A box longer than HEADER_BYTES simply has brands we can't see.
-  const end = Math.min(size, bytes.length)
-
-  const brands = [major]
-  for (let offset = 16; offset + 4 <= end; offset += 4) {
-    const brand = fourCCAt(bytes, offset)
-    if (brand !== null) brands.push(brand)
-  }
-
-  return brands
-}
-
-/**
- * Tests whether an `ftyp` box declares at least one of `allowed`.
- *
- * @param brands - The brands declared by the box, from {@link ftypBrands}.
- * @param allowed - The brands that satisfy this test.
- * @returns `true` if any declared brand is on `allowed`.
- */
-function ftypBrandsIncludeAny(brands: string[], allowed: string[]): boolean {
-  return brands.some((brand) => allowed.includes(brand))
-}
+export const FILE_TYPES = Object.freeze({
+  avif: AVIF_TYPE,
+  gif: GIF_TYPE,
+  heic: HEIC_TYPE,
+  jpeg: JPEG_TYPE,
+  png: PNG_TYPE,
+  webp: WEBP_TYPE,
+  pdf: PDF_TYPE,
+  docx: DOCX_TYPE,
+  doc: DOC_TYPE,
+  odt: ODT_TYPE,
+  rtf: RTF_TYPE,
+  text: TEXT_TYPE,
+  quicktime: QUICKTIME_TYPE,
+  mp4: MP4_TYPE,
+  threeGPP: THREE_GPP_TYPE,
+  webm: WEBM_TYPE,
+  matroska: MATROSKA_TYPE
+})
 
 /** Image matchers: AVIF, GIF, HEIC, JPEG, PNG, WebP. */
 export const IMAGE_TYPES: FileMatcher[] = [
-  {
-    contentType: 'image/avif',
-    extensions: ['avif'],
-
-    // A conformant AVIF must declare 'avif' (still) or 'avis' (sequence), so their absence is decisive. The registered
-    // `image/avif` covers sequences too, hence no separate matcher for 'avis'.
-    test: (bytes) => ftypBrandsIncludeAny(ftypBrands(bytes), ['avif', 'avis'])
-  },
-  {
-    contentType: 'image/gif',
-    extensions: ['gif'],
-
-    // Those are the only two versions ever published, so matching the full signature costs nothing over 'GIF8'.
-    test: (bytes) => hasSignature(bytes, 'GIF87a') || hasSignature(bytes, 'GIF89a')
-  },
-  {
-    contentType: 'image/heic',
-    extensions: ['heic', 'heif'],
-
-    // Per IANA's `image/heic` registration, the subtype applies only to files declaring 'heic', 'heix', 'heim' or
-    // 'heis'. Excluded on purpose: 'mif1'/'msf1' are HEIF's structural (container, not codec) brands that every
-    // conformant AVIF also declares, so a file carrying only those is `image/heif`, whose codec the header doesn't
-    // reveal; 'hevc'/'hevx' are image *sequence* brands (`image/heic-sequence`); 'heif' was never a brand.
-    //
-    // A multi-codec HEIF can declare both an HEVC and an AVIF brand; its primary item — well past the header — decides
-    // which it is. AVIF is matched first and takes the tie by position.
-    test: (bytes) => ftypBrandsIncludeAny(ftypBrands(bytes), ['heic', 'heix', 'heim', 'heis'])
-  },
-  {
-    contentType: 'image/jpeg',
-    extensions: ['jpg', 'jpeg', 'jpe', 'jfif'],
-
-    // \xff\xd8 is the SOI marker; the trailing \xff is the lead byte of whichever marker follows, and rules out a bare
-    // two-byte SOI with nothing after it.
-    test: (bytes) => hasSignature(bytes, '\xff\xd8\xff')
-  },
-  {
-    contentType: 'image/png',
-    extensions: ['png'],
-
-    // The bytes around 'PNG' are a deliberate corruption trap: the high bit catches 7-bit-stripping transports, and the
-    // \r\n / \n pair catches CRLF translation.
-    test: (bytes) => hasSignature(bytes, '\x89PNG\r\n\x1a\n')
-  },
-  {
-    contentType: 'image/webp',
-    extensions: ['webp'],
-
-    // Bytes 4–7 are the RIFF chunk size, hence the gap.
-    test: (bytes) => hasSignature(bytes, 'RIFF') && hasSignature(bytes, 'WEBP', 8)
-  }
+  FILE_TYPES.avif,
+  FILE_TYPES.gif,
+  FILE_TYPES.heic,
+  FILE_TYPES.jpeg,
+  FILE_TYPES.png,
+  FILE_TYPES.webp
 ]
 
-/** Document matchers: PDF. */
+/** Video matchers: QuickTime, MP4, 3GP, WebM, Matroska. They name the container, not the codecs inside it. */
+export const VIDEO_TYPES: FileMatcher[] = [
+  FILE_TYPES.quicktime,
+  FILE_TYPES.mp4,
+  FILE_TYPES.threeGPP,
+  FILE_TYPES.webm,
+  FILE_TYPES.matroska
+]
+
+/** Image and video matchers. Images come first because AVIF and HEIC share their container with video. */
+export const MEDIA_TYPES: FileMatcher[] = [...IMAGE_TYPES, ...VIDEO_TYPES]
+
+/** Word matchers: `.docx` and the older `.doc`. */
+export const WORD_TYPES: FileMatcher[] = [FILE_TYPES.docx, FILE_TYPES.doc]
+
+/** Plain-text matchers, which also accept Markdown. */
+export const TEXT_TYPES: FileMatcher[] = [FILE_TYPES.text]
+
+/**
+ * Document matchers: PDF, Word, OpenDocument text, RTF and plain text, in the order that checks them correctly. RTF
+ * and almost any other format are also valid text, so each is tried before the one it could be mistaken for.
+ */
 export const DOCUMENT_TYPES: FileMatcher[] = [
-  {
-    contentType: 'application/pdf',
-    extensions: ['pdf'],
-
-    // Readers tolerate junk before the header; the allow-list deliberately does not.
-    test: (bytes) => hasSignature(bytes, '%PDF-')
-  }
+  FILE_TYPES.pdf,
+  ...WORD_TYPES,
+  FILE_TYPES.odt,
+  FILE_TYPES.rtf,
+  ...TEXT_TYPES
 ]
 
-/** The default allow-list: every image and document matcher. */
-export const ALL_TYPES: FileMatcher[] = [...IMAGE_TYPES, ...DOCUMENT_TYPES]
+/**
+ * The default allow-list: every built-in matcher. Images precede video, binary documents precede RTF, and plain
+ * text comes last, which is the order each needs to be checked in.
+ */
+export const ALL_TYPES: FileMatcher[] = [...MEDIA_TYPES, ...DOCUMENT_TYPES]
 
 /**
  * Runs a matcher's header test, counting a throw as a failed test.

@@ -24,6 +24,7 @@ what a site must do to move to it.
 - [Inspectors](#inspectors)
 - [Dispatchers](#dispatchers)
 - [File uploads](#file-uploads)
+  - [File types](#file-types)
   - [Direct uploads](#direct-uploads)
 - [The form (client enhancement)](#the-form-client-enhancement)
 - [Styling](#styling)
@@ -944,7 +945,7 @@ enrichers: [
     storage: new R2Storage({ bucket: env.UPLOADS_BUCKET, prefix: 'uploads/' }),
     maxFiles: 5,
     maxFileBytes: 10 * 1024 * 1024,
-    accept: ALL_TYPES,                                   // magic-byte allow-list (IMAGE_TYPES, DOCUMENT_TYPES)
+    accept: ALL_TYPES,                                   // magic-byte allow-list; see File types for the groups
     link: signedLink({ secret: env.UPLOADS_LINK_SECRET, ttlSeconds: 7 * 24 * 60 * 60 }),
     attachTo: 'files'                                    // the `context.resources` key the links land on
   })
@@ -1032,6 +1033,73 @@ logical key the file was stored under (`R2Storage` applies the `prefix`), which 
 
 A rolled-back or lifecycle-expired object simply 410s. Deletion/erasure of stored uploads is the
 bucket's job; the toolkit never retains the files or the bearer URLs itself.
+
+### File types
+
+`accept` takes a list of matchers, and the package ships every type it can recognise, named in `FILE_TYPES` and
+gathered into ready-made groups. Each value is the matcher itself, so one composes with the others and with a
+matcher of your own.
+
+| Group            | Contains                                      |
+| ---------------- | --------------------------------------------- |
+| `IMAGE_TYPES`    | AVIF, GIF, HEIC, JPEG, PNG, WebP              |
+| `VIDEO_TYPES`    | QuickTime, MP4, 3GP, WebM, Matroska           |
+| `MEDIA_TYPES`    | `IMAGE_TYPES` and `VIDEO_TYPES`               |
+| `WORD_TYPES`     | `.docx`, `.doc`                               |
+| `TEXT_TYPES`     | Plain text, which includes Markdown           |
+| `DOCUMENT_TYPES` | PDF, Word, OpenDocument text, RTF, plain text |
+| `ALL_TYPES`      | Everything above; the default `accept`        |
+
+`FILE_TYPES` is frozen and has the keys `avif`, `gif`, `heic`, `jpeg`, `png`, `webp`, `pdf`, `docx`, `doc`, `odt`,
+`rtf`, `text`, `quicktime`, `mp4`, `threeGPP`, `webm` and `matroska`. Build an accept list from the groups and the
+names, spreading a group where you want all of it:
+
+```ts
+import { FILE_TYPES, IMAGE_TYPES, WORD_TYPES } from '@nialto-services/astro-form-submissions'
+
+// A job application: a CV in Word or PDF, or a photo of a certificate.
+const accept = [FILE_TYPES.pdf, ...WORD_TYPES, ...IMAGE_TYPES]
+```
+
+A list is tried in order and the first matcher to pass wins, so a list you assemble by hand should keep three
+rules that `ALL_TYPES` already follows: images before video (AVIF and HEIC share their container with video),
+binary formats before RTF, and plain text last, since almost any file is valid text at one end or the other.
+Each matcher also has a `label` (`Word`, `PDF`, `JPEG`) for hint text.
+
+Every type is recognised from the file's own bytes, never its name or its `Content-Type`, and nothing is
+unpacked: Word and OpenDocument files are read from their index, not inflated. The check says what a file is
+shaped like, not that it is safe, so what it guarantees is deliberately narrow:
+
+| Type              | Content type                                                              | Extension    | Guarantees                                                   |
+| ----------------- | ------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------ |
+| Word              | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `docx`       | Word, not macro-enabled; plain ZIP, xlsx, pptx, docm refused |
+| Word 97-2003      | `application/msword`                                                      | `doc`        | Word, not Excel/PowerPoint; may carry macros                 |
+| OpenDocument text | `application/vnd.oasis.opendocument.text`                                 | `odt`        | ODF text, not another ODF type                               |
+| RTF               | `application/rtf`                                                         | `rtf`        | starts like RTF; may embed objects                           |
+| Plain text        | `text/plain`                                                              | `txt`, `md`  | starts and ends like text; matched last                      |
+| QuickTime         | `video/quicktime`                                                         | `mov`        | container type only                                          |
+| MP4               | `video/mp4`                                                               | `mp4`, `m4v` | container type only                                          |
+| 3GP               | `video/3gpp`                                                              | `3gp`, `3g2` | container type only                                          |
+| WebM              | `video/webm`                                                              | `webm`       | container type only                                          |
+| Matroska          | `video/x-matroska`                                                        | `mkv`        | container type only                                          |
+
+Images and PDF are recognised from their signatures alone.
+
+Anything that falls outside what can be read is refused rather than guessed at. The limits worth knowing:
+
+- **`.doc`** is recognised when its `WordDocument` stream is listed in the first two directory sectors of the
+  compound file. A Word file that embeds an Excel or PowerPoint object whose stream sits there is refused.
+- **`.docx`** is refused when the archive is ZIP64, has a comment of more than about 32 KiB, or has a central
+  directory of more than 48 KiB.
+- **`.odt`** is refused when it was written with a data descriptor for its `mimetype` entry.
+- **Plain text** is checked at its first and last 4 KiB, or in whole when it is 8 KiB or less. It must be UTF-8,
+  with or without a byte-order mark, and hold no control characters except tab, line feed, form feed and carriage
+  return; UTF-16 text is refused.
+- **Direct uploads** need a storage that can read ranges of an object, which `R2Storage` does. A storage that
+  cannot leaves Word, OpenDocument and plain text unmatched, so those files are refused.
+
+The default `accept` is `ALL_TYPES`, which includes video and text. To accept only images and PDF, name that list
+yourself: `accept: [...IMAGE_TYPES, FILE_TYPES.pdf]`.
 
 ### Direct uploads
 
