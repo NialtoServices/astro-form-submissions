@@ -22,3 +22,4 @@ export {
   WORD_TYPES,
   type FileMatcher
 } from '#files/sniff.js'
+export { describeUploadRules, uploadInputAttributes, uploadRules, type UploadRules } from '#files/upload-rules.js'

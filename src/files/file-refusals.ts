@@ -1,6 +1,7 @@
 import { FILE_COPY } from '#client/file-copy.js'
 import { formatFileSize } from '#client/file-size.js'
 import { formError, type FormError } from '#errors.js'
+import { describeAcceptedTypes } from '#files/accepted-types.js'
 import type { FileMatcher } from '#files/sniff.js'
 
 /** What {@link FileRefusals} needs to know about a file field. */
@@ -18,22 +19,7 @@ export interface FileRefusalRules {
   maxTotalBytes: number
 
   /** The accepted types, whose labels the type refusal lists. */
-  accept: FileMatcher[]
-}
-
-/** Stands in for the accepted types when none of the accepted matchers carries a label. */
-const UNLABELLED_TYPES = 'a supported file type'
-
-/**
- * Joins items for a sentence: `PDF`, `JPEG or PDF`, `JPEG, PNG or PDF`.
- *
- * @param items - The items to join.
- * @returns The joined text, empty for no items.
- */
-function joinAlternatives(items: readonly string[]): string {
-  if (items.length <= 1) return items.join('')
-
-  return `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`
+  accept: readonly FileMatcher[]
 }
 
 /**
@@ -65,15 +51,13 @@ export class FileRefusals {
    * @param rules - The field's name and limits.
    */
   constructor(rules: FileRefusalRules) {
-    const labels = [...new Set(rules.accept.flatMap((matcher) => (matcher.label ? [matcher.label] : [])))]
-
     this.field = rules.field
     this.maxFiles = rules.maxFiles
     this.placeholders = {
       maxFiles: String(rules.maxFiles),
       maxFileSize: formatFileSize(rules.maxFileBytes),
       maxTotalSize: formatFileSize(rules.maxTotalBytes),
-      types: labels.length > 0 ? joinAlternatives(labels) : UNLABELLED_TYPES
+      types: describeAcceptedTypes(rules.accept)
     }
   }
 

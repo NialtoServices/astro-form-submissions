@@ -61,7 +61,7 @@ export interface UploadedFilesOptions<E extends FormSubmission = FormSubmission,
    * Permitted content-type matchers, checked against the stored bytes. Default {@link ALL_TYPES}. A matcher that
    * reads beyond the header (`inspect`) needs the storage to implement `readRange`, and never matches without it.
    */
-  accept?: FileMatcher[]
+  accept?: readonly FileMatcher[]
 
   /**
    * Turns a stored object into an absolute http(s) download URL (e.g. {@link signedLink}). Any other result

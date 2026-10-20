@@ -92,6 +92,14 @@ reason code, and a form posted without JavaScript gets a page a person can read.
 - `UploadedFiles` and `createUploadRoute` take an `input` option, the file input's name, which their refusals are
   reported against. It defaults to `file`.
 - The new error keys `filesTooLarge` and `fileRequired` join `ToolkitErrorKey` and `DEFAULT_ERROR_COPY`.
+- `uploadRules`, which validates and freezes a file field's limits and accepted types (`maxFiles`, `maxFileBytes`,
+  `maxTotalBytes`, `accept`, `required`) so one shared definition spreads into `FileUploads`, `UploadedFiles` and
+  `createUploadRoute`; `uploadInputAttributes`, which gives the file input its `accept`, `multiple`, `required` and
+  limit attributes from the same rules; and `describeUploadRules`, which writes the hint ("Up to 5 files, 10 MB
+  each, 50 MB in total. Accepted: JPEG, PNG or PDF.") or fills a template of your own using `{maxFiles}`,
+  `{maxFileSize}`, `{maxTotalSize}` and `{types}`. Also exports the `UploadRules` type.
+- The `accept` option of `FileUploads`, `UploadedFiles` and `createUploadRoute`, and the `sniffBytes`, `sniffType`
+  and `sniffWithReader` parameters, take a `readonly FileMatcher[]`.
 
 ### Changed
 

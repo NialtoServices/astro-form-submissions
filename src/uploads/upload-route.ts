@@ -55,7 +55,7 @@ export interface UploadRouteConfig<S extends SchemaInput> extends AdmissionConfi
    * declared, anything else as `application/octet-stream`. Pass the same list as the
    * {@link UploadedFiles} enricher, which sniffs the stored bytes against it. Default {@link ALL_TYPES}.
    */
-  accept?: FileMatcher[]
+  accept?: readonly FileMatcher[]
 
   /**
    * Called with each failure the route handles itself and each refused, dropped or quarantined request. The

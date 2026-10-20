@@ -67,7 +67,7 @@ export interface FileUploadsOptions<E extends FormSubmission = FormSubmission, K
    * Permitted content-type matchers, checked by magic bytes (never the client MIME), reading further ranges of
    * the file for a matcher that asks. Default {@link ALL_TYPES}.
    */
-  accept?: FileMatcher[]
+  accept?: readonly FileMatcher[]
 
   /** Whether the field must carry a file. An empty field is refused with `fileRequired`. Default `false`. */
   required?: boolean

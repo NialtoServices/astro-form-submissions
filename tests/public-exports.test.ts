@@ -62,6 +62,7 @@ describe('package entry', () => {
       'createUploadRoute',
       'defaultErrorReporter',
       'defineLazyRoute',
+      'describeUploadRules',
       'escapeDiscordMarkdown',
       'formDataToObject',
       'formError',
@@ -84,6 +85,8 @@ describe('package entry', () => {
       'sniffType',
       'submissionAcknowledgementTemplates',
       'submissionNotificationTemplates',
+      'uploadInputAttributes',
+      'uploadRules',
       'validationFailed',
       'verifyFileToken'
     ])
@@ -187,6 +190,7 @@ export type {
   TurnstileInspectorOptions,
   UploadInstruction,
   UploadRouteConfig,
+  UploadRules,
   UploadTarget,
   UploadedFilesOptions,
   ValidationFailure,

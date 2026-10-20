@@ -230,7 +230,7 @@ function passesHeaderTest(matcher: FileMatcher, header: Uint8Array): boolean {
  * @param matchers - The permitted matchers; defaults to {@link ALL_TYPES}.
  * @returns The matched content-type, or `null` when the bytes match nothing on the list.
  */
-export function sniffBytes(header: Uint8Array, matchers: FileMatcher[] = ALL_TYPES): string | null {
+export function sniffBytes(header: Uint8Array, matchers: readonly FileMatcher[] = ALL_TYPES): string | null {
   for (const matcher of matchers) {
     if (!matcher.inspect && passesHeaderTest(matcher, header)) return matcher.contentType
   }
@@ -253,7 +253,7 @@ export function sniffBytes(header: Uint8Array, matchers: FileMatcher[] = ALL_TYP
 export async function sniffWithReader(
   header: Uint8Array,
   reader: ByteRangeReader | undefined,
-  matchers: FileMatcher[] = ALL_TYPES
+  matchers: readonly FileMatcher[] = ALL_TYPES
 ): Promise<string | null> {
   for (const matcher of matchers) {
     if (!passesHeaderTest(matcher, header)) continue
@@ -277,7 +277,7 @@ export async function sniffWithReader(
  * @param matchers - The allow-list it came from.
  * @returns The matcher's extensions, if any.
  */
-export function extensionsFor(contentType: string, matchers: FileMatcher[]): readonly string[] | undefined {
+export function extensionsFor(contentType: string, matchers: readonly FileMatcher[]): readonly string[] | undefined {
   return matchers.find((matcher) => matcher.contentType === contentType)?.extensions
 }
 
@@ -288,7 +288,7 @@ export function extensionsFor(contentType: string, matchers: FileMatcher[]): rea
  * @param matchers - The permitted matchers; defaults to {@link ALL_TYPES}.
  * @returns The matched content-type, or `null` when the file matches nothing on the list.
  */
-export async function sniffType(file: File, matchers: FileMatcher[] = ALL_TYPES): Promise<string | null> {
+export async function sniffType(file: File, matchers: readonly FileMatcher[] = ALL_TYPES): Promise<string | null> {
   const header = new Uint8Array(await file.slice(0, HEADER_BYTES).arrayBuffer())
   return sniffWithReader(header, readerForFile(file), matchers)
 }

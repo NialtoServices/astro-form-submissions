@@ -51,6 +51,7 @@ export {
 export {
   ALL_TYPES,
   createFileRoute,
+  describeUploadRules,
   DOCUMENT_TYPES,
   FILE_TYPES,
   HEADER_BYTES,
@@ -63,6 +64,8 @@ export {
   sniffBytes,
   sniffType,
   TEXT_TYPES,
+  uploadInputAttributes,
+  uploadRules,
   verifyFileToken,
   VIDEO_TYPES,
   WORD_TYPES,
@@ -71,7 +74,8 @@ export {
   type FileMatcher,
   type FilePayload,
   type FileToken,
-  type SignedLinkOptions
+  type SignedLinkOptions,
+  type UploadRules
 } from '#files/index.js'
 
 export {

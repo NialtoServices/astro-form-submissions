@@ -25,6 +25,7 @@ what a site must do to move to it.
 - [Dispatchers](#dispatchers)
 - [File uploads](#file-uploads)
   - [File types](#file-types)
+  - [Upload rules](#upload-rules)
   - [Direct uploads](#direct-uploads)
 - [The form (client enhancement)](#the-form-client-enhancement)
 - [Styling](#styling)
@@ -986,8 +987,7 @@ key needs a second type argument, pass both to the template builder — `submiss
 
 **Keep the limits in one place.** The client file UI you write (the `<input accept>`, any
 pre-submit size/count check, the error copy) must agree with the server's `maxFiles` / `maxFileBytes`.
-Declare them once in a module both import — e.g. `src/lib/contact-limits.ts` exporting `MAX_FILES` /
-`MAX_FILE_BYTES` — rather than re-typing the numbers in the endpoint and the `.astro` script, where
+Declare them once in a module both import, with [`uploadRules`](#upload-rules), rather than re-typing the numbers in the endpoint and the `.astro` script, where
 they drift. The package also exports the enricher's own defaults (`DEFAULT_MAX_FILES`,
 `DEFAULT_MAX_FILE_BYTES`, `DEFAULT_MAX_TOTAL_BYTES`) if you want to reference them.
 
@@ -1123,6 +1123,58 @@ Anything that falls outside what can be read is refused rather than guessed at. 
 
 The default `accept` is `ALL_TYPES`, which includes video and text. To accept only images and PDF, name that list
 yourself: `accept: [...IMAGE_TYPES, FILE_TYPES.pdf]`.
+
+### Upload rules
+
+The server's limits and the file input's `accept`, `multiple` and hint text all describe the same field, so
+declare them once. `uploadRules` validates a field's limits and accepted types and freezes them; the result
+spreads into `FileUploads` (or `UploadedFiles` and `createUploadRoute`, for [direct uploads](#direct-uploads)), and
+`uploadInputAttributes` and `describeUploadRules` read the same object in the component.
+
+```ts
+// src/lib/uploads.ts
+import { FILE_TYPES, IMAGE_TYPES, uploadRules } from '@nialto-services/astro-form-submissions'
+
+const MB = 1024 * 1024
+
+// A quote form with photos of the job, and a PDF of any plans.
+export const quoteUploads = uploadRules({
+  maxFiles: 5,
+  maxFileBytes: 10 * MB,
+  maxTotalBytes: 50 * MB,
+  accept: [...IMAGE_TYPES, FILE_TYPES.pdf]
+})
+```
+
+```ts
+// In the route
+import { quoteUploads } from '../../lib/uploads'
+
+new FileUploads<Quote>({ ...quoteUploads, storage, link, attachTo: 'files' })
+```
+
+```astro
+---
+// In the form component
+import { describeUploadRules, uploadInputAttributes } from '@nialto-services/astro-form-submissions'
+import { quoteUploads } from '../lib/uploads'
+---
+
+<input type='file' name='file' {...uploadInputAttributes(quoteUploads)} />
+<p>{describeUploadRules(quoteUploads)}</p>
+```
+
+`uploadInputAttributes` returns `accept` (the content types, then each type's extensions), `multiple` when more
+than one file is allowed, `required` when the rules say so, and `data-astro-form-max-files`,
+`data-astro-form-max-file-bytes` (only when the rules set `maxFileBytes`) and `data-astro-form-max-total-bytes`,
+which the form script reads. `describeUploadRules` writes a sentence fitted to the rules, such as "Up to 5 files,
+10 MB each, 50 MB in total. Accepted: JPEG, PNG or PDF." or "One file, up to 5 MB. Accepted: PDF or Word."
+Pass a template of your own for other wording or a translation; it may use `{maxFiles}`, `{maxFileSize}`,
+`{maxTotalSize}` and `{types}`, and a token with no value is left as written.
+
+```ts
+describeUploadRules(quoteUploads, 'Jusqu’à {maxFiles} fichiers de {maxFileSize}. Formats : {types}.')
+```
 
 ### Direct uploads
 
