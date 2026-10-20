@@ -1486,7 +1486,7 @@ Success requires the route's `{ ok: true }` body — any other 2xx response is t
 
 `initializeForms` enhances every `[data-astro-form]` form in the document, and every one added to it
 later (safe to call repeatedly). A form without its required status element is left unenhanced, with a
-console warning. Each hook is an attribute you add to your own markup:
+console warning, until the element is added. Each hook is an attribute you add to your own markup:
 
 | Attribute                                                               | On                              | Purpose                                                                                                                                                                    |
 | ----------------------------------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

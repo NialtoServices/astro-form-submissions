@@ -22,6 +22,15 @@ const formControllers = new Map<HTMLFormElement, FormController>()
 /** Watches for forms added after the first `initializeForms` call, and for bound forms leaving the page. */
 let formObserver: MutationObserver | undefined
 
+/** The pending release of bound forms that have left the page, at most one at a time. */
+let releaseTimer: ReturnType<typeof setTimeout> | undefined
+
+/** Forms already warned about, so retrying an incomplete form doesn't repeat its warning. */
+const warnedFormElements = new WeakSet<HTMLFormElement>()
+
+/** Forms whose warning waits for the document to finish parsing. */
+const heldFormElements = new WeakSet<HTMLFormElement>()
+
 // MARK: - Parts
 
 /**
@@ -39,7 +48,7 @@ function attachFormPart(formController: FormController, factory: FormPartFactory
     const teardown = factory(formController.formElement, formController)
     if (teardown) formController.addTeardown(teardown)
   } catch (error) {
-    console.error('Failed to initialize a form part', error)
+    console.error('[astro-form-submissions] Failed to initialize a form part', error)
   }
 }
 
@@ -58,19 +67,41 @@ function bindForm(formElement: HTMLFormElement): void {
   try {
     formController = new FormController(formElement)
   } catch (error) {
-    // Unenhanced, the form posts natively and the visitor lands on the route's raw JSON, so the cause has to
-    // surface somewhere a developer will look.
     if (error instanceof FormMarkupError) {
-      console.warn(`[astro-form-submissions] ${error.message}`, error.formElement)
+      warnAboutMarkup(error)
       return
     }
 
-    console.error('Failed to initialize FormController', error)
+    console.error('[astro-form-submissions] Failed to initialize FormController', error)
     return
   }
 
   formControllers.set(formElement, formController)
   for (const factory of formPartFactories) attachFormPart(formController, factory)
+}
+
+/**
+ * Warn, once per form, that a form can't be enhanced. Unenhanced, the form posts natively and the visitor lands
+ * on the route's raw JSON, so the cause has to surface somewhere a developer will look.
+ */
+function warnAboutMarkup(error: FormMarkupError): void {
+  const { formElement } = error
+  if (warnedFormElements.has(formElement) || heldFormElements.has(formElement)) return
+
+  // While the document is still parsing, the parser may yet add the missing element, and the observer then
+  // binds the form, so the form is judged once parsing ends.
+  if (document.readyState === 'loading') {
+    heldFormElements.add(formElement)
+    const judgeForm = () => {
+      heldFormElements.delete(formElement)
+      if (formElement.isConnected && !formElement.dataset.astroFormBound) warnAboutMarkup(error)
+    }
+    document.addEventListener('DOMContentLoaded', judgeForm, { once: true })
+    return
+  }
+
+  warnedFormElements.add(formElement)
+  console.warn(`[astro-form-submissions] ${error.message}`, formElement)
 }
 
 /** Bind every `[data-astro-form]` form at or inside `rootNode`. */
@@ -81,6 +112,7 @@ function bindFormsWithin(rootNode: Document | Element): void {
 
 /** Release every bound form no longer on the page. */
 function releaseDetachedForms(): void {
+  releaseTimer = undefined
   for (const [formElement, formController] of formControllers) {
     if (formElement.isConnected) continue
 
@@ -89,19 +121,32 @@ function releaseDetachedForms(): void {
   }
 }
 
-/** Bind the forms a batch of mutations added, and schedule the release of any it removed. */
+/**
+ * Bind the forms a batch of mutations added, retry an unbound form that gained content (its missing status
+ * element, say), and schedule the release of any bound form it removed.
+ */
 function handleMutations(records: MutationRecord[]): void {
   let removedNodes = false
   for (const record of records) {
     if (record.removedNodes.length > 0) removedNodes = true
     for (const addedNode of record.addedNodes) {
-      if (addedNode instanceof Element && addedNode.isConnected) bindFormsWithin(addedNode)
+      if (!(addedNode instanceof Element) || !addedNode.isConnected) continue
+
+      bindFormsWithin(addedNode)
+
+      // An unbound form retries as content arrives in it, since the arrival may be its missing status element.
+      const enclosingFormElement =
+        addedNode instanceof HTMLFormElement ? null : addedNode.closest<HTMLFormElement>(FORM_SELECTOR)
+      if (enclosingFormElement) bindForm(enclosingFormElement)
     }
   }
 
-  // A form moved within the page (a drawer re-parenting its content) is removed and put back, possibly across
-  // an await; checking a microtask after the batch keeps its controller rather than tearing it down.
-  if (removedNodes) queueMicrotask(releaseDetachedForms)
+  if (!removedNodes || formControllers.size === 0 || releaseTimer !== undefined) return
+
+  // A form moved within the page (a drawer re-parenting its content) is removed and put back within one task,
+  // however many awaits apart; judging detachment in a later task keeps its controller rather than tearing it
+  // down.
+  releaseTimer = setTimeout(releaseDetachedForms, 0)
 }
 
 // MARK: - Initialisation
@@ -113,7 +158,7 @@ function handleMutations(records: MutationRecord[]): void {
  *
  * Safe to call repeatedly (e.g. after Astro View Transitions swap the DOM): already-bound
  * forms are skipped via a `data-astro-form-bound` marker. A form the script can't enhance is left
- * unmarked with a console warning, so a later call retries it.
+ * unmarked with one console warning, and binds once its missing element is added.
  */
 export function initializeForms(): void {
   bindFormsWithin(document)

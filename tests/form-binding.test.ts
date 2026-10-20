@@ -89,6 +89,7 @@ describe('form binding', () => {
   })
 
   it('calling initializeForms twice binds once', async () => {
+    // The re-entry guard hides a second submit listener, so this can't yet tell one binding from two.
     const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
     document.body.innerHTML = formMarkup()
     initializeForms()
@@ -137,6 +138,94 @@ describe('form binding', () => {
     await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2))
     await settle()
     expect(fetchSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('a form moved across several awaits in one task keeps its controller', async () => {
+    stubFetch(async () => jsonResponse({ ok: true }))
+    document.body.innerHTML = `<main>${formMarkup()}<div data-astro-form-success hidden><h2>Thanks!</h2></div></main>
+      <aside class="drawer"></aside>`
+    initializeForms()
+
+    const formElement = document.querySelector('form')
+    const drawerElement = document.querySelector('.drawer')
+    const successElement = document.querySelector<HTMLElement>('[data-astro-form-success]')
+    if (!formElement || !drawerElement || !successElement) throw new Error('The page is missing its parts')
+
+    formElement.remove()
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    drawerElement.append(formElement)
+    await settle()
+
+    // Only the binding made beside the success panel knows of it; a form bound afresh in the drawer has none.
+    submit(formElement)
+    await vi.waitFor(() => expect(formElement.isConnected).toBe(false))
+    expect(successElement.parentElement).toBe(drawerElement)
+    expect(successElement.hidden).toBe(false)
+  })
+
+  it('binds a form once the status element it was missing is added', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const fetchSpy = stubFetch(async () => jsonResponse({ ok: true }))
+    initializeForms()
+
+    const formElement = createForm({ status: false })
+    document.body.append(formElement)
+    await settle()
+    expect(submit(formElement)).toBe(true)
+
+    const statusElement = document.createElement('p')
+    statusElement.dataset.astroFormStatus = ''
+    statusElement.dataset.astroFormMessageSuccess = 'Thanks.'
+    formElement.append(statusElement)
+    await settle()
+
+    expect(submit(formElement)).toBe(false)
+    await vi.waitFor(() => expect(statusElement.textContent).toBe('Thanks.'))
+    expect(fetchSpy).toHaveBeenCalledOnce()
+  })
+
+  it('warns once about a form missing its status element, however often it is retried', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    document.body.innerHTML = formMarkup({ status: false })
+    initializeForms()
+    initializeForms()
+
+    const formElement = document.querySelector('form')
+    if (!formElement) throw new Error('The page has no form')
+
+    formElement.append(document.createElement('span'))
+    await settle()
+    initializeForms()
+
+    expect(warn).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('[data-astro-form-status]'), formElement)
+  })
+
+  it('holds the warning for a form still being parsed until the document is parsed', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const readyState = vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading')
+    stubFetch(async () => jsonResponse({ ok: true }))
+    initializeForms()
+
+    const completedFormElement = createForm({ id: 'completed', status: false })
+    const incompleteFormElement = createForm({ id: 'incomplete', status: false })
+    document.body.append(completedFormElement, incompleteFormElement)
+    await settle()
+
+    const statusElement = document.createElement('p')
+    statusElement.dataset.astroFormStatus = ''
+    completedFormElement.append(statusElement)
+    await settle()
+    expect(warn).not.toHaveBeenCalled()
+
+    readyState.mockReturnValue('interactive')
+    document.dispatchEvent(new Event('DOMContentLoaded'))
+
+    expect(warn).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('[data-astro-form-status]'), incompleteFormElement)
+    expect(submit(completedFormElement)).toBe(false)
   })
 
   it('a form put back after being removed works and sends one request per submit', async () => {
