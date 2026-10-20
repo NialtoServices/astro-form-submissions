@@ -1062,6 +1062,31 @@ describe('form script disabled fields', () => {
     expect(budgetSlot.hidden).toBe(true)
     expect(budgetSlot.textContent).toBe('')
     expect(email.getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).not.toBe(budget)
+    expect(document.activeElement).not.toBe(deadline)
+  })
+
+  it('marks and reports a re-enabled field again when a later refusal names it', async () => {
+    const fetchSpy = stubFetch(async () => quoteErrorsResponse())
+    const { budget, summary, budgetSlot, submit } = mountConditionalForm()
+
+    submit()
+    await vi.waitFor(() => expect(summary.querySelectorAll('li')).toHaveLength(3))
+    budget.disabled = true
+    await vi.waitFor(() => expect(budget.getAttribute('aria-invalid')).toBeNull())
+
+    budget.disabled = false
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(budget.getAttribute('aria-invalid')).toBeNull()
+    expect(budgetSlot.textContent).toBe('')
+    expect(summary.textContent).not.toContain('Enter a budget.')
+
+    fetchSpy.mockImplementation(async () => quoteErrorsResponse())
+    submit()
+    await vi.waitFor(() => expect(budget.getAttribute('aria-invalid')).toBe('true'))
+    expect(budgetSlot.textContent).toBe('Enter a budget.')
+    expect(budget.getAttribute('aria-describedby')).toBe('budget-hint quote-budget-error')
+    expect(summary.textContent).toContain('Enter a budget.')
   })
 
   it('focuses the first enabled faulty field when an earlier one is disabled, without a summary', async () => {

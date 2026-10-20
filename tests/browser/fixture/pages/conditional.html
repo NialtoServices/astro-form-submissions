@@ -9,8 +9,7 @@
       initializeForms()
     </script>
     <script>
-      // A site's own script, as a site writes it: it hides the sections that don't apply and disables them in the
-      // same step, so the browser leaves their fields out of the submission.
+      // Hiding alone leaves a field in the submission; disabling it as well is what keeps it out.
       document.addEventListener('DOMContentLoaded', () => {
         const enquiryElement = document.querySelector('#enquiry')
         const sectionElements = document.querySelectorAll('[data-section]')

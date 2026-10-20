@@ -1655,7 +1655,8 @@ the first invalid field.
 A form can show a section only when it applies: a quote request that asks for a budget and photos, a job
 application that asks for a visa status only of some applicants. You write the listener, since the toolkit
 knows nothing of your fields, and it toggles `hidden` and `disabled` together, on a `<fieldset>` for a whole
-section:
+section, once on load and again on every change. The markup ships plain, so without JavaScript the section
+shows:
 
 ```astro
 <select id='enquiry' name='enquiry'>
@@ -1663,7 +1664,7 @@ section:
   <option value='quote'>Quote request</option>
 </select>
 
-<fieldset data-section='quote' hidden disabled>
+<fieldset data-section='quote'>
   <legend>Your quote</legend>
   <label>Budget <input name='budget' /></label>
   <p data-astro-form-field-error-for='budget' id='quote-budget-error' hidden></p>
@@ -1673,11 +1674,14 @@ section:
   const enquiry = document.querySelector('#enquiry')
   const quote = document.querySelector('[data-section="quote"]')
 
-  enquiry.addEventListener('change', () => {
+  const showSectionForEnquiry = () => {
     const applies = enquiry.value === 'quote'
     quote.hidden = !applies
     quote.disabled = !applies
-  })
+  }
+
+  enquiry.addEventListener('change', showSectionForEnquiry)
+  showSectionForEnquiry()
 </script>
 ```
 
