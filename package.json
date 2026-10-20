@@ -40,7 +40,8 @@
     "test": "node scripts/generate-email-template-sources.mjs && vitest run",
     "test:dist": "vitest run --config vitest.dist.config.ts",
     "test:workers": "vitest run --config vitest.workers.config.ts",
-    "prepublishOnly": "prettier --check . && pnpm check && pnpm lint && pnpm test && pnpm test:workers && pnpm build && pnpm test:dist",
+    "test:browser": "playwright test",
+    "prepublishOnly": "prettier --check . && pnpm check && pnpm lint && pnpm test && pnpm test:workers && pnpm build && pnpm test:browser && pnpm test:dist",
     "format": "prettier --write ."
   },
   "dependencies": {
@@ -53,6 +54,7 @@
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.3.5",
     "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
+    "@playwright/test": "^1.64.1",
     "@types/mustache": "^4.2.6",
     "astro": "^7.3.5",
     "aws4fetch": "^1.0.20",

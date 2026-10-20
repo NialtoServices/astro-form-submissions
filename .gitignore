@@ -14,6 +14,9 @@ pnpm-debug.log*
 dist/
 .astro/
 
+# Playwright's per-run output (failure context, last-run status)
+test-results/
+
 # Claude Code session state
 .claude/
 

@@ -52,3 +52,30 @@ whatever its `Content-Type` says. Those are stated as **fast-check** properties.
 
 msw-based files start their own `setupServer`. A file that also stubs `global.fetch` restores the
 msw-intercepted `fetch` after each such test, so the two approaches never overlap within a test.
+
+## Browsers
+
+`tests/browser/*.browser.ts` run in Chromium, Firefox and WebKit through Playwright. They cover what DOM emulation
+can't prove: real file inputs, drag and drop, focus movement, the multipart body a browser actually sends, direct
+uploads with progress, and the same forms with **JavaScript turned off**, posting natively and getting back the
+readable responses. Markup-driven logic that happy-dom models faithfully stays in the Vitest suite, where it runs in
+milliseconds; a browser test is for behaviour only a real browser can show.
+
+The same golden rule holds: assert what a person sees (visible text, `aria-invalid`, accessible descriptions, focus),
+the responses the browser receives, and what the server was sent, never the script's internals.
+
+The suite runs against the **built** package. Its pages load `dist/client/form.js`, and its fixture server
+(`tests/browser/fixture/server.ts`) hands each post to a real `createFormRoute` imported from `dist/index.js`, with a
+recording `EmailTransport` in place of a provider. A test reads back what its own submissions sent through the
+`deliveries` fixture in `tests/browser/support/test.ts`, which tags each test's browser context with a cookie of its
+own, so tests run in parallel without seeing each other's emails. Turnstile is `tests/browser/fixture/turnstile-fake.js`,
+never Cloudflare's script.
+
+That server is the test run's own: Playwright starts it on port 47123 and stops it when the run ends. It is never a
+developer's dev or preview server, and the run fails rather than reuse anything already listening on that port.
+
+```bash
+pnpm exec playwright install chromium firefox webkit   # once, and after a Playwright upgrade
+pnpm build && pnpm test:browser
+pnpm test:browser --project=firefox                     # a single browser
+```

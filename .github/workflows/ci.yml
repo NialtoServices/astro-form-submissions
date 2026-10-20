@@ -36,6 +36,8 @@ jobs:
       - run: pnpm test
       - run: pnpm test:workers
       - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - run: pnpm test:browser
       - run: pnpm test:dist
 
   publish:
