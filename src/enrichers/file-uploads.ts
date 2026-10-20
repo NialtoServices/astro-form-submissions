@@ -1,9 +1,9 @@
 import type { Enricher, EnrichmentContext, EnrichmentResult } from '#enrichers/enricher.js'
+import { checkFiles } from '#enrichers/file-checks.js'
 import { formError } from '#errors.js'
 import { FileRefusals } from '#files/file-refusals.js'
-import { storedFilename } from '#files/filename.js'
 import type { FilePayload } from '#files/signing.js'
-import { ALL_TYPES, extensionsFor, sniffType, type FileMatcher } from '#files/sniff.js'
+import { ALL_TYPES, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions } from '#numeric-options.js'
 import { OperationalError } from '#operational-error.js'
 import type { FormSubmission } from '#pipeline.js'
@@ -150,47 +150,13 @@ export class FileUploads<
     const maxFileBytes = this.options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES
     const maxTotalBytes = this.maxTotalBytes
     const accept = this.options.accept ?? ALL_TYPES
-    const refusals = new FileRefusals({ field, maxFiles, maxFileBytes, maxTotalBytes, accept })
-
-    // A file input left empty still submits a zero-byte part — drop those before counting.
-    const files = context.data.getAll(field).filter((entry): entry is File => entry instanceof File && entry.size > 0)
-    if (files.length === 0) {
-      return this.options.required ? { reject: refusals.fileRequired(), code: 'file-uploads.required' } : {}
-    }
-
-    if (files.length > maxFiles) {
-      return {
-        reject: refusals.tooManyFiles(),
-        code: 'file-uploads.too-many',
-        details: { count: files.length, limit: maxFiles }
-      }
-    }
-
-    const validated: { file: File; contentType: string }[] = []
-    let totalBytes = 0
-    for (const file of files) {
-      if (file.size > maxFileBytes) {
-        return {
-          reject: refusals.fileTooLarge(),
-          code: 'file-uploads.too-large',
-          details: { size: file.size, limit: maxFileBytes }
-        }
-      }
-
-      totalBytes += file.size
-      if (totalBytes > maxTotalBytes) {
-        return {
-          reject: refusals.filesTooLarge(),
-          code: 'file-uploads.total-too-large',
-          details: { total: totalBytes, limit: maxTotalBytes }
-        }
-      }
-
-      const contentType = await sniffType(file, accept)
-      if (!contentType) return { reject: refusals.fileType(), code: 'file-uploads.type-not-accepted' }
-
-      validated.push({ file, contentType })
-    }
+    const checks = await checkFiles(
+      context.data,
+      { field, maxFiles, maxFileBytes, maxTotalBytes, accept, required: this.options.required ?? false },
+      'file-uploads'
+    )
+    if ('reject' in checks) return checks
+    if (checks.files.length === 0) return {}
 
     // A `put` can commit the object yet still throw (a lost acknowledgement), so a key is known to
     // rollback once it enters `storedKeys` — deleting a never-written key is a safe no-op per the
@@ -198,9 +164,8 @@ export class FileUploads<
     const storedKeys: string[] = []
     const links: FileLink[] = []
     try {
-      for (const { file, contentType } of validated) {
+      for (const { file, contentType, name: filename } of checks.files) {
         const objectKey = crypto.randomUUID()
-        const filename = storedFilename(file.name, extensionsFor(contentType, accept))
         storedKeys.push(objectKey)
         await this.options.storage.put(objectKey, file, { contentType, filename })
 
