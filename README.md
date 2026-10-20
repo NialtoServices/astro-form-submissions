@@ -303,6 +303,25 @@ fail with, and its default copy. There is no central list — every error lives 
 - two more keys, `plainSubmitted` and `plainRetry`, are the lines added when answering a form posted without
   JavaScript (see [Without JavaScript](#without-javascript)).
 
+**File refusals** name the file field and the limit. Each one answers `{ error, fieldErrors: { <input>: … } }`, so
+the script marks the input and reports it like a validation failure, and each key's copy can use these
+placeholders, filled from the field's limits for the default and for a site's override alike:
+
+| Key             | Raised when                             | Default copy                                                                                            |
+| --------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `tooManyFiles`  | more files than `maxFiles`              | `Please attach no more than {maxFiles} files.`, or `Please attach only one file.` when the limit is one |
+| `fileTooLarge`  | **one** file over `maxFileBytes`        | `Each file must be {maxFileSize} or smaller.`                                                           |
+| `filesTooLarge` | the files together over `maxTotalBytes` | `Your files add up to more than {maxTotalSize}.`                                                        |
+| `fileType`      | a file's type is not accepted           | `That file type is not accepted. Please attach {types}.`                                                |
+| `fileRequired`  | a `required` file field left empty      | `Please attach a file.`                                                                                 |
+| `uploadMissing` | an upload did not finish                | `One of your files didn't finish uploading. Please try again.`                                          |
+
+Every file refusal offers all four placeholders: `{maxFiles}`, `{maxFileSize}` and `{maxTotalSize}` (sizes read like
+`10 MB`), and `{types}`, the accepted types' labels once each, such as `JPEG, PNG or PDF` (`a supported file type`
+when no accepted matcher has a label). A token with no value is left as written. The file field is the
+`FileUploads` `field` (default `file`), or the `input` option of `UploadedFiles` and `createUploadRoute` (default
+`file`), which should match the file input's `name`.
+
 **Schema validation** is the exception to "every error is a keyed `FormError`". Per-field messages
 come straight from your validator (`z.email('Enter a valid email')` or the library's default) — the
 toolkit reads only the issue's message and path, so nothing couples to Zod. The one toolkit-owned key
@@ -380,10 +399,12 @@ The toolkit's codes:
 | `enrichment` | `file-uploads.too-many`             | `count`, `limit`                                                                           | More files than `maxFiles`.                                                                                                |
 | `enrichment` | `file-uploads.too-large`            | `size`, `limit`                                                                            | A file over `maxFileBytes`.                                                                                                |
 | `enrichment` | `file-uploads.total-too-large`      | `total`, `limit`                                                                           | The files together over `maxTotalBytes`.                                                                                   |
+| `enrichment` | `file-uploads.required`             | none                                                                                       | A `required` file field arrived empty.                                                                                     |
 | `enrichment` | `file-uploads.type-not-accepted`    | none                                                                                       | A file's bytes matched no accepted type.                                                                                   |
 | `enrichment` | `file-uploads.store-failed`         | none                                                                                       | Storing or linking a file failed. Also reported as a failure.                                                              |
 | `enrichment` | `uploaded-files.receipt-invalid`    | `count`                                                                                    | Receipts that were tampered with, expired, or not receipts.                                                                |
 | `enrichment` | `uploaded-files.receipt-used`       | `count`                                                                                    | Receipts another submission already used. Their files were left alone.                                                     |
+| `enrichment` | `uploaded-files.required`           | none                                                                                       | A `required` submission carried no receipts.                                                                               |
 | `enrichment` | `uploaded-files.too-many`           | `count`, `limit`                                                                           | More receipts than `maxFiles`.                                                                                             |
 | `enrichment` | `uploaded-files.too-large`          | `size`, `limit`                                                                            | An upload over `maxFileBytes`.                                                                                             |
 | `enrichment` | `uploaded-files.total-too-large`    | `total`, `limit`                                                                           | The uploads together over `maxTotalBytes`.                                                                                 |
@@ -974,7 +995,7 @@ Files are **content-sniffed by magic bytes** (never the client MIME), and a file
 in its checked type's extension has it appended, so `invoice.js` that is really a GIF is stored and linked as
 `invoice.js.gif` and opens as an image when saved. Control characters and bidirectional text controls that
 can disguise a name are removed, as are trailing dots and spaces, which Windows drops when saving. A matcher of your own needs an
-`extensions` list for this; without one, names are kept as given. Validation failures return `tooManyFiles` / `fileTooLarge` / `fileType`. The links are
+`extensions` list for this; without one, names are kept as given. Validation failures return `tooManyFiles` / `fileTooLarge` / `filesTooLarge` / `fileType` (see [Errors](#errors)), and `required: true` refuses an empty field with `fileRequired`. The links are
 signed, tamper-proof, and non-guessable — serve them from a companion route (`defineLazyRoute` handles
 the Cloudflare request-time binding, as for the form route):
 

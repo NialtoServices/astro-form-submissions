@@ -806,6 +806,27 @@ describe('createFormRoute enrichers', () => {
     expect(dispatch).not.toHaveBeenCalled()
   })
 
+  it('a file refusal names the file field in fieldErrors', async () => {
+    const storage = { put: vi.fn(async () => {}), get: vi.fn(async () => null), delete: vi.fn(async () => {}) }
+    const enricher = new FileUploads({
+      storage,
+      field: 'photos',
+      maxFileBytes: 1024,
+      link: async () => 'https://example.com/files/key/'
+    })
+    const form = validForm()
+    form.append('photos', new File([new Uint8Array(2048)], 'big.jpg'))
+
+    const response = await createFormRoute({ ...baseConfig, enrichers: [enricher] })(contextFor(form))
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({
+      error: 'Each file must be 1 KB or smaller.',
+      fieldErrors: { photos: 'Each file must be 1 KB or smaller.' }
+    })
+    expect(storage.put).not.toHaveBeenCalled()
+  })
+
   it('a throwing enricher fails closed (500), rolls back, and reports via onError', async () => {
     const onError = vi.fn()
     const first = stubEnricher({ provide: {} })
@@ -2382,6 +2403,24 @@ describe('createFormRoute without JavaScript', () => {
     expect((await response.text()).split('\n')).toEqual([
       ERRORS.validationFailed.message,
       'Please enter a valid email address.',
+      '',
+      'Please go back and try again. If JavaScript is turned off in your browser, turning it on may help.'
+    ])
+  })
+
+  it('says a file refusal once, though it also names the field', async () => {
+    const enricher = new FileUploads({
+      storage: { put: vi.fn(async () => {}), get: vi.fn(async () => null), delete: vi.fn(async () => {}) },
+      maxFileBytes: 1024,
+      link: async () => 'https://example.com/files/key/'
+    })
+    const form = validForm()
+    form.append('file', new File([new Uint8Array(2048)], 'big.jpg'))
+
+    const response = await createFormRoute({ ...baseConfig, enrichers: [enricher] })(browserPost(form))
+
+    expect((await response.text()).split('\n')).toEqual([
+      'Each file must be 1 KB or smaller.',
       '',
       'Please go back and try again. If JavaScript is turned off in your browser, turning it on may help.'
     ])

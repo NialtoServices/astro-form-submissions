@@ -42,7 +42,9 @@ export const DEFAULT_ERROR_COPY: Record<ToolkitErrorKey, string> = {
   rateLimited: RateLimitGuard.errors.rateLimited.message,
   tooManyFiles: FileUploads.errors.tooManyFiles.message,
   fileTooLarge: FileUploads.errors.fileTooLarge.message,
+  filesTooLarge: FileUploads.errors.filesTooLarge.message,
   fileType: FileUploads.errors.fileType.message,
+  fileRequired: FileUploads.errors.fileRequired.message,
   uploadMissing: UploadedFiles.errors.uploadMissing.message,
   plainSubmitted: PLAIN_COPY.plainSubmitted,
   plainRetry: PLAIN_COPY.plainRetry

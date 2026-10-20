@@ -10,6 +10,7 @@ import {
 import { formError, type FormError } from '#errors.js'
 import { ByteRangeReadError } from '#files/byte-range-read-error.js'
 import { readerForStorage } from '#files/byte-range-reader.js'
+import { FileRefusals } from '#files/file-refusals.js'
 import { hasAnyExtension, hasExtension } from '#files/filename.js'
 import type { FilePayload } from '#files/signing.js'
 import { ALL_TYPES, extensionsFor, HEADER_BYTES, sniffWithReader, type FileMatcher } from '#files/sniff.js'
@@ -34,6 +35,15 @@ export interface UploadedFilesOptions<E extends FormSubmission = FormSubmission,
 
   /** Form field carrying the receipts, one value per file. Default `upload`. */
   field?: string
+
+  /**
+   * The name of the file input the receipts came from, which every file refusal is reported against so the
+   * script can mark it. Default `file`.
+   */
+  input?: string
+
+  /** Whether the submission must carry a file. A submission with no receipts is refused with `fileRequired`. Default `false`. */
+  required?: boolean
 
   /** The key the resolved `FileLink[]` is exposed under on `context.resources`. Default `files`. */
   attachTo?: K
@@ -73,8 +83,10 @@ export interface UploadedFilesOptions<E extends FormSubmission = FormSubmission,
  * a retry uploads afresh, while a receipt another submission already claimed is refused without touching an
  * object that submission may have delivered. Refusals: `uploadMissing` (an invalid, expired or already-used
  * receipt, a missing object, one whose size differs from its receipt, or one the storage failed to read while
- * checking its type), `tooManyFiles` / `fileTooLarge` (the limits, re-checked here), and `fileType` (the bytes
- * match nothing accepted, or contradict the type the object was stored with).
+ * checking its type), `tooManyFiles` / `fileTooLarge` / `filesTooLarge` (the limits, re-checked here), `fileType`
+ * (the bytes match nothing accepted, or contradict the type the object was stored with), and `fileRequired`
+ * (a required field with no receipts). The refusals about the files name the `input` and carry its limits as copy
+ * placeholders.
  */
 export class UploadedFiles<
   E extends FormSubmission = FormSubmission,
@@ -116,20 +128,23 @@ export class UploadedFiles<
   async enrich(submission: E, context: EnrichmentContext<E>): Promise<EnrichmentResult<Record<K, FileLink[]>>> {
     const field = this.options.field ?? 'upload'
     const attachTo = this.options.attachTo ?? 'files'
+    const refusals = this.refusals()
 
     const receipts = [
       ...new Set(
         context.data.getAll(field).filter((entry): entry is string => typeof entry === 'string' && entry !== '')
       )
     ]
-    if (receipts.length === 0) return {}
+    if (receipts.length === 0) {
+      return this.options.required ? { reject: refusals.fileRequired(), code: 'uploaded-files.required' } : {}
+    }
 
     // Each receipt costs an HMAC verification, so a sender could otherwise make one request verify as many as
     // the body holds. Nothing is claimed yet, so this refusal has nothing to delete.
     const maxFiles = this.options.maxFiles ?? DEFAULT_MAX_FILES
     if (receipts.length > maxFiles) {
       return {
-        reject: FileUploads.errors.tooManyFiles,
+        reject: refusals.tooManyFiles(),
         code: 'uploaded-files.too-many',
         details: { count: receipts.length, limit: maxFiles }
       }
@@ -174,7 +189,7 @@ export class UploadedFiles<
       return refuse(UploadedFiles.errors.uploadMissing, 'uploaded-files.receipt-invalid', { count: invalidReceipts })
     }
 
-    const limitRefusal = this.limitRefusal([...uploads.values()])
+    const limitRefusal = this.limitRefusal([...uploads.values()], refusals)
     if (limitRefusal) return refuse(limitRefusal.error, limitRefusal.code, limitRefusal.details)
 
     try {
@@ -212,7 +227,7 @@ export class UploadedFiles<
 
         const storedType = object.contentType ?? OPAQUE_CONTENT_TYPE
         if (!contentType || (storedType !== OPAQUE_CONTENT_TYPE && storedType !== contentType)) {
-          return refuse(FileUploads.errors.fileType, 'uploaded-files.type-not-accepted')
+          return refuse(refusals.fileType(), 'uploaded-files.type-not-accepted')
         }
 
         // An opaque upload was named before its bytes were known and its stored name can't change now, so
@@ -224,7 +239,7 @@ export class UploadedFiles<
           hasAnyExtension(upload.filename) &&
           !hasExtension(upload.filename, extensions)
         ) {
-          return refuse(FileUploads.errors.fileType, 'uploaded-files.extension-mismatch')
+          return refuse(refusals.fileType(), 'uploaded-files.extension-mismatch')
         }
 
         const url = checkedLink(
@@ -247,8 +262,19 @@ export class UploadedFiles<
 
   // MARK: - Validation
 
+  private refusals(): FileRefusals {
+    return new FileRefusals({
+      field: this.options.input ?? 'file',
+      maxFiles: this.options.maxFiles ?? DEFAULT_MAX_FILES,
+      maxFileBytes: this.options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES,
+      maxTotalBytes: this.options.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES,
+      accept: this.options.accept ?? ALL_TYPES
+    })
+  }
+
   private limitRefusal(
-    uploads: PendingUpload[]
+    uploads: PendingUpload[],
+    refusals: FileRefusals
   ): { error: FormError; code: string; details: VerdictDetails } | undefined {
     const maxFiles = this.options.maxFiles ?? DEFAULT_MAX_FILES
     const maxFileBytes = this.options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES
@@ -256,7 +282,7 @@ export class UploadedFiles<
 
     if (uploads.length > maxFiles) {
       return {
-        error: FileUploads.errors.tooManyFiles,
+        error: refusals.tooManyFiles(),
         code: 'uploaded-files.too-many',
         details: { count: uploads.length, limit: maxFiles }
       }
@@ -266,7 +292,7 @@ export class UploadedFiles<
     for (const upload of uploads) {
       if (upload.size > maxFileBytes) {
         return {
-          error: FileUploads.errors.fileTooLarge,
+          error: refusals.fileTooLarge(),
           code: 'uploaded-files.too-large',
           details: { size: upload.size, limit: maxFileBytes }
         }
@@ -275,7 +301,7 @@ export class UploadedFiles<
       totalBytes += upload.size
       if (totalBytes > maxTotalBytes) {
         return {
-          error: FileUploads.errors.fileTooLarge,
+          error: refusals.filesTooLarge(),
           code: 'uploaded-files.total-too-large',
           details: { total: totalBytes, limit: maxTotalBytes }
         }

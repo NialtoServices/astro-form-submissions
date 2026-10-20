@@ -24,10 +24,17 @@ export function jsonError(status: number, message: string): Response {
  * @param error - The error to respond with.
  * @param overrides - The site's per-key copy overrides, if any.
  * @param context - What a resolver override may read about the request (the form data, if available).
- * @returns A JSON `{ error }` response carrying the resolved copy and the error's status.
+ * @returns A JSON `{ error }` response carrying the resolved copy and the error's status, plus
+ * `fieldErrors: { [field]: copy }` when the error names a field.
  */
 export function jsonFormError(error: FormError, overrides?: FormErrors, context: CopyContext = {}): Response {
-  return jsonError(error.status, resolveCopy(error.key, error.message, overrides, context))
+  const message = resolveCopy(error.key, error.message, overrides, context, error.placeholders)
+  if (error.field === undefined) return jsonError(error.status, message)
+
+  return new Response(JSON.stringify({ error: message, fieldErrors: { [error.field]: message } }), {
+    status: error.status,
+    headers: JSON_HEADERS
+  })
 }
 
 /**

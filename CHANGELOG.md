@@ -48,6 +48,11 @@ reason code, and a form posted without JavaScript gets a page a person can read.
 10. **`DOCUMENT_TYPES` and `ALL_TYPES` now accept Word, OpenDocument text, RTF and plain text, and `ALL_TYPES`
     also phone video.** A site relying on either default that wants the previous list sets
     `accept: [...IMAGE_TYPES, FILE_TYPES.pdf]`.
+11. **A `fileTooLarge` override now applies only to a single file.** The files together over `maxTotalBytes` are
+    refused with the new `filesTooLarge` key, so copy that reads as a per-file limit no longer shows for a total.
+    Add a `filesTooLarge` entry beside it.
+12. **A copy table typed `Record<ToolkitErrorKey, string>` needs two more entries**, `filesTooLarge` and
+    `fileRequired` (`DEFAULT_ERROR_COPY` has the default wording).
 
 ### Added
 
@@ -79,6 +84,14 @@ reason code, and a form posted without JavaScript gets a page a person can read.
 - File types: Word (`.docx` and `.doc`), OpenDocument text, RTF, plain text (which includes Markdown), and the
   video containers QuickTime, MP4, 3GP, WebM and Matroska. Each is recognised from the file's bytes.
 - Every built-in matcher has a `label`, such as `PDF`, `JPEG` and `Word`, for hint text.
+- `required: true` on `FileUploads` and `UploadedFiles` refuses an empty file field with the new `fileRequired`
+  key (`file-uploads.required` and `uploaded-files.required`).
+- Copy placeholders: an error's copy, whether the default or a site's override (a map or a resolver), can use
+  `{name}` tokens. File refusals offer `{maxFiles}`, `{maxFileSize}`, `{maxTotalSize}` and `{types}`. A token with
+  no value is left as written. `formError` takes `field` and `placeholders` options, and `FormError` carries them.
+- `UploadedFiles` and `createUploadRoute` take an `input` option, the file input's name, which their refusals are
+  reported against. It defaults to `file`.
+- The new error keys `filesTooLarge` and `fileRequired` join `ToolkitErrorKey` and `DEFAULT_ERROR_COPY`.
 
 ### Changed
 
@@ -99,6 +112,13 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   success panel take focus without a `tabindex`, makes summary entries for fields without an `id` keyboard
   links, announces upload progress in 25% steps, and warns when a form lacks a status element.
 - Releases are published from CI through npm trusted publishing, with provenance.
+- File refusals name the field: `{ error, fieldErrors: { <input>: … } }`, so the script marks the file input and
+  reports it like a validation failure. `jsonFormError` answers with `fieldErrors` for any error that names a field.
+- File refusals say what the limit is. The default copy is now `Please attach no more than {maxFiles} files.` (or
+  `Please attach only one file.`), `Each file must be {maxFileSize} or smaller.`, `Your files add up to more than
+{maxTotalSize}.` and `That file type is not accepted. Please attach {types}.`, and the files together over
+  `maxTotalBytes` are refused with `filesTooLarge` instead of `fileTooLarge`.
+- A form posted without JavaScript is told a refusal that names a field once, not twice.
 
 ### Fixed
 

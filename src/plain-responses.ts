@@ -88,7 +88,11 @@ export async function plainResponse(response: Response, options: PlainResponseOp
     typeof body.fieldErrors === 'object' && body.fieldErrors !== null
       ? Object.values(body.fieldErrors).filter((message): message is string => typeof message === 'string')
       : []
-  const lines = [typeof body.error === 'string' ? body.error : '', ...fieldMessages].filter((line) => line !== '')
+
+  // A refusal that names a field says the same thing in `error` and in that field's message.
+  const lines = [
+    ...new Set([typeof body.error === 'string' ? body.error : '', ...fieldMessages].filter((line) => line !== ''))
+  ]
 
   return new Response([...lines, '', copy('plainRetry')].join('\n').trim(), {
     status: response.status,

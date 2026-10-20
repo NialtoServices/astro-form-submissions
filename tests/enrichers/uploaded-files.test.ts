@@ -2,7 +2,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import type { EnrichmentContext } from '#enrichers/enricher.js'
 import { UploadedFiles, type UploadedFilesOptions } from '#enrichers/uploaded-files.js'
 import type { FilePayload } from '#files/signing.js'
-import type { FileMatcher } from '#files/sniff.js'
+import { FILE_TYPES, type FileMatcher } from '#files/sniff.js'
 import { R2Storage } from '#storage/r2.js'
 import type { FileStorage } from '#storage/storage.js'
 import { createUploadRoute } from '#uploads/upload-route.js'
@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { browserFilename, expectSafeStoredName } from '../support/filenames.js'
 import { makeRouteContext } from '../support/harness.js'
 import { MemoryBucket } from '../support/memory-bucket.js'
+import { refusalBody } from '../support/refusals.js'
 import { TRAILER_MATCHER, trailerBytes } from '../support/trailer-matcher.js'
 
 const SECRET = 'a-sufficiently-long-signing-secret'
@@ -610,7 +611,7 @@ describe('UploadedFiles', () => {
 
       await expectRefused(
         await tooLarge.enricher.enrich({ name: 'Ada' }, contextWith(receipts)),
-        'fileTooLarge',
+        'filesTooLarge',
         'uploaded-files.total-too-large',
         tooLarge.bucket
       )
@@ -626,6 +627,79 @@ describe('UploadedFiles', () => {
       expect(result).toMatchObject({ reject: { key: 'tooManyFiles' }, code: 'uploaded-files.too-many' })
       expect(tooMany.bucket.fileKeys()).toHaveLength(2)
       expect(await tooMany.storage.claim(prepared[0]!.objectKey)).toBe(true)
+    })
+
+    describe('naming the file input and the limit', () => {
+      it('refuses one oversized file with fileTooLarge naming the limit', async () => {
+        const { enricher, bucket } = setup({ maxFileBytes: 4 * 1024 })
+        const bytes = new Uint8Array(5 * 1024)
+        bytes.set(JPEG)
+        const large: TestFile = { ...photo, bytes }
+        const { receipts, prepared } = await admit([large])
+        store(bucket, prepared, [large])
+
+        const result = await enricher.enrich({ name: 'Ada' }, contextWith(receipts))
+
+        expect(result).toMatchObject({ reject: { key: 'fileTooLarge' }, code: 'uploaded-files.too-large' })
+        expect(await refusalBody(result)).toEqual({
+          error: 'Each file must be 4 KB or smaller.',
+          fieldErrors: { file: 'Each file must be 4 KB or smaller.' }
+        })
+      })
+
+      it('refuses an oversized total with filesTooLarge, keyed to the configured input', async () => {
+        const { enricher, bucket } = setup({ maxTotalBytes: 2 * 1024 * 1024, input: 'cv' })
+        const bytes = new Uint8Array(1.5 * 1024 * 1024)
+        bytes.set(JPEG)
+        const large: TestFile = { ...photo, bytes }
+        const { receipts, prepared } = await admit([large, { ...large, name: 'second.jpg' }])
+        store(bucket, prepared, [large, large])
+
+        expect(await refusalBody(await enricher.enrich({ name: 'Ada' }, contextWith(receipts)))).toEqual({
+          error: 'Your files add up to more than 2 MB.',
+          fieldErrors: { cv: 'Your files add up to more than 2 MB.' }
+        })
+      })
+
+      it('says only one file when the limit is one', async () => {
+        const { enricher } = setup({ maxFiles: 1 })
+        const { receipts } = await admit([photo, quote])
+
+        expect(await refusalBody(await enricher.enrich({ name: 'Ada' }, contextWith(receipts)))).toEqual({
+          error: 'Please attach only one file.',
+          fieldErrors: { file: 'Please attach only one file.' }
+        })
+      })
+
+      it('lists the accepted types in fileType, keyed to the configured input', async () => {
+        const { enricher, bucket } = setup({ accept: [FILE_TYPES.jpeg, FILE_TYPES.png, FILE_TYPES.pdf], input: 'cv' })
+        const text = { name: 'notes.txt', type: 'text/plain', bytes: TEXT }
+        const { receipts, prepared } = await admit([text])
+        store(bucket, prepared, [text])
+
+        expect(await refusalBody(await enricher.enrich({ name: 'Ada' }, contextWith(receipts)))).toEqual({
+          error: 'That file type is not accepted. Please attach JPEG, PNG or PDF.',
+          fieldErrors: { cv: 'That file type is not accepted. Please attach JPEG, PNG or PDF.' }
+        })
+      })
+
+      it('refuses a required field left empty', async () => {
+        const { enricher } = setup({ required: true, input: 'cv' })
+
+        const result = await enricher.enrich({ name: 'Ada' }, contextWith([]))
+
+        expect(result).toMatchObject({ reject: { key: 'fileRequired' }, code: 'uploaded-files.required' })
+        expect(await refusalBody(result)).toEqual({
+          error: 'Please attach a file.',
+          fieldErrors: { cv: 'Please attach a file.' }
+        })
+      })
+
+      it('lets an optional field stay empty', async () => {
+        const { enricher } = setup({ required: false })
+
+        expect(await enricher.enrich({ name: 'Ada' }, contextWith([]))).toEqual({})
+      })
     })
 
     it('reports a storage failure, cleans up, and fails with the send error', async () => {

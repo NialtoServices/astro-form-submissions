@@ -1,11 +1,7 @@
 import { admit, clientAddressLookup, ERRORS, type AdmissionConfig } from '#admission.js'
-import {
-  DEFAULT_MAX_FILE_BYTES,
-  DEFAULT_MAX_FILES,
-  DEFAULT_MAX_TOTAL_BYTES,
-  FileUploads
-} from '#enrichers/file-uploads.js'
+import { DEFAULT_MAX_FILE_BYTES, DEFAULT_MAX_FILES, DEFAULT_MAX_TOTAL_BYTES } from '#enrichers/file-uploads.js'
 import type { FormError } from '#errors.js'
+import { FileRefusals } from '#files/file-refusals.js'
 import { storedFilename } from '#files/filename.js'
 import { ALL_TYPES, extensionsFor, type FileMatcher } from '#files/sniff.js'
 import { assertFileLimitOptions, assertPositiveNumberOption } from '#numeric-options.js'
@@ -38,6 +34,12 @@ export interface UploadRouteConfig<S extends SchemaInput> extends AdmissionConfi
 
   /** Form field carrying the JSON file descriptors. Default `uploads`; the form script posts under `data-astro-form-upload-field`. */
   field?: string
+
+  /**
+   * The name of the file input, which every file refusal is reported against so the script can mark it. Use the
+   * same name as the {@link UploadedFiles} enricher's `input`. Default `file`.
+   */
+  input?: string
 
   /** Maximum number of files per submission. Default {@link DEFAULT_MAX_FILES}. */
   maxFiles?: number
@@ -134,6 +136,13 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
   const receiptTTLSeconds = config.receiptTTLSeconds ?? DEFAULT_RECEIPT_TTL_SECONDS
   const accept = config.accept ?? ALL_TYPES
   const acceptedTypes = new Set(accept.map((matcher) => matcher.contentType))
+  const refusals = new FileRefusals({
+    field: config.input ?? 'file',
+    maxFiles,
+    maxFileBytes,
+    maxTotalBytes,
+    accept
+  })
 
   return async (context) => {
     const { request, site, url } = context
@@ -175,7 +184,7 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
       const descriptors = readDescriptors(formData.get(field))
       if (!descriptors) return refuse(ERRORS.invalidForm, 'upload-route.descriptors-invalid')
       if (descriptors.length > maxFiles) {
-        return refuse(FileUploads.errors.tooManyFiles, 'upload-route.too-many', {
+        return refuse(refusals.tooManyFiles(), 'upload-route.too-many', {
           count: descriptors.length,
           limit: maxFiles
         })
@@ -184,7 +193,7 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
       let totalBytes = 0
       for (const descriptor of descriptors) {
         if (descriptor.size > maxFileBytes) {
-          return refuse(FileUploads.errors.fileTooLarge, 'upload-route.too-large', {
+          return refuse(refusals.fileTooLarge(), 'upload-route.too-large', {
             size: descriptor.size,
             limit: maxFileBytes
           })
@@ -192,7 +201,7 @@ export function createUploadRoute<const S extends SchemaInput>(config: UploadRou
 
         totalBytes += descriptor.size
         if (totalBytes > maxTotalBytes) {
-          return refuse(FileUploads.errors.fileTooLarge, 'upload-route.total-too-large', {
+          return refuse(refusals.filesTooLarge(), 'upload-route.total-too-large', {
             total: totalBytes,
             limit: maxTotalBytes
           })

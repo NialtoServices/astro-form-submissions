@@ -218,27 +218,31 @@ describe('createUploadRoute', () => {
   })
 
   it.each([
-    ['too many files', { maxFiles: 1 }, [photo, photo], 'Please attach fewer files.'],
-    [
-      'a file over the per-file limit',
-      { maxFileBytes: 1_000_000 },
-      [photo],
-      'A file is too large. Please attach smaller files.'
-    ],
+    ['too many files', { maxFiles: 1 }, [photo, photo], 'Please attach only one file.'],
+    ['a file over the per-file limit', { maxFileBytes: 1_000_000 }, [photo], 'Each file must be 977 KB or smaller.'],
     [
       'files over the total limit',
       { maxFileBytes: 50_000_000, maxTotalBytes: 3_000_000 },
       [photo, photo],
-      'A file is too large. Please attach smaller files.'
+      'Your files add up to more than 2.9 MB.'
     ]
-  ] as const)('refuses %s with the keyed copy', async (_label, limits, descriptors, message) => {
+  ] as const)('refuses %s with the keyed copy, naming the file input', async (_label, limits, descriptors, message) => {
     const { route, prepared } = routeWith(limits)
 
     const response = await route(request(descriptors))
 
     expect(response.status).toBe(400)
-    expect(await response.json()).toEqual({ error: message })
+    expect(await response.json()).toEqual({ error: message, fieldErrors: { file: message } })
     expect(prepared).toHaveLength(0)
+  })
+
+  it('names a configured file input', async () => {
+    const { route } = routeWith({ input: 'cv', maxFiles: 1 })
+
+    expect(await (await route(request([photo, photo]))).json()).toEqual({
+      error: 'Please attach only one file.',
+      fieldErrors: { cv: 'Please attach only one file.' }
+    })
   })
 
   it.each([
@@ -261,7 +265,10 @@ describe('createUploadRoute', () => {
   it('uses the site’s copy overrides', async () => {
     const { route } = routeWith({ maxFiles: 1, errors: { tooManyFiles: 'Please attach no more than 1 file.' } })
 
-    expect(await (await route(request([photo, photo]))).json()).toEqual({ error: 'Please attach no more than 1 file.' })
+    expect(await (await route(request([photo, photo]))).json()).toEqual({
+      error: 'Please attach no more than 1 file.',
+      fieldErrors: { file: 'Please attach no more than 1 file.' }
+    })
   })
 
   it('reports a failing target and answers unavailable', async () => {

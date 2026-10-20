@@ -1,9 +1,11 @@
 import type { EnrichmentContext } from '#enrichers/enricher.js'
 import { FileUploads } from '#enrichers/file-uploads.js'
+import { FILE_TYPES, type FileMatcher } from '#files/sniff.js'
 import type { FileStorage } from '#storage/storage.js'
 import fc from 'fast-check'
 import { describe, expect, it, vi } from 'vitest'
 import { browserFilename, expectSafeStoredName } from '../support/filenames.js'
+import { refusalBody } from '../support/refusals.js'
 import { TRAILER_MATCHER, trailerBytes } from '../support/trailer-matcher.js'
 
 const PNG_HEADER = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
@@ -79,8 +81,8 @@ describe('FileUploads', () => {
     const files = [1, 2, 3].map((fileNumber) => upload(`f${fileNumber}.pdf`, PDF_HEADER))
     const result = await uploader(storage, { maxFiles: 2 }).enrich({ name: 'Ada' }, contextWith(files))
 
-    expect(result).toEqual({
-      reject: FileUploads.errors.tooManyFiles,
+    expect(result).toMatchObject({
+      reject: { key: 'tooManyFiles' },
       code: 'file-uploads.too-many',
       details: { count: 3, limit: 2 }
     })
@@ -92,8 +94,8 @@ describe('FileUploads', () => {
       { name: 'Ada' },
       contextWith([upload('big.pdf', PDF_HEADER, 512)])
     )
-    expect(result).toEqual({
-      reject: FileUploads.errors.fileTooLarge,
+    expect(result).toMatchObject({
+      reject: { key: 'fileTooLarge' },
       code: 'file-uploads.too-large',
       details: { size: 512, limit: 256 }
     })
@@ -104,8 +106,8 @@ describe('FileUploads', () => {
     const files = [upload('a.pdf', PDF_HEADER, 400), upload('b.pdf', PDF_HEADER, 400)]
     const result = await uploader(storage, { maxTotalBytes: 600 }).enrich({ name: 'Ada' }, contextWith(files))
 
-    expect(result).toEqual({
-      reject: FileUploads.errors.fileTooLarge,
+    expect(result).toMatchObject({
+      reject: { key: 'filesTooLarge' },
       code: 'file-uploads.total-too-large',
       details: { total: 800, limit: 600 }
     })
@@ -116,7 +118,7 @@ describe('FileUploads', () => {
     const notAllowed = new File([new Uint8Array([0x00, 0x01, 0x02, 0x03])], 'mystery.bin')
     const result = await uploader(storage).enrich({ name: 'Ada' }, contextWith([notAllowed]))
 
-    expect(result).toEqual({ reject: FileUploads.errors.fileType, code: 'file-uploads.type-not-accepted' })
+    expect(result).toMatchObject({ reject: { key: 'fileType' }, code: 'file-uploads.type-not-accepted' })
   })
 
   it('stores each file and provides the resolved links as a resource', async () => {
@@ -347,6 +349,148 @@ describe('FileUploads', () => {
     expect(complete).toMatchObject({ provide: { files: [{ name: 'report.trl' }] } })
     expect(put).toHaveBeenCalledOnce()
     expect(put.mock.calls[0]![2]).toEqual({ contentType: 'application/x-trailer', filename: 'report.trl' })
-    expect(cutShort).toEqual({ reject: FileUploads.errors.fileType, code: 'file-uploads.type-not-accepted' })
+    expect(cutShort).toMatchObject({ reject: { key: 'fileType' }, code: 'file-uploads.type-not-accepted' })
+  })
+
+  describe('refusals, which name the file field and the limit', () => {
+    it('refuses one oversized file with fileTooLarge naming the limit', async () => {
+      const { storage } = stubStorage()
+      const result = await uploader(storage, { maxFileBytes: 10 * 1024 * 1024 }).enrich(
+        { name: 'Ada' },
+        contextWith([upload('big.pdf', PDF_HEADER, 10 * 1024 * 1024 + 1)])
+      )
+
+      expect(await refusalBody(result)).toEqual({
+        error: 'Each file must be 10 MB or smaller.',
+        fieldErrors: { file: 'Each file must be 10 MB or smaller.' }
+      })
+    })
+
+    it('refuses an oversized total with filesTooLarge', async () => {
+      const { storage } = stubStorage()
+      const files = [upload('a.pdf', PDF_HEADER, 3 * 1024 * 1024), upload('b.pdf', PDF_HEADER, 3 * 1024 * 1024)]
+      const result = await uploader(storage, { maxTotalBytes: 5 * 1024 * 1024 }).enrich(
+        { name: 'Ada' },
+        contextWith(files)
+      )
+
+      expect(await refusalBody(result)).toEqual({
+        error: 'Your files add up to more than 5 MB.',
+        fieldErrors: { file: 'Your files add up to more than 5 MB.' }
+      })
+    })
+
+    it('says how many files are allowed, and only one when the limit is one', async () => {
+      const { storage } = stubStorage()
+      const files = [upload('a.pdf', PDF_HEADER), upload('b.pdf', PDF_HEADER)]
+
+      expect(
+        (await refusalBody(await uploader(storage, { maxFiles: 1 }).enrich({ name: 'Ada' }, contextWith(files)))).error
+      ).toBe('Please attach only one file.')
+      expect(
+        (
+          await refusalBody(
+            await uploader(storage, { maxFiles: 3 }).enrich({ name: 'Ada' }, contextWith([...files, ...files]))
+          )
+        ).error
+      ).toBe('Please attach no more than 3 files.')
+    })
+
+    it('fills the limit into a site override of tooManyFiles', async () => {
+      const { storage } = stubStorage()
+      const files = [upload('a.pdf', PDF_HEADER), upload('b.pdf', PDF_HEADER)]
+      const result = await uploader(storage, { maxFiles: 1 }).enrich({ name: 'Ada' }, contextWith(files))
+
+      expect((await refusalBody(result, { tooManyFiles: 'At most {maxFiles}, please.' })).error).toBe(
+        'At most 1, please.'
+      )
+    })
+
+    it('lists the accepted types in fileType', async () => {
+      const { storage } = stubStorage()
+      const unknown = new File([new Uint8Array([0, 1, 2, 3])], 'mystery.bin')
+      const result = await uploader(storage, { accept: [FILE_TYPES.jpeg, FILE_TYPES.png, FILE_TYPES.pdf] }).enrich(
+        { name: 'Ada' },
+        contextWith([unknown])
+      )
+
+      expect(await refusalBody(result)).toEqual({
+        error: 'That file type is not accepted. Please attach JPEG, PNG or PDF.',
+        fieldErrors: { file: 'That file type is not accepted. Please attach JPEG, PNG or PDF.' }
+      })
+    })
+
+    it('lists each label once, and falls back when no accepted type has one', async () => {
+      const { storage } = stubStorage()
+      const unknown = new File([new Uint8Array([0, 1, 2, 3])], 'mystery.bin')
+      const unlabelled: FileMatcher = { contentType: 'application/x-made-up', test: () => false }
+
+      const twoOfOneLabel = await uploader(storage, {
+        accept: [FILE_TYPES.docx, FILE_TYPES.doc, FILE_TYPES.pdf]
+      }).enrich({ name: 'Ada' }, contextWith([unknown]))
+      const noLabels = await uploader(storage, { accept: [unlabelled] }).enrich({ name: 'Ada' }, contextWith([unknown]))
+
+      expect((await refusalBody(twoOfOneLabel)).error).toBe(
+        'That file type is not accepted. Please attach Word or PDF.'
+      )
+      expect((await refusalBody(noLabels)).error).toBe(
+        'That file type is not accepted. Please attach a supported file type.'
+      )
+    })
+
+    it('names a custom field', async () => {
+      const { storage } = stubStorage()
+      const result = await uploader(storage, { field: 'attachment', maxFiles: 1 }).enrich(
+        { name: 'Ada' },
+        contextWith([upload('a.pdf', PDF_HEADER), upload('b.pdf', PDF_HEADER)], 'attachment')
+      )
+
+      expect((await refusalBody(result)).fieldErrors).toEqual({ attachment: 'Please attach only one file.' })
+    })
+
+    it('fills the limits into a site override', async () => {
+      const { storage } = stubStorage()
+      const result = await uploader(storage, { maxFileBytes: 256 }).enrich(
+        { name: 'Ada' },
+        contextWith([upload('big.pdf', PDF_HEADER, 512)])
+      )
+
+      expect((await refusalBody(result, { fileTooLarge: 'Keep each file under {maxFileSize}.' })).error).toBe(
+        'Keep each file under 256 B.'
+      )
+    })
+  })
+
+  describe('required', () => {
+    it('refuses a required field left empty', async () => {
+      const { storage, put } = stubStorage()
+      const result = await uploader(storage, { required: true }).enrich(
+        { name: 'Ada' },
+        contextWith([new File([], 'empty.pdf')])
+      )
+
+      expect(result).toMatchObject({ reject: { key: 'fileRequired' }, code: 'file-uploads.required' })
+      expect(await refusalBody(result)).toEqual({
+        error: 'Please attach a file.',
+        fieldErrors: { file: 'Please attach a file.' }
+      })
+      expect(put).not.toHaveBeenCalled()
+    })
+
+    it('lets a required field through when a file is attached', async () => {
+      const { storage } = stubStorage()
+      const result = await uploader(storage, { required: true }).enrich(
+        { name: 'Ada' },
+        contextWith([upload('quote.pdf', PDF_HEADER)])
+      )
+
+      expect('provide' in result).toBe(true)
+    })
+
+    it('leaves an optional field empty without a refusal', async () => {
+      const { storage } = stubStorage()
+
+      expect(await uploader(storage, { required: false }).enrich({ name: 'Ada' }, contextWith([]))).toEqual({})
+    })
   })
 })

@@ -1,5 +1,5 @@
+import { formatFileSize } from '#client/file-size.js'
 import type { DispatchContext } from '#dispatchers/dispatcher.js'
-import { formatFileSize } from '#strings.js'
 import { isRecord } from '#type-guards.js'
 
 /** Rendering helpers shared by the built-in {@link submissionNotificationTemplates} and

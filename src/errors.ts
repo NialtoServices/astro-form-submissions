@@ -1,3 +1,5 @@
+import { fillPlaceholders } from '#client/placeholders.js'
+
 /**
  * A user-facing form error: a stable `key` (the override/i18n handle), the HTTP `status`, and default
  * `message`. No central registry — any stage mints keys with {@link formError} (the schema stage's is
@@ -10,9 +12,24 @@ export interface FormError {
   /** The HTTP status the request fails with. */
   status: number
 
-  /** Default user-facing copy, owned by whoever raises the error. */
+  /** Default user-facing copy, owned by whoever raises the error. May carry `{name}` tokens that `placeholders` fill. */
   message: string
+
+  /**
+   * The form field the error belongs to. When set, the JSON response also carries it as
+   * `fieldErrors[field]`, so the script marks and reports that field like a validation failure.
+   */
+  field?: string
+
+  /**
+   * What each `{name}` token in the copy stands for. Filled into the default and into a site's override
+   * alike, so a site's own wording can use the same tokens.
+   */
+  placeholders?: Readonly<Record<string, string>>
 }
+
+/** The optional parts of a {@link FormError}. */
+export type FormErrorOptions = Pick<FormError, 'field' | 'placeholders'>
 
 /**
  * Builds a {@link FormError} value.
@@ -20,10 +37,15 @@ export interface FormError {
  * @param key - Stable identifier a site overrides copy by.
  * @param status - The HTTP status the request fails with.
  * @param message - Default user-facing copy.
+ * @param options - The field the error belongs to, and the values for the copy's `{name}` tokens.
  * @returns The error value, ready to reject or refuse with.
  */
-export function formError(key: string, status: number, message: string): FormError {
-  return { key, status, message }
+export function formError(key: string, status: number, message: string, options: FormErrorOptions = {}): FormError {
+  const error: FormError = { key, status, message }
+  if (options.field !== undefined) error.field = options.field
+  if (options.placeholders !== undefined) error.placeholders = options.placeholders
+
+  return error
 }
 
 /** What the copy resolver may read about the request — the form data, absent for pre-body guard errors. */
@@ -55,7 +77,9 @@ export type ToolkitErrorKey =
   | 'rateLimited'
   | 'tooManyFiles'
   | 'fileTooLarge'
+  | 'filesTooLarge'
   | 'fileType'
+  | 'fileRequired'
   | 'uploadMissing'
   | 'plainSubmitted'
   | 'plainRetry'
@@ -79,9 +103,20 @@ export type FormErrors = Partial<Record<ToolkitErrorKey | (string & {}), string>
  * @param defaultMessage - The error's own default copy.
  * @param overrides - The site's overrides, if any.
  * @param context - What the resolver may read about the request.
+ * @param placeholders - What each `{name}` token stands for; filled into whichever copy wins.
  * @returns The resolved copy.
  */
 export function resolveCopy(
+  key: string,
+  defaultMessage: string,
+  overrides: FormErrors | undefined,
+  context: CopyContext,
+  placeholders: Readonly<Record<string, string>> = {}
+): string {
+  return fillPlaceholders(chooseCopy(key, defaultMessage, overrides, context), placeholders)
+}
+
+function chooseCopy(
   key: string,
   defaultMessage: string,
   overrides: FormErrors | undefined,

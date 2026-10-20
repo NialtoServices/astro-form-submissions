@@ -1,5 +1,6 @@
 import type { Enricher, EnrichmentContext, EnrichmentResult } from '#enrichers/enricher.js'
 import { formError } from '#errors.js'
+import { FileRefusals } from '#files/file-refusals.js'
 import { storedFilename } from '#files/filename.js'
 import type { FilePayload } from '#files/signing.js'
 import { ALL_TYPES, extensionsFor, sniffType, type FileMatcher } from '#files/sniff.js'
@@ -68,6 +69,9 @@ export interface FileUploadsOptions<E extends FormSubmission = FormSubmission, K
    */
   accept?: FileMatcher[]
 
+  /** Whether the field must carry a file. An empty field is refused with `fileRequired`. Default `false`. */
+  required?: boolean
+
   /**
    * Turns a stored object into an absolute http(s) download URL (e.g. {@link signedLink}). Any other result
    * fails the upload with `file-link.invalid-url`, since the built-in emails would leave it out.
@@ -101,7 +105,9 @@ export function checkedLink(url: string): string {
  * fails; it **deletes** them otherwise — a later enricher rejects, every exposing delivery definitely fails,
  * or only non-exposing deliveries succeed.
  *
- * Validation failures are clean client refusals (`tooManyFiles` / `fileTooLarge` / `fileType`). A
+ * Validation failures are clean client refusals (`tooManyFiles` / `fileTooLarge` / `filesTooLarge` / `fileType`,
+ * and `fileRequired` for an empty required field), each naming the file field and carrying its limits as copy
+ * placeholders. A
  * storage failure fails the request with `send` (502) — the same key the email dispatcher uses, so
  * a site's `errors.send` override covers both.
  */
@@ -111,9 +117,7 @@ export class FileUploads<
 > implements Enricher<E, Record<K, FileLink[]>> {
   /** Errors this enricher rejects with. Override the copy per-site via `errors[key]`. */
   static readonly errors = {
-    tooManyFiles: formError('tooManyFiles', 400, 'Please attach fewer files.'),
-    fileTooLarge: formError('fileTooLarge', 400, 'A file is too large. Please attach smaller files.'),
-    fileType: formError('fileType', 400, 'That file type is not accepted.'),
+    ...FileRefusals.errors,
 
     // Reuses the `send` key so a site's `errors.send` override covers upload and mail failure alike.
     uploadFailed: formError('send', 502, 'Could not send your message right now. Please try again or call us directly.')
@@ -146,14 +150,17 @@ export class FileUploads<
     const maxFileBytes = this.options.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES
     const maxTotalBytes = this.maxTotalBytes
     const accept = this.options.accept ?? ALL_TYPES
+    const refusals = new FileRefusals({ field, maxFiles, maxFileBytes, maxTotalBytes, accept })
 
     // A file input left empty still submits a zero-byte part — drop those before counting.
     const files = context.data.getAll(field).filter((entry): entry is File => entry instanceof File && entry.size > 0)
-    if (files.length === 0) return {}
+    if (files.length === 0) {
+      return this.options.required ? { reject: refusals.fileRequired(), code: 'file-uploads.required' } : {}
+    }
 
     if (files.length > maxFiles) {
       return {
-        reject: FileUploads.errors.tooManyFiles,
+        reject: refusals.tooManyFiles(),
         code: 'file-uploads.too-many',
         details: { count: files.length, limit: maxFiles }
       }
@@ -164,7 +171,7 @@ export class FileUploads<
     for (const file of files) {
       if (file.size > maxFileBytes) {
         return {
-          reject: FileUploads.errors.fileTooLarge,
+          reject: refusals.fileTooLarge(),
           code: 'file-uploads.too-large',
           details: { size: file.size, limit: maxFileBytes }
         }
@@ -173,14 +180,14 @@ export class FileUploads<
       totalBytes += file.size
       if (totalBytes > maxTotalBytes) {
         return {
-          reject: FileUploads.errors.fileTooLarge,
+          reject: refusals.filesTooLarge(),
           code: 'file-uploads.total-too-large',
           details: { total: totalBytes, limit: maxTotalBytes }
         }
       }
 
       const contentType = await sniffType(file, accept)
-      if (!contentType) return { reject: FileUploads.errors.fileType, code: 'file-uploads.type-not-accepted' }
+      if (!contentType) return { reject: refusals.fileType(), code: 'file-uploads.type-not-accepted' }
 
       validated.push({ file, contentType })
     }
