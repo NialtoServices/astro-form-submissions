@@ -1,3 +1,4 @@
+import { ByteRangeReadError } from '#files/byte-range-read-error.js'
 import type { FileStorage } from '#storage/storage.js'
 
 /**
@@ -24,15 +25,16 @@ export interface ByteRangeReader {
    * @param offset - The index of the first byte; a non-negative integer.
    * @param length - How many bytes to read; a non-negative integer.
    * @returns The bytes read.
-   * @throws When the range is invalid, when it would exceed {@link MAX_INSPECTED_BYTES} or
-   * {@link MAX_INSPECTED_READS} for the file, or when the bytes can't be read.
+   * @throws A `RangeError` when the range is invalid, or when it would exceed {@link MAX_INSPECTED_BYTES} or
+   * {@link MAX_INSPECTED_READS} for the file; any other error when the bytes can't be read, which a type
+   * check doesn't count as a mismatch.
    */
   read(offset: number, length: number): Promise<Uint8Array>
 }
 
 /**
  * Wraps a source of byte ranges in the per-file budget, so no matcher can read more than the limits allow
- * whatever it asks for.
+ * whatever it asks for. A source's failure becomes a {@link ByteRangeReadError}.
  *
  * @param size - The file's total size in bytes.
  * @param readSlice - Reads a range already known to lie within the file.
@@ -64,7 +66,12 @@ function budgetedReader(
       if (available === 0) return new Uint8Array(0)
 
       byteCount += available
-      return readSlice(offset, available)
+
+      try {
+        return await readSlice(offset, available)
+      } catch (error) {
+        throw new ByteRangeReadError(offset, available, { cause: error })
+      }
     }
   }
 }

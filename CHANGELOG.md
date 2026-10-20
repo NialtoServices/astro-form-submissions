@@ -67,6 +67,8 @@ reason code, and a form posted without JavaScript gets a page a person can read.
 - This changelog, which now ships with the package.
 - `FileMatcher.inspect` and `FileStorage.readRange`, so a type check can read beyond the file's first bytes;
   `R2Storage` implements it. Also exports `ByteRangeReader`, `MAX_INSPECTED_BYTES` and `MAX_INSPECTED_READS`.
+- A direct upload the storage fails to read while checking its type is refused with `uploadMissing` and
+  reported as an `OperationalError` (`uploaded-files.read-failed`) naming the object's key.
 
 ### Changed
 

@@ -6,6 +6,7 @@
 // still needs `X-Content-Type-Options: nosniff`, and inline PDFs on the app origin need `Content-Disposition: attachment`
 // (or a separate, cookieless origin).
 
+import { ByteRangeReadError } from '#files/byte-range-read-error.js'
 import { readerForFile, type ByteRangeReader } from '#files/byte-range-reader.js'
 
 /**
@@ -48,7 +49,8 @@ export interface FileMatcher {
    * `test` has passed. The reader enforces a budget per file ({@link MAX_INSPECTED_BYTES} bytes and
    * {@link MAX_INSPECTED_READS} reads, shared by every matcher tried against the file), rejecting a read past
    * it. A throw or rejection counts as no match, as does a storage that can't read ranges, so structure outside
-   * the ranges a matcher reads is never assumed.
+   * the ranges a matcher reads is never assumed. The one exception is a read the storage itself fails, which says
+   * nothing about the file's type: its rejection propagates out of the type check, so a matcher should let it.
    */
   inspect?: (reader: ByteRangeReader) => Promise<boolean>
 }
@@ -250,6 +252,8 @@ export function sniffBytes(header: Uint8Array, matchers: FileMatcher[] = ALL_TYP
  *   when the bytes can't be read again, which leaves a matcher with an `inspect` unable to match.
  * @param matchers - The permitted matchers; defaults to {@link ALL_TYPES}.
  * @returns The matched content-type, or `null` when the file matches nothing on the list.
+ * @throws {@link ByteRangeReadError} when a matcher's read fails because the bytes couldn't be read, since that
+ *   leaves the file's type unknown rather than wrong.
  */
 export async function sniffWithReader(
   header: Uint8Array,
@@ -263,8 +267,8 @@ export async function sniffWithReader(
 
     try {
       if ((await matcher.inspect(reader)) === true) return matcher.contentType
-    } catch {
-      continue
+    } catch (error) {
+      if (error instanceof ByteRangeReadError) throw error
     }
   }
 

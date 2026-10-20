@@ -8,6 +8,7 @@ import {
   type FileLink
 } from '#enrichers/file-uploads.js'
 import { formError, type FormError } from '#errors.js'
+import { ByteRangeReadError } from '#files/byte-range-read-error.js'
 import { readerForStorage } from '#files/byte-range-reader.js'
 import { hasAnyExtension, hasExtension } from '#files/filename.js'
 import type { FilePayload } from '#files/signing.js'
@@ -71,9 +72,9 @@ export interface UploadedFilesOptions<E extends FormSubmission = FormSubmission,
  * `claim`, and only claimed objects are ever deleted. A refused submission deletes the objects it claimed, so
  * a retry uploads afresh, while a receipt another submission already claimed is refused without touching an
  * object that submission may have delivered. Refusals: `uploadMissing` (an invalid, expired or already-used
- * receipt, a missing object, or one whose size differs from its receipt), `tooManyFiles` / `fileTooLarge`
- * (the limits, re-checked here), and `fileType` (the bytes match nothing accepted, or contradict the type the
- * object was stored with).
+ * receipt, a missing object, one whose size differs from its receipt, or one the storage failed to read while
+ * checking its type), `tooManyFiles` / `fileTooLarge` (the limits, re-checked here), and `fileType` (the bytes
+ * match nothing accepted, or contradict the type the object was stored with).
  */
 export class UploadedFiles<
   E extends FormSubmission = FormSubmission,
@@ -189,11 +190,26 @@ export class UploadedFiles<
         }
 
         const accept = this.options.accept ?? ALL_TYPES
-        const contentType = await sniffWithReader(
-          object.header,
-          readerForStorage(this.options.storage, upload.objectKey, object.size),
-          accept
-        )
+        let contentType: string | null
+        try {
+          contentType = await sniffWithReader(
+            object.header,
+            readerForStorage(this.options.storage, upload.objectKey, object.size),
+            accept
+          )
+        } catch (error) {
+          if (!(error instanceof ByteRangeReadError)) throw error
+
+          context.report?.(
+            new OperationalError(
+              'uploaded-files.read-failed',
+              `Failed to read uploaded object ${upload.objectKey} while checking its type.`,
+              { details: { key: upload.objectKey }, cause: error.cause }
+            )
+          )
+          return refuse(UploadedFiles.errors.uploadMissing, 'uploaded-files.read-failed')
+        }
+
         const storedType = object.contentType ?? OPAQUE_CONTENT_TYPE
         if (!contentType || (storedType !== OPAQUE_CONTENT_TYPE && storedType !== contentType)) {
           return refuse(FileUploads.errors.fileType, 'uploaded-files.type-not-accepted')

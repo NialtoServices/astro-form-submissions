@@ -517,6 +517,52 @@ describe('UploadedFiles', () => {
       )
     })
 
+    /** Storage over `bucket` whose ranged reads go through `readRange`, given the real one to delegate to. */
+    const storageReadingRangesWith = (
+      bucket: MemoryBucket,
+      readRange: (real: R2Storage, key: string, offset: number, length: number) => Promise<Uint8Array | null>
+    ): FileStorage => {
+      const real = new R2Storage({ bucket, prefix: 'uploads/' })
+      return {
+        put: real.put.bind(real),
+        get: real.get.bind(real),
+        delete: real.delete.bind(real),
+        peek: real.peek.bind(real),
+        claim: real.claim.bind(real),
+        readRange: (key, offset, length) => readRange(real, key, offset, length)
+      }
+    }
+
+    it('refuses as unfinished, not as the wrong type, when the storage fails a ranged read', async () => {
+      const bucket = new MemoryBucket()
+      const failure = new Error('The bucket is unavailable.')
+      const enricher = new UploadedFiles<Enquiry>({
+        storage: storageReadingRangesWith(bucket, async () => Promise.reject(failure)),
+        secret: SECRET,
+        link: async () => 'https://example.com/files/x/',
+        accept: [TRAILER_MATCHER]
+      })
+      const report = { name: 'report.trl', type: '', bytes: trailerBytes(true) }
+      const { receipts, prepared } = await admit([report])
+      store(bucket, prepared, [report])
+      const context = contextWith(receipts)
+
+      await expectRefused(
+        await enricher.enrich({ name: 'Ada' }, context),
+        'uploadMissing',
+        'uploaded-files.read-failed',
+        bucket
+      )
+      expect(context.report).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'OperationalError',
+          code: 'uploaded-files.read-failed',
+          details: { key: prepared[0]!.objectKey },
+          cause: failure
+        })
+      )
+    })
+
     it('refuses bytes that contradict the type they were stored with', async () => {
       const { enricher, bucket } = setup()
       const disguised = { name: 'photo.pdf', type: 'application/pdf', bytes: JPEG }
