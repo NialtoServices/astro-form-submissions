@@ -97,7 +97,8 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   `createUploadRoute`; `uploadInputAttributes`, which gives the file input its `accept`, `multiple`, `required` and
   limit attributes from the same rules; and `describeUploadRules`, which writes the hint ("Up to 5 files, 10 MB
   each, 50 MB in total. Accepted: JPEG, PNG or PDF.") or fills a template of your own using `{maxFiles}`,
-  `{maxFileSize}`, `{maxTotalSize}` and `{types}`. Also exports the `UploadRules` type.
+  `{maxFileSize}`, `{maxTotalSize}` and `{types}`. Also exports the `UploadRules` type. Rules that omit
+  `maxFileBytes` get `maxTotalBytes` as their per-file limit, so no enricher default applies behind them.
 - The `accept` option of `FileUploads`, `UploadedFiles` and `createUploadRoute`, and the `sniffBytes`, `sniffType`
   and `sniffWithReader` parameters, take a `readonly FileMatcher[]`.
 

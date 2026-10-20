@@ -1164,13 +1164,18 @@ import { quoteUploads } from '../lib/uploads'
 <p>{describeUploadRules(quoteUploads)}</p>
 ```
 
+`maxFileBytes` is optional and at most `maxTotalBytes` (`uploadRules` throws otherwise). Leave it out for no
+separate per-file limit: the returned rules then carry `maxFileBytes: maxTotalBytes`, so a file may be as large as
+the total allows and no enricher default applies behind the rules' back. Enrichers used without `uploadRules` keep
+their own defaults.
+
 `uploadInputAttributes` returns `accept` (the content types, then each type's extensions), `multiple` when more
 than one file is allowed, `required` when the rules say so, and `data-astro-form-max-files`,
-`data-astro-form-max-file-bytes` (only when the rules set `maxFileBytes`) and `data-astro-form-max-total-bytes`,
-which the form script reads. `describeUploadRules` writes a sentence fitted to the rules, such as "Up to 5 files,
-10 MB each, 50 MB in total. Accepted: JPEG, PNG or PDF." or "One file, up to 5 MB. Accepted: PDF or Word."
-Pass a template of your own for other wording or a translation; it may use `{maxFiles}`, `{maxFileSize}`,
-`{maxTotalSize}` and `{types}`, and a token with no value is left as written.
+`data-astro-form-max-file-bytes` and `data-astro-form-max-total-bytes`, which the form script reads.
+`describeUploadRules` writes a sentence fitted to the rules, such as "Up to 5 files, 10 MB each, 50 MB in total.
+Accepted: JPEG, PNG or PDF." or "One file, up to 5 MB. Accepted: PDF or Word."; it names a per-file limit only when
+it differs from the total. Pass a template of your own for other wording or a translation; it may use `{maxFiles}`,
+`{maxFileSize}`, `{maxTotalSize}` and `{types}`, and a token with no value is left as written.
 
 ```ts
 describeUploadRules(quoteUploads, 'Jusqu’à {maxFiles} fichiers de {maxFileSize}. Formats : {types}.')

@@ -105,6 +105,22 @@ describe('uploadRules', () => {
     }).toThrow(TypeError)
   })
 
+  it('leaves no per-file limit when none is given, so a file may be as large as the total allows', async () => {
+    const rules = uploadRules({ maxFiles: 3, maxTotalBytes: 50 * MB, accept: [FILE_TYPES.pdf] })
+    const uploads = new FileUploads<Enquiry>({ ...rules, storage, link })
+
+    const result = await uploads.enrich({ name: 'Ada' }, contextWith([pdf('plans.pdf', 12 * MB)]))
+
+    expect(result).not.toHaveProperty('reject')
+    expect(describeUploadRules(rules)).toBe('Up to 3 files, 50 MB in total. Accepted: PDF.')
+  })
+
+  it('refuses a per-file limit above the total', () => {
+    expect(() =>
+      uploadRules({ maxFiles: 2, maxFileBytes: 2 * MB, maxTotalBytes: MB, accept: [FILE_TYPES.pdf] })
+    ).toThrow(/`maxFileBytes`.*at most.*`maxTotalBytes`/)
+  })
+
   it('refuses limits that would silently stop limiting', () => {
     const accept = [FILE_TYPES.pdf]
 
@@ -135,7 +151,7 @@ describe('uploadInputAttributes', () => {
     })
   })
 
-  it('marks a single required file as not multiple and leaves out a per-file limit it was not given', () => {
+  it('marks a single required file as not multiple and gives the total as its per-file limit', () => {
     const attributes = uploadInputAttributes(
       uploadRules({ maxFiles: 1, maxTotalBytes: 5 * MB, accept: [FILE_TYPES.pdf], required: true })
     )
@@ -144,6 +160,7 @@ describe('uploadInputAttributes', () => {
       accept: 'application/pdf,.pdf',
       required: true,
       'data-astro-form-max-files': '1',
+      'data-astro-form-max-file-bytes': String(5 * MB),
       'data-astro-form-max-total-bytes': String(5 * MB)
     })
   })
@@ -181,6 +198,7 @@ describe('describeUploadRules', () => {
     const rules = uploadRules({ maxFiles: 3, maxTotalBytes: 20 * MB, accept: [FILE_TYPES.pdf, ...WORD_TYPES] })
 
     expect(describeUploadRules(rules)).toBe('Up to 3 files, 20 MB in total. Accepted: PDF or Word.')
+    expect(describeUploadRules(rules)).not.toMatch(/each/)
   })
 
   it('writes a default hint for a single file, bounded by the smaller of its limits', () => {
@@ -215,9 +233,9 @@ describe('describeUploadRules', () => {
     ).toBe('Maximum 5 files of 10 MB (50 MB altogether): JPEG or PDF')
   })
 
-  it('leaves a per-file token as written when the rules set no per-file limit', () => {
+  it('reads a per-file token as the total when the rules set no per-file limit', () => {
     const rules = uploadRules({ maxFiles: 5, maxTotalBytes: 50 * MB, accept: [FILE_TYPES.pdf] })
 
-    expect(describeUploadRules(rules, '{maxFileSize} each')).toBe('{maxFileSize} each')
+    expect(describeUploadRules(rules, '{maxFileSize} each')).toBe('50 MB each')
   })
 })
