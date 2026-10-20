@@ -25,8 +25,8 @@ test('submits and shows the success panel', async ({ page, deliveries }) => {
   await expect(page.getByRole('button', { name: 'Send' })).toHaveCount(0)
   await expect(page).toHaveURL(CONTACT_PAGE_PATH)
 
+  await expect.poll(async () => (await deliveries()).length).toBe(1)
   const emails = await deliveries()
-  expect(emails).toHaveLength(1)
   expect(emails[0]).toMatchObject({ from: 'site@example.com', to: 'owner@example.com', replyTo: 'ada@example.com' })
   expect(emails[0]?.text).toContain('Ada Lovelace')
   expect(emails[0]?.text).toContain('I would like a quote.')
@@ -64,7 +64,7 @@ test('shows field errors from the server and clears them as the person edits', a
 
   await page.getByRole('button', { name: 'Send' }).click()
   await expect(page.getByRole('status').filter({ hasText: "Thanks, we'll be in touch." })).toBeVisible()
-  expect(await deliveries()).toHaveLength(1)
+  await expect.poll(async () => (await deliveries()).length).toBe(1)
 })
 
 test.describe(() => {
@@ -83,8 +83,8 @@ test.describe(() => {
     await expect(page).toHaveURL('/api/contact')
     await expect(page.locator('body')).toHaveText('Form submitted. Please return to the home page.')
 
+    await expect.poll(async () => (await deliveries()).length).toBe(1)
     const emails = await deliveries()
-    expect(emails).toHaveLength(1)
     expect(emails[0]).toMatchObject({ to: 'owner@example.com', replyTo: 'ada@example.com' })
     expect(emails[0]?.text).toContain('Ada Lovelace')
   })

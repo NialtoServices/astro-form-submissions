@@ -136,7 +136,14 @@ function routeContext(request: Request, incoming: IncomingMessage): APIContext {
 /** Write a Fetch `Response` back to Node: its status, headers (a redirect's `Location` among them) and body. */
 async function writeResponse(response: Response, outgoing: ServerResponse): Promise<void> {
   outgoing.statusCode = response.status
-  response.headers.forEach((value, name) => outgoing.setHeader(name, value))
+  response.headers.forEach((value, name) => {
+    if (name !== 'set-cookie') outgoing.setHeader(name, value)
+  })
+
+  // `setHeader` replaces a header, so each `Set-Cookie` must go out together, as one list, or only the last survives.
+  const cookies = response.headers.getSetCookie()
+  if (cookies.length > 0) outgoing.setHeader('Set-Cookie', cookies)
+
   outgoing.end(Buffer.from(await response.arrayBuffer()))
 }
 

@@ -38,6 +38,15 @@ jobs:
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
       - run: pnpm test:browser
+      - name: Keep the browser suite's traces and failure context
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-results
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
       - run: pnpm test:dist
 
   publish:
@@ -60,4 +69,7 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
       - run: pnpm install --frozen-lockfile
+
+      # `prepublishOnly` runs the full gate, the browser suite included, so publishing needs the browsers too.
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
       - run: npm publish --provenance

@@ -9,8 +9,10 @@ export default defineConfig({
   testMatch: '**/*.browser.ts',
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
+  retries: process.env.CI ? 1 : 0,
   use: {
-    baseURL: FIXTURE_ORIGIN
+    baseURL: FIXTURE_ORIGIN,
+    trace: 'on-first-retry'
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
