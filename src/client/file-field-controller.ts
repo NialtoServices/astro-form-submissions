@@ -1,6 +1,7 @@
 import { clearFieldError, replaceFieldErrorMessage } from './field-errors.js'
 import { checkFiles, describeAcceptedTypes, readFileLimits, type FileLimits, type FileProblem } from './file-checks.js'
 import { FILE_COPY } from './file-copy.js'
+import { dragCarriesFiles, registerDropTarget } from './file-drag.js'
 import { FileItemList } from './file-list.js'
 import { formatFileSize } from './file-size.js'
 import type { FormPartHost, FormTeardown, SubmitRefusal } from './form-controller.js'
@@ -10,6 +11,9 @@ import { message } from './messages.js'
 
 /** The parts of a file field the script finds by the field's name, each marked invalid with the field. */
 const FIELD_PART_ATTRIBUTES = ['data-astro-form-file-list-for'] as const
+
+/** Set to `active` on a drop target while a file is dragged over it. */
+const DROP_STATE_ATTRIBUTE = 'data-astro-form-file-drop'
 
 /** Each problem's message attribute name and default copy, the same wording the server's refusals use. */
 const PROBLEM_MESSAGES: Record<FileProblem, { name: string; fallback: (limits: FileLimits) => string }> = {
@@ -33,13 +37,17 @@ function fileKey(file: File): string {
  * Manages one file input that has a `[data-astro-form-file-list-for]` list: picks accumulate (a single-file
  * input's pick replaces), an identical file is listed once, each file can be removed, each is checked against
  * the input's limits, and the form won't send while any file has a problem. The input always holds exactly the
- * listed files, so the form, and a direct upload, sends what the person sees.
+ * listed files, so the form, and a direct upload, sends what the person sees. Files dropped on the input, or on
+ * any `[data-astro-form-file-drop-for]` element naming it, join the selection as a pick does.
  */
 export class FileFieldController {
   // MARK: - Properties
 
   private readonly inputElement: HTMLInputElement
   private readonly formElement: HTMLFormElement
+  private readonly host: FormPartHost
+  private readonly dropTargetElements: Set<HTMLElement>
+  private readonly releaseDropTargets: (() => void)[] = []
   private readonly fileList: FileItemList
   private readonly files: File[] = []
   private readonly invalidObserver: MutationObserver
@@ -57,6 +65,7 @@ export class FileFieldController {
 
     this.inputElement = inputElement
     this.formElement = host.formElement
+    this.host = host
     this.fileList = new FileItemList(listElement)
 
     const { signal } = host
@@ -64,6 +73,19 @@ export class FileFieldController {
     listElement.addEventListener('click', (event) => this.handleListClick(event), { signal })
     host.formElement.addEventListener('reset', (event) => this.handleReset(event), { signal })
     host.addSubmitCheck(() => this.refusal())
+
+    this.dropTargetElements = new Set([
+      inputElement,
+      ...host.formElement.querySelectorAll<HTMLElement>(
+        `[data-astro-form-file-drop-for="${CSS.escape(inputElement.name)}"]`
+      )
+    ])
+    for (const dropTargetElement of this.dropTargetElements) {
+      this.releaseDropTargets.push(registerDropTarget(dropTargetElement))
+      for (const type of ['dragenter', 'dragover', 'dragleave', 'drop'] as const) {
+        dropTargetElement.addEventListener(type, (event) => this.handleDrag(event, dropTargetElement), { signal })
+      }
+    }
 
     // The server's refusals mark the input `aria-invalid` as well as the field's own checks, so the mirror
     // follows the attribute itself.
@@ -85,6 +107,8 @@ export class FileFieldController {
   disconnect(): void {
     this.invalidObserver.disconnect()
     this.disabledObserver.disconnect()
+    for (const release of this.releaseDropTargets.splice(0)) release()
+    for (const dropTargetElement of this.dropTargetElements) dropTargetElement.removeAttribute(DROP_STATE_ATTRIBUTE)
     this.fileList.clear()
   }
 
@@ -130,13 +154,18 @@ export class FileFieldController {
       return
     }
 
+    this.addFiles(chosenFiles)
+  }
+
+  /** Add files to the selection: all of them, less any already listed, or only the first for a single-file input. */
+  private addFiles(files: readonly File[]): void {
     if (!this.inputElement.multiple) {
-      this.replaceFiles(chosenFiles.slice(0, 1))
+      this.replaceFiles(files.slice(0, 1))
       return
     }
 
     const listedKeys = new Set(this.files.map(fileKey))
-    const addedFiles = chosenFiles.filter((file) => {
+    const addedFiles = files.filter((file) => {
       const key = fileKey(file)
       if (listedKeys.has(key)) return false
 
@@ -175,6 +204,52 @@ export class FileFieldController {
   }
 
   // MARK: - Events
+
+  /**
+   * Follow a drag over one of the field's drop targets. A drag that carries no files is left to the browser, and
+   * a disabled field refuses the drag's drop, without taking the file, the browser's default of opening it or the
+   * hover state.
+   */
+  private handleDrag(event: DragEvent, dropTargetElement: HTMLElement): void {
+    if (event.type === 'dragleave') {
+      // Entering a child of the target also fires `dragleave` on the target, and the browser reports where the
+      // drag went only some of the time; a drag still over the target sets the state again on its next `dragover`.
+      if (event.relatedTarget instanceof Node && dropTargetElement.contains(event.relatedTarget)) return
+
+      dropTargetElement.removeAttribute(DROP_STATE_ATTRIBUTE)
+      return
+    }
+
+    if (!dragCarriesFiles(event)) return
+
+    // Cancelling the event is what makes the element a place a file can be dropped.
+    event.preventDefault()
+
+    if (this.inputElement.matches(':disabled')) {
+      dropTargetElement.removeAttribute(DROP_STATE_ATTRIBUTE)
+      if (event.dataTransfer && event.type !== 'drop') event.dataTransfer.dropEffect = 'none'
+      return
+    }
+
+    if (event.type !== 'drop') {
+      if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+      dropTargetElement.setAttribute(DROP_STATE_ATTRIBUTE, 'active')
+      return
+    }
+
+    dropTargetElement.removeAttribute(DROP_STATE_ATTRIBUTE)
+    this.addDroppedFiles(Array.from(event.dataTransfer?.files ?? []))
+  }
+
+  /** Take a drop as a pick, saying so when a single-file field was given several files and kept the first. */
+  private addDroppedFiles(files: readonly File[]): void {
+    if (files.length === 0) return
+
+    this.addFiles(files)
+    if (!this.inputElement.multiple && files.length > 1) {
+      this.host.announce(message(this.inputElement, 'only-one-file', FILE_COPY.onlyOneFile, this.placeholders))
+    }
+  }
 
   private handleListClick(event: MouseEvent): void {
     if (!(event.target instanceof Element)) return

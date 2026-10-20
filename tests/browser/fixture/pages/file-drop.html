@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Quote request with photos and a plan</title>
+    <style>
+      .drop-zone {
+        padding: 1rem;
+        border: 2px dashed gray;
+      }
+
+      .drop-zone[data-astro-form-file-drop='active'] {
+        border-color: blue;
+      }
+    </style>
+    <script type="module">
+      import { initializeForms } from '/client/form.js'
+
+      initializeForms()
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>Request a quote</h1>
+
+      <form data-astro-form action="/api/application" method="POST" enctype="multipart/form-data" novalidate>
+        <label>Name <input name="name" /></label>
+
+        <fieldset>
+          <legend>Photos</legend>
+          <label for="quote-photos">Photos of the job</label>
+          <input
+            id="quote-photos"
+            type="file"
+            name="photos"
+            accept="image/png,image/jpeg,.png,.jpg"
+            multiple
+            data-astro-form-max-files="4"
+            data-astro-form-max-file-bytes="65536"
+            data-astro-form-max-total-bytes="131072"
+            data-astro-form-accepted-types="PNG or JPEG" />
+          <div class="drop-zone" data-astro-form-file-drop-for="photos">Drop photos here</div>
+          <ul data-astro-form-file-list-for="photos" aria-label="Chosen photos">
+            <template>
+              <li>
+                <span data-astro-form-file-name></span>
+                <span data-astro-form-file-problem hidden></span>
+                <button type="button" data-astro-form-file-remove>Remove</button>
+              </li>
+            </template>
+          </ul>
+        </fieldset>
+
+        <fieldset id="plan-section">
+          <legend>Plan</legend>
+          <label for="quote-plan">Floor plan</label>
+          <input
+            id="quote-plan"
+            type="file"
+            name="cv"
+            accept="application/pdf,.pdf"
+            data-astro-form-max-files="1"
+            data-astro-form-max-file-bytes="65536"
+            data-astro-form-max-total-bytes="65536"
+            data-astro-form-accepted-types="PDF" />
+          <div class="drop-zone" data-astro-form-file-drop-for="cv">Drop your plan here</div>
+          <ul data-astro-form-file-list-for="cv" aria-label="Chosen plan">
+            <template>
+              <li>
+                <span data-astro-form-file-name></span>
+                <span data-astro-form-file-problem hidden></span>
+                <button type="button" data-astro-form-file-remove>Remove</button>
+              </li>
+            </template>
+          </ul>
+        </fieldset>
+
+        <button type="submit">Send</button>
+
+        <p data-astro-form-status data-astro-form-message-success="Thanks, we'll be in touch."></p>
+      </form>
+
+      <p id="elsewhere">Nothing to drop on here.</p>
+      <textarea aria-label="Notes"></textarea>
+    </main>
+  </body>
+</html>

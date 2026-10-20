@@ -47,6 +47,12 @@ export interface FormPartHost {
 
   /** Ask `check` before every send, before anything (a direct upload included) leaves the browser. */
   addSubmitCheck(check: SubmitCheck): void
+
+  /**
+   * Show `message` in the form's status region as a neutral notice: announced politely, and without the
+   * `pending`, `success` or `error` state, which belongs to a send.
+   */
+  announce(message: string): void
 }
 
 /**
@@ -138,6 +144,11 @@ export class FormController implements FormPartHost {
 
   addSubmitCheck(check: SubmitCheck): void {
     this.submitChecks.push(check)
+  }
+
+  announce(message: string): void {
+    this.statusElement.textContent = message
+    delete this.statusElement.dataset.astroFormState
   }
 
   /**
