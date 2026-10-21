@@ -1525,7 +1525,7 @@ console warning, until the element is added. Each hook is an attribute you add t
 | `data-astro-form-submit-timeout`                                        | the `<form>`                    | Optional per-form request timeout, in ms (default 30000).                                                                                                                  |
 | `data-astro-form-upload-action`                                         | the `<form>`                    | Optional — the upload route, opting into [direct uploads](#direct-uploads-in-the-form).                                                                                    |
 | `data-astro-form-upload`                                                | a file input                    | Its files upload directly and never join a submission (with `data-astro-form-upload-action`). One per form: the first is used.                                             |
-| `data-astro-form-requires-script`                                       | an element inside the form      | Optional — a `hidden` element the script reveals (see [Fields that need the script](#fields-that-need-the-script)).                                                        |
+| `data-astro-form-requires-script`                                       | an element inside the form      | Optional — a `hidden`, `disabled` element the script reveals and enables (see [Fields that need the script](#fields-that-need-the-script)).                                |
 | `data-astro-form-upload-field`                                          | the `<form>`                    | Optional field the file descriptors post to the upload route under (default `uploads`); match the route's `field`.                                                         |
 | `data-astro-form-upload-receipt-field`                                  | the `<form>`                    | Optional field the receipts post under (default `upload`).                                                                                                                 |
 | `data-astro-form-message-uploading`                                     | the status element              | Optional copy while files upload, with `{current}`, `{total}` and `{percent}` filled in; it changes as each file starts and at each 25%, so a screen reader isn't flooded. |
@@ -1820,20 +1820,29 @@ A progress part on a field is enough to make the script manage it, as a list or 
 
 #### Fields that need the script
 
-A direct upload has no use without JavaScript, so render its field `hidden`, mark it
-`data-astro-form-requires-script`, and the script reveals it when it binds the form. Without JavaScript the field
-stays hidden and the rest of the form still posts. Put a `<noscript>` note beside it for visitors who would
-otherwise wonder where the photos went; the note is yours to write, as the package ships no markup.
+A direct upload has no use without JavaScript, so render its field `hidden` and `disabled`, mark it
+`data-astro-form-requires-script`, and the script reveals and enables it when it binds the form. Without
+JavaScript the field stays hidden and disabled, and the rest of the form still posts. Put a `<noscript>` note beside
+it for visitors who would otherwise wonder where the photos went; the note is yours to write, as the package ships
+no markup.
+
+Render the element `disabled` as well as `hidden`, most of all when the field is required. A `required` control
+the browser can't show blocks the whole form without JavaScript and tells the person nothing; a disabled one is
+left out of that check and out of the post. Rely on `UploadedFiles`' `required` to make the field required: the
+server refuses a post without the files in words a person can read. Without JavaScript such a field can't be
+filled, so every post is refused that way, which the `<noscript>` note should say.
 
 ```html
-<fieldset data-astro-form-requires-script hidden>
+<fieldset data-astro-form-requires-script hidden disabled>
   <legend>Photos</legend>
   <input type="file" name="photos" multiple data-astro-form-upload />
 </fieldset>
 <noscript><p>Photos can only be added with JavaScript turned on. Please email them to us instead.</p></noscript>
 ```
 
-The script removes `hidden` from every such element inside a form it binds, and from nowhere else on the page.
+The script removes `hidden` and `disabled` from every such element inside a form it binds, and from nowhere else
+on the page. It lifts them from the marked element only, so a field inside it that the site disables for its own
+reasons stays disabled; disable that field itself, not the marked element, when the site needs to switch it off.
 
 ### Extras: honeypot and Turnstile
 
@@ -2516,8 +2525,9 @@ export const POST = defineLazyRoute(async () => {
 ```
 
 The form marks the media field for direct upload and gives it every part: the list, a drop zone, a progress bar for
-each file and one for the whole field, and an error slot. The fieldset is `hidden` and marked
-`data-astro-form-requires-script`, so the script reveals it, and the `<noscript>` note beside it is the site's own:
+each file and one for the whole field, and an error slot. The fieldset is `hidden`, `disabled` and marked
+`data-astro-form-requires-script`, so the script reveals and enables it, and the `<noscript>` note beside it is the
+site's own:
 
 ```astro
 ---
@@ -2550,7 +2560,7 @@ const mediaHint = describeUploadRules(
   <textarea id='quote-details' name='details' required></textarea>
   <p data-astro-form-field-error-for='details' id='quote-details-error' hidden></p>
 
-  <fieldset class='file-field' data-astro-form-requires-script hidden>
+  <fieldset class='file-field' data-astro-form-requires-script hidden disabled>
     <legend>Photos and videos of the job (optional)</legend>
     <input
       id='quote-media'

@@ -73,8 +73,9 @@
 //   (bytes sent and total) and any other element has `--astro-form-progress` (0 to 1) set, and each carries
 //   `data-astro-form-file-state` of `uploading` or `done`; a failed or refused upload returns them to 0 and takes
 //   the state off.
-// - `[data-astro-form-requires-script]` — anything the site renders `hidden` that needs the script, a direct-upload
-//   field say; the script removes `hidden` from each such element inside a form when it binds the form.
+// - `[data-astro-form-requires-script]` — anything the site renders `hidden` and `disabled` that needs the script, a
+//   direct-upload field say; the script removes `hidden` and `disabled` from each such element inside a form when it
+//   binds the form.
 
 import { attachFormAnalytics } from './analytics.js'
 import { registerFormPart } from './binding.js'

@@ -132,22 +132,42 @@ test('a refused file upload returns the field and item progress to nothing after
   )
 })
 
-test('a script-only field is revealed when the script runs', async ({ page }) => {
+test('a script-only field is revealed and enabled when the script runs', async ({ page }) => {
   await page.goto(DIRECT_UPLOAD_PAGE_PATH)
 
   await expect(page.getByRole('group', { name: 'Photos' })).toBeVisible()
+  await expect(page.getByLabel('Photos', { exact: true })).toBeEnabled()
   await expect(page.locator('noscript p')).toBeHidden()
+})
+
+test('a required script-only field the script enables refuses an empty send, as any enabled field does', async ({
+  page,
+  deliveries
+}) => {
+  await page.goto(DIRECT_UPLOAD_PAGE_PATH)
+  await page.getByLabel('Name').fill('Ada Lovelace')
+  const photosInput = page.getByLabel('Photos', { exact: true })
+
+  await page.getByRole('button', { name: 'Send' }).click()
+
+  await expect(photosInput).toBeFocused()
+  expect(
+    await photosInput.evaluate((element: HTMLInputElement) => element.willValidate && element.validity.valueMissing)
+  ).toBe(true)
+  await expect(page.getByRole('status')).not.toHaveText(SUCCESS_COPY)
+  expect(await deliveries()).toHaveLength(0)
 })
 
 test.describe(() => {
   test.use({ javaScriptEnabled: false })
 
-  test('without JavaScript, a script-only field stays hidden and the rest of the form submits', async ({
+  test('without JavaScript, a required script-only field stays hidden and the rest of the form submits', async ({
     page,
     deliveries
   }) => {
     await page.goto(DIRECT_UPLOAD_PAGE_PATH)
     await expect(page.getByRole('group', { name: 'Photos' })).toBeHidden()
+    expect(await page.locator('#quote-photos').getAttribute('required')).not.toBeNull()
     await expect(page.locator('noscript p')).toHaveText('Photos can only be added with JavaScript turned on.')
 
     await page.getByLabel('Name').fill('Ada Lovelace')

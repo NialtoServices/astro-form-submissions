@@ -174,9 +174,11 @@ from its own wrappers" in the README says what each one was for.
   `--astro-form-progress` set from `0` to `1`. The field's part counts the bytes of every file, and each part, and
   the item, carries `data-astro-form-file-state` of `uploading` or `done`; a failed or refused upload returns them
   to `0` and removes the state. An ordinary file field's parts are never touched. See "Upload progress" in the README.
-- Mark an element `data-astro-form-requires-script`, and render it `hidden`, for the script to reveal it when it binds
-  the form, so a direct-upload field only appears when it can work. Without JavaScript it stays hidden and the rest
-  of the form posts; a `<noscript>` note beside it is the site's own. See "Fields that need the script" in the README.
+- Mark an element `data-astro-form-requires-script`, and render it `hidden` and `disabled`, for the script to reveal
+  and enable it when it binds the form, so a direct-upload field only appears when it can work. Without JavaScript it
+  stays hidden and disabled, so a `required` input inside it can't block the post, and the rest of the form posts;
+  make such a field required with `UploadedFiles`' `required` instead. A `<noscript>` note beside it is the site's
+  own. See "Fields that need the script" in the README.
 - `data-astro-form-analytics="<form name>"` on a form makes the script push `{ event: 'form_submission', form_name }` to
   `window.dataLayer` each time the form is sent successfully, creating the array if the page has none and never
   replacing one. A submission the server quietly drops as spam is answered as a success, so it is counted too; a

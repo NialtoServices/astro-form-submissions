@@ -32,13 +32,19 @@
         data-astro-form-upload-action="/api/photos/uploads/"
         action="/api/photos"
         method="POST"
-        enctype="multipart/form-data"
-        novalidate>
+        enctype="multipart/form-data">
         <label>Name <input name="name" /></label>
 
-        <fieldset data-astro-form-requires-script hidden>
+        <fieldset data-astro-form-requires-script hidden disabled>
           <legend>Photos</legend>
-          <input id="quote-photos" type="file" name="photos" multiple data-astro-form-upload aria-label="Photos" />
+          <input
+            id="quote-photos"
+            type="file"
+            name="photos"
+            multiple
+            required
+            data-astro-form-upload
+            aria-label="Photos" />
           <p data-astro-form-field-error-for="photos" id="quote-photos-error" hidden></p>
           <ul data-astro-form-file-list-for="photos" aria-label="Chosen photos">
             <template>

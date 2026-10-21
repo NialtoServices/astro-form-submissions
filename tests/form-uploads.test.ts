@@ -755,6 +755,24 @@ describe('form script — script-only fields', () => {
     expect(document.querySelector<HTMLElement>('#note')!.hidden).toBe(true)
     expect(document.querySelector<HTMLElement>('#outside')!.hidden).toBe(true)
   })
+
+  it('a script-only field rendered disabled is enabled when the script runs', () => {
+    document.body.innerHTML = `
+      <form data-astro-form action="/api/contact/" method="POST">
+        <fieldset data-astro-form-requires-script hidden disabled>
+          <input type="file" name="photos" required />
+        </fieldset>
+        <p data-astro-form-status></p>
+      </form>
+      <fieldset data-astro-form-requires-script hidden disabled id="outside"><input name="other" /></fieldset>`
+
+    initializeForms()
+
+    const fieldsetElement = document.querySelector('form fieldset')!
+    expect(fieldsetElement.hasAttribute('hidden')).toBe(false)
+    expect(fieldsetElement.hasAttribute('disabled')).toBe(false)
+    expect(document.querySelector('#outside')!.hasAttribute('disabled')).toBe(true)
+  })
 })
 
 describe('form script — one direct-upload input per form', () => {
