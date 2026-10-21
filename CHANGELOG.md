@@ -81,6 +81,9 @@ reason code, and a form posted without JavaScript gets a page a person can read.
 - Exports `SubmissionVerdictError`, `ReportedVerdictAction`, `OperationalError`, `OperationalErrorOptions`,
   `ObjectExistsError`, `escapeDiscordMarkdown`, `DEFAULT_MAX_BODY_BYTES`, `DEFAULT_MAX_TEXT_BODY_BYTES`,
   `VerdictReason`, `VerdictDetails` and `VerdictDetail`.
+- `TurnstileInspector`'s `verifyHostname` accepts a comma-separated string, such as an environment variable's value:
+  entries are trimmed and blanks dropped, and a string with no entries (blank or unset) means the check is off. A
+  literal `[]` still rejects everything.
 - This changelog, which now ships with the package.
 - `FileMatcher.inspect` and `FileStorage.readRange`, so a type check can read beyond the file's first bytes;
   `R2Storage` implements it. Also exports `ByteRangeReader`, `MAX_INSPECTED_BYTES` and `MAX_INSPECTED_READS`.

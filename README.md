@@ -617,7 +617,10 @@ Two inspectors ship with the package:
 
   - `false` / omitted (**default**) — off.
   - `true` — verify against Astro's `site`.
-  - a hostname **string** — verify against exactly that host.
+  - a hostname **string** — verify against exactly that host. A comma-separated string is a list: each entry is
+    trimmed and blanks are dropped, so an environment variable can be passed straight through
+    (`verifyHostname: env.TURNSTILE_HOSTNAMES`). A blank or unset variable leaves no entries, which means **off**,
+    as `false` does.
   - a **`string[]`** — accept a token solved on any listed host, so a site reachable on more than one
     origin works. A literal `[]` is a closed allowlist that rejects everything (reported once).
 

@@ -312,6 +312,37 @@ describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () =
     expect(second.report).not.toHaveBeenCalled()
   })
 
+  it('accepts a comma-separated hostname list', async () => {
+    const inspector = new TurnstileInspector({
+      secretKey: 'secret',
+      verifyHostname: ' example.com, staging.example.com ,'
+    })
+
+    mockSiteverify(JSON.stringify({ success: true, hostname: 'example.com' }))
+    expect(await inspector.inspect(contextFor('token'))).toEqual({ action: 'accept' })
+
+    mockSiteverify(JSON.stringify({ success: true, hostname: 'staging.example.com' }))
+    expect(await inspector.inspect(contextFor('token'))).toEqual({ action: 'accept' })
+
+    mockSiteverify(JSON.stringify({ success: true, hostname: 'evil.example.net' }))
+    expect(await inspector.inspect(contextFor('token'))).toEqual(
+      rejected('turnstile.hostname-mismatch', {
+        expected: ['example.com', 'staging.example.com'],
+        solved: 'evil.example.net'
+      })
+    )
+  })
+
+  it.each(['', '   ', ' , ,'])('a blank list turns the check off (%j)', async (blank) => {
+    mockSiteverify(JSON.stringify({ success: true, hostname: 'anywhere.example.net' }))
+    const context = contextFor('token')
+
+    const result = await new TurnstileInspector({ secretKey: 'secret', verifyHostname: blank }).inspect(context)
+
+    expect(result).toEqual({ action: 'accept' })
+    expect(context.report).not.toHaveBeenCalled()
+  })
+
   it('compares hostnames case-insensitively in both directions', async () => {
     mockSiteverify(JSON.stringify({ success: true, hostname: 'EXAMPLE.com' }))
     const inspector = new TurnstileInspector({ secretKey: 'secret', verifyHostname: 'Example.COM' })

@@ -89,7 +89,9 @@ export interface TurnstileInspectorOptions {
    *
    * - `false` / omitted (**default**) — off.
    * - `true` — verify against Astro `site` (reject + report if `site` is unset; never the request host).
-   * - a `string` — verify against exactly that host.
+   * - a `string` — verify against that host, or against each host of a comma-separated list (entries are
+   *   trimmed and blanks dropped), so an env variable passes straight through. A string with no entries,
+   *   such as an unset or blank variable, means off.
    * - a `string[]` — accept any listed host (e.g. production + a `*.workers.dev` preview); a malformed
    *   entry is a reported misconfig, and a literal `[]` rejects everything (reported once).
    */
@@ -129,6 +131,9 @@ export class TurnstileInspector implements Inspector {
   // A `[]` allowlist rejects every submission, so its diagnostic is reported once rather than per request.
   private emptyAllowlistReported = false
 
+  // A string option is split once at construction, and a string with no entries is `false`.
+  private readonly verifyHostname: boolean | string[]
+
   // MARK: - Object Lifecycle
 
   /**
@@ -136,7 +141,20 @@ export class TurnstileInspector implements Inspector {
    *
    * @param options - The inspector options, including the secret key, token field, and hostname policy.
    */
-  constructor(private readonly options: TurnstileInspectorOptions) {}
+  constructor(private readonly options: TurnstileInspectorOptions) {
+    const { verifyHostname = false } = options
+    if (typeof verifyHostname !== 'string') {
+      this.verifyHostname = verifyHostname
+
+      return
+    }
+
+    const entries = verifyHostname
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry !== '')
+    this.verifyHostname = entries.length === 0 ? false : entries
+  }
 
   // MARK: - Inspector API
 
@@ -152,7 +170,7 @@ export class TurnstileInspector implements Inspector {
    */
   async inspect(context: InspectionContext<FormSubmission>): Promise<Verdict> {
     const tokenField = this.options.tokenField ?? 'cf-turnstile-response'
-    const verifyHostname = this.options.verifyHostname ?? false
+    const verifyHostname = this.verifyHostname
     const token = `${context.data.get(tokenField) ?? ''}`
 
     // A missing token is expected sender/bot behaviour, not an operational event — no report.
