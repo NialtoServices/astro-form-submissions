@@ -43,6 +43,9 @@
     frameElement.title = 'Widget containing a Cloudflare security challenge'
     frameElement.style.border = '0'
 
+    // A block frame adds no line box of its own, so a container holding only a zero-sized frame measures zero high.
+    frameElement.style.display = 'block'
+
     const inputElement = document.createElement('input')
     inputElement.type = 'hidden'
     inputElement.name = containerElement.dataset.responseFieldName || RESPONSE_FIELD_NAME

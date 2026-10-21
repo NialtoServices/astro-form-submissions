@@ -170,6 +170,11 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   replacing one. A submission the server quietly drops as spam is answered as a success, so it is counted too; a
   refusal and a form posted without JavaScript are not. An empty value warns once and pushes nothing. Google Tag
   Manager needs a trigger for the event; see "Analytics" in the README.
+- The form script keeps `data-astro-form-turnstile` on each `.cf-turnstile` container in a form: `visible` while the
+  widget takes up room and `invisible` while it doesn't, as an interaction-only or execute widget does until it needs
+  the visitor, and also before Cloudflare's script has rendered anything. A form without a container gets no
+  attribute. Style a wrapper with it to collapse the space around an invisible widget; a `min-height` on the
+  container itself reads as visible. See "Styling the Turnstile widget" in the README.
 
 ### Changed
 

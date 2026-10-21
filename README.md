@@ -1835,6 +1835,43 @@ Two optional protections need **extra markup in your form** — nothing is auto-
   to reset the widget after success **and** after failed attempts, so a retry never resubmits an
   already-consumed token.
 
+  Load `api.js` yourself, **once per page and only on pages that have a widget**. Without a widget it
+  is a request and a script the page doesn't need, and loading it twice makes Cloudflare warn and render
+  widgets twice.
+
+#### Styling the Turnstile widget
+
+The script sets `data-astro-form-turnstile` on each `.cf-turnstile` container in a form: `visible` while the
+widget takes up room, and `invisible` while it doesn't. An interaction-only or execute widget shows nothing
+until it needs the visitor, so it stays `invisible` until then, as it does before Cloudflare's script has
+rendered anything. A form without a widget has no attribute.
+
+The attribute lets you collapse the space an invisible widget would otherwise leave behind. Put the spacing
+on a wrapper, so the container itself stays free of it:
+
+```astro
+<div class='turnstile-slot'>
+  <div class='cf-turnstile' data-sitekey={import.meta.env.PUBLIC_TURNSTILE_SITE_KEY} data-appearance='interaction-only'>
+  </div>
+</div>
+
+<style>
+  .turnstile-slot {
+    margin-block: 1rem;
+  }
+
+  .turnstile-slot:has([data-astro-form-turnstile='invisible']) {
+    margin-block: 0;
+  }
+</style>
+```
+
+- **`:empty` can't do this.** The widget puts its response input and its frame inside the container, so
+  the container is never empty, even while it shows nothing.
+- **The measure is the container's content box**, so padding and borders on the container don't count as
+  the widget showing. A `min-height` on the container itself does give it a height, so it reads as
+  `visible`; style a wrapper instead, as above.
+
 ### Swap on success
 
 By default a successful submission shows the success copy in the status element and resets the form.

@@ -32,7 +32,8 @@
 // - `data-astro-form-analytics="<form name>"` — opts the form into analytics: each successful submission pushes
 //   `{ event: 'form_submission', form_name }` to `window.dataLayer`, which is created if the page has none.
 // - `.cf-turnstile` — an optional Turnstile widget container (Cloudflare's own convention); the
-//   script refreshes it after each attempt so a retry never resubmits a spent token.
+//   script refreshes it after each attempt so a retry never resubmits a spent token, and keeps
+//   `data-astro-form-turnstile` on it at `visible` while the widget takes up room and `invisible` while it doesn't.
 //
 // ## Direct uploads (opt-in)
 //
@@ -80,6 +81,7 @@ import { registerFormPart } from './binding.js'
 import { checkDirectUploadMarkup } from './direct-uploads.js'
 import { attachFileFields } from './file-field-controller.js'
 import { revealScriptOnlyParts } from './script-only-parts.js'
+import { attachTurnstileState } from './turnstile-state.js'
 
 export { initializeForms } from './binding.js'
 
@@ -87,3 +89,4 @@ registerFormPart(revealScriptOnlyParts)
 registerFormPart(checkDirectUploadMarkup)
 registerFormPart(attachFileFields)
 registerFormPart(attachFormAnalytics)
+registerFormPart(attachTurnstileState)
