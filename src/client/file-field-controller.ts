@@ -407,9 +407,9 @@ export class FileFieldController {
 // MARK: - Initialisation
 
 /**
- * Bind a {@link FileFieldController} to each file input in a form that has a file list, drop zone or progress part, so a field without the
- * list markup stays as the browser provides it. A field whose markup is broken is reported and left alone, and
- * the form's other fields carry on.
+ * Bind a {@link FileFieldController} to each file input in a form that has a file list, drop zone or progress part,
+ * so a field without that markup stays as the browser provides it. A field whose markup is broken is reported and
+ * left alone, and the form's other fields carry on.
  */
 export function attachFileFields(formElement: HTMLFormElement, host: FormPartHost): FormTeardown | void {
   const controllers: FileFieldController[] = []

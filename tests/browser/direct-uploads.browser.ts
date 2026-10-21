@@ -88,6 +88,50 @@ test('a refusal from the upload route lands on the direct-upload input', async (
   expect(await deliveries()).toHaveLength(0)
 })
 
+test('a refused file upload returns the field and item progress to nothing after it had moved', async ({ page }) => {
+  await page.goto(DIRECT_UPLOAD_PAGE_PATH)
+  await page.getByLabel('Name').fill('Ada Lovelace')
+  await page
+    .getByLabel('Photos', { exact: true })
+    .setInputFiles([photoOf('garden.png', 200_000), photoOf('loft.png', 200_000)])
+
+  // The first file's upload goes through; the storage refuses the second.
+  let uploadCount = 0
+  await page.route('**/api/photos/uploads/*/', async (route) => {
+    uploadCount++
+    if (uploadCount === 1) {
+      await route.continue()
+      return
+    }
+
+    await route.fulfill({ status: 403, body: 'Refused' })
+  })
+
+  const fieldBar = page.getByRole('progressbar', { name: 'Overall progress' })
+  await fieldBar.evaluate((element: HTMLProgressElement) => {
+    const seen: number[] = []
+    ;(window as unknown as { seenProgress: number[] }).seenProgress = seen
+    new MutationObserver(() => seen.push(element.value)).observe(element, {
+      attributes: true,
+      attributeFilter: ['value']
+    })
+  })
+
+  await page.getByRole('button', { name: 'Send' }).click()
+  await expect(page.getByRole('status')).toHaveText('Something went wrong.')
+
+  const seen = await page.evaluate(() => (window as unknown as { seenProgress: number[] }).seenProgress)
+  expect(Math.max(...seen)).toBeGreaterThan(0)
+
+  expect(await barOf(fieldBar)).toMatchObject({ value: 0, state: null })
+  const itemBars = page.getByRole('list', { name: 'Chosen photos' }).getByRole('progressbar')
+  for (const index of [0, 1]) expect(await barOf(itemBars.nth(index))).toMatchObject({ value: 0, state: null })
+  await expect(page.locator('#photos-meter')).toHaveCSS('--astro-form-progress', '0')
+  await expect(page.getByRole('list', { name: 'Chosen photos' }).getByRole('listitem').first()).not.toHaveAttribute(
+    'data-astro-form-file-state'
+  )
+})
+
 test('a script-only field is revealed when the script runs', async ({ page }) => {
   await page.goto(DIRECT_UPLOAD_PAGE_PATH)
 
