@@ -9,8 +9,12 @@ every Upgrading section from the oldest version skipped to the newest.
 
 ## [Unreleased]
 
-The route now caps the body it reads, upload receipts and grants work once, every refusal is reported with a
-reason code, and a form posted without JavaScript gets a page a person can read.
+Emails can carry uploaded files as attachments, files are recognised as Word, OpenDocument text, RTF, plain text and
+phone video as well as images and PDF, and a file field's limits are declared once for the route, the input and its
+hint. The form script lists, checks and manages chosen files, takes dropped files, shows direct-upload progress, binds
+forms added after it starts, follows fields a site disables, and can push an analytics event and mark whether a
+Turnstile widget is showing. The route caps the body it reads, upload receipts and grants work once, every refusal is
+reported with a reason code, and a form posted without JavaScript gets a page a person can read.
 
 ### Upgrading
 
@@ -27,45 +31,47 @@ reason code, and a form posted without JavaScript gets a page a person can read.
    throws at construction without it. Its `putStream` should also refuse a key that holds an object or has been
    claimed by throwing `ObjectExistsError`. `R2Storage` does both.
 3. **Check the body limits suit the form.** The route reads at most `maxBodyBytes` (default 1 MiB, plus each
-   `FileUploads` enricher's `maxTotalBytes`) and, for a body that isn't multipart, `maxTextBodyBytes` (default
-   64 KiB), refusing anything larger with `requestTooLarge` (413). Raise `maxBodyBytes` if a custom enricher
-   reads files from the multipart body.
-4. **`onError` now also receives every refused, dropped or quarantined submission** as a
-   `SubmissionVerdictError`. A hook that forwards everything to an error tracker should skip these or route
-   them elsewhere.
+   `FileUploads` and `FileAttachments` enricher's `maxTotalBytes`) and, for a body that isn't multipart,
+   `maxTextBodyBytes` (default 64 KiB), refusing anything larger with `requestTooLarge` (413). Raise `maxBodyBytes`
+   if a custom enricher reads files from the multipart body.
+4. **Keep verdicts out of an error tracker.** `onError` now also receives every refused, dropped or quarantined
+   submission as a `SubmissionVerdictError`, so a hook that forwards everything to an error tracker should skip
+   these or route them elsewhere.
 5. **Take `cf-turnstile-response` out of the schema.** An inspector's own fields are now removed before
    validation, so a schema that requires the Turnstile token refuses every submission.
 6. **Set Astro's `site`** for the built-in emails to show the site's host and link its home page; they no
    longer fall back to the request's URL.
-7. **Some options are now checked when the route is built**, and throw if invalid: `DiscordDispatcher`'s
+7. **Check the options now validated when the route is built**, since an invalid one throws: `DiscordDispatcher`'s
    `webhookURL` must be an absolute `https` URL, `RateLimitGuard` needs a `limiter` with a `limit` method,
    `PostmarkTransport`'s `timeoutSeconds` can be at most 2,147,483, `InMemoryRateLimiter`'s `maxKeys` must be a
    finite positive number, and `createFormRoute`'s `successURL` must be an `http(s)` URL or a path.
-8. **A copy table typed `Record<ToolkitErrorKey, string>` needs three new entries**: `requestTooLarge`,
-   `plainSubmitted` and `plainRetry` (`DEFAULT_ERROR_COPY` has the default wording).
-9. **An `onError` hook that checks for `PostmarkDeliveryError` or `DiscordDeliveryError`** no longer sees a 502
-   or 504: those arrive as `DestinationUnreachableError`, with the provider's error as its `cause`.
+8. **Add five entries to a copy table typed `Record<ToolkitErrorKey, string>`**: `requestTooLarge`,
+   `plainSubmitted`, `plainRetry`, `filesTooLarge` and `fileRequired` (`DEFAULT_ERROR_COPY` has the default wording).
+9. **Check for `DestinationUnreachableError` too in an `onError` hook that looks for `PostmarkDeliveryError` or
+   `DiscordDeliveryError`.** A 502 or 504 from either provider now arrives as a `DestinationUnreachableError`, with
+   the provider's error as its `cause`.
 10. **`DOCUMENT_TYPES` and `ALL_TYPES` now accept Word, OpenDocument text, RTF and plain text, and `ALL_TYPES`
     also phone video.** A site relying on either default that wants the previous list sets
     `accept: [...IMAGE_TYPES, FILE_TYPES.pdf]`.
 11. **A `fileTooLarge` override now applies only to a single file.** The files together over `maxTotalBytes` are
     refused with the new `filesTooLarge` key, so copy that reads as a per-file limit no longer shows for a total.
     Add a `filesTooLarge` entry beside it.
-12. **A copy table typed `Record<ToolkitErrorKey, string>` needs two more entries**, `filesTooLarge` and
-    `fileRequired` (`DEFAULT_ERROR_COPY` has the default wording).
-13. **Check what `to` and `replyTo` functions return.** Each must return `local@domain` or `Name <local@domain>`;
+12. **Check what `to` and `replyTo` functions return.** Each must return `local@domain` or `Name <local@domain>`;
     anything else now throws `EmailRecipientError`. The name must be plain text without `" ( ) , : ; < > @ [ \ ]`, or
     quoted with no `"` or `\` inside, and either way hold no control character, no whitespace but spaces, no
     compatibility character (such as a fullwidth comma) and no `=?`. The simplest fix is to drop the name and return the
     bare address (`to: (submission) => submission.email`).
-14. **Mark only one file input per form `data-astro-form-upload`.** A form has one upload action, one descriptor field
+13. **Mark only one file input per form `data-astro-form-upload`.** A form has one upload action, one descriptor field
     and one receipt field, so the script now uploads directly from the first marked input only; the others post as
     ordinary file inputs, with a console warning. A form that marked several needs its extra fields on `FileUploads`
     instead.
-15. **Rename `webhookUrl` to `webhookURL` on every `DiscordDispatcher`.** The old spelling is removed, no longer
+14. **Rename `webhookUrl` to `webhookURL` on every `DiscordDispatcher`.** The old spelling is removed, no longer
     type-checks and is no longer read, so a dispatcher given only `webhookUrl` throws at construction, as one
-    without a webhook does. Also drop any site-written logging wrappers and body-size guards the route now
-    covers (see "Migrating a site from its own wrappers" in the README).
+    without a webhook does.
+
+Once on this release, a site can also drop the logging wrappers and body-size guards it wrote for earlier ones,
+since the route now reports every refusal and caps the body itself. Nothing breaks if they stay; "Migrating a site
+from its own wrappers" in the README says what each one was for.
 
 ### Added
 
@@ -114,14 +120,14 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   limit attributes and `data-astro-form-accepted-types` (the types in the server's words) from the same rules;
   and `describeUploadRules`, which writes the hint ("Up to 5 files, 10 MB each, 50 MB in total. Accepted: JPEG,
   PNG or PDF.") or fills a template of your own using `{maxFiles}`, `{maxFileSize}`, `{maxTotalSize}` and
-  `{types}`. Also exports the `UploadRules` type. Rules that omit
-  `maxFileBytes` get `maxTotalBytes` as their per-file limit, so no enricher default applies behind them.
+  `{types}`. Also exports the `UploadRules` type. Rules that omit `maxFileBytes` get `maxTotalBytes` as their
+  per-file limit, so no enricher default applies behind them. The rules spread into `FileAttachments` too.
 - `FileAttachments`, an enricher for files that go with the submission instead of into storage. It checks the form's
   files as `FileUploads` does, holds them in memory as `AttachedFile`s (`name`, `contentType`, `size` and `bytes()`)
   under `context.resources[attachTo]`, and has nothing to roll back. Its total defaults to 5 MB
-  (`DEFAULT_ATTACHMENT_TOTAL_BYTES`), `maxFileBytes` applies only when given, and its reason codes are
-  `file-attachments.*`. The route's default `maxBodyBytes` also adds each `FileAttachments` enricher's total.
-  Also exports `AttachedFile` and `FileAttachmentsOptions`.
+  (`DEFAULT_ATTACHMENT_TOTAL_BYTES`), `maxFileBytes` applies only when given, `required: true` refuses an empty field
+  with `fileRequired`, and its reason codes are `file-attachments.*`. The route's default `maxBodyBytes` also adds
+  each `FileAttachments` enricher's total. Also exports `AttachedFile` and `FileAttachmentsOptions`.
 - The `accept` option of `FileUploads`, `UploadedFiles` and `createUploadRoute`, and the `sniffBytes`, `sniffType`
   and `sniffWithReader` parameters, take a `readonly FileMatcher[]`.
 - `EmailDispatcher`'s `attach` option, naming the `context.resources` key whose files the email carries as
@@ -135,7 +141,6 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   Postmark: it throws an `OperationalError` with the code `postmark.message-too-large` and the `bytes` and `limit`
   in its details, a definite failure that answers a required email's submission with `send` (502). `FileAttachments`'
   default total of 5 MB leaves room. Also exports `POSTMARK_MAX_MESSAGE_BYTES`.
-
 - The form script manages a file field that has a `data-astro-form-file-list-for` list: each chosen file is listed
   from the list's `<template>`, filling every `data-astro-form-file-name` slot and its `-file-size` and
   `-file-problem` slots, and wiring its `-file-remove` control, which is described by the file's name and problem.
@@ -148,19 +153,20 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   does a server's refusal: the message in the status, the field's error, `astro-form:error`, and focus on the
   summary or the file's remove control. A flagged item carries `data-astro-form-file-state="invalid"`, and the list
   carries `data-astro-form-invalid` while the field is invalid. The files are kept after a refused submission and
-  cleared on success, on reset and when the field is disabled. A file input with neither a list nor a drop zone is left as the
-  browser provides it. See "File fields" in the README.
+  cleared on success, on reset and when the field is disabled. A file input with no list, drop zone or progress part
+  is left as the browser provides it. See "File fields" in the README.
 - A file field takes files dropped on the input itself, or on any element in the form marked
   `data-astro-form-file-drop-for="<name>"`, as if they were picked: they join the selection, are listed once and are
   checked like any other, and a file of the wrong type is listed and flagged. A drop zone makes a field managed
-  without a list, which then shows no items. The target carries
-  `data-astro-form-file-drop="active"` while a file is dragged over it, for styling. A field without `multiple` keeps
-  the first file of a drop and says "Only one file can be added." in the form's status, in the copy of the input's new
-  `data-astro-form-message-only-one-file`; it is not marked invalid, and the notice goes once the next pick or drop is accepted. A disabled field ignores drops and shows no
-  hover state. While any drop target is on the page, the script also stops the browser opening a file dropped
-  anywhere else, which would replace the page and lose what was typed; text drags, and drops on an enabled file input with
-  neither a list nor a drop zone, are left alone. A site's own drop zone outside these parts has its file drops cancelled: marking the zone
-  `data-astro-form-file-drop-for` makes it a target. See "Dropping files" in the README.
+  without a list, which then shows no items. The target carries `data-astro-form-file-drop="active"` while a file is
+  dragged over it, for styling. A field without `multiple` keeps the first file of a drop and says "Only one file can
+  be added." in the form's status, in the copy of the input's new `data-astro-form-message-only-one-file`; it is not
+  marked invalid, and the notice goes once the next pick or drop is accepted. A disabled field ignores drops and shows
+  no hover state. While any drop target is on the page, the script also stops the browser opening a file dropped
+  anywhere else, which would replace the page and lose what was typed; text drags, and drops on an enabled file input
+  with no list, drop zone or progress part, are left alone. A site's own drop zone outside these parts has its file
+  drops cancelled: marking the zone `data-astro-form-file-drop-for` makes it a target. See "Dropping files" in the
+  README.
 - The form script shows upload progress for a direct upload. A `[data-astro-form-file-progress]` slot in a listed item,
   and any `[data-astro-form-upload-progress-for="<name>"]` element in the form (which alone makes the field
   managed), follow the upload: a `<progress>` has its `value` and `max` set in bytes, and any other element has
@@ -170,8 +176,6 @@ reason code, and a form posted without JavaScript gets a page a person can read.
 - Mark an element `data-astro-form-requires-script`, and render it `hidden`, for the script to reveal it when it binds
   the form, so a direct-upload field only appears when it can work. Without JavaScript it stays hidden and the rest
   of the form posts; a `<noscript>` note beside it is the site's own. See "Fields that need the script" in the README.
-- A form has one direct-upload field. When several file inputs in a form carry `data-astro-form-upload`, the script
-  uses the first, leaves the others as ordinary file inputs and warns once in the console, naming both inputs.
 - `data-astro-form-analytics="<form name>"` on a form makes the script push `{ event: 'form_submission', form_name }` to
   `window.dataLayer` each time the form is sent successfully, creating the array if the page has none and never
   replacing one. A submission the server quietly drops as spam is answered as a success, so it is counted too; a
@@ -189,6 +193,8 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   `aria-invalid` mark, error slot and summary entry are cleared at once, and a disabled field is never focused or
   listed when errors are shown. A field that is only `hidden` is unaffected. See "Fields that come and go" in the
   README.
+- A form has one direct-upload field. When several file inputs in a form carry `data-astro-form-upload`, the script
+  uses the first, leaves the others as ordinary file inputs and warns once in the console, naming both inputs.
 - Forms added to the page after `initializeForms()` bind themselves. Calling it again is harmless, and a form
   moved within the page (into a drawer, say) keeps its state. A form missing its status element warns once, and
   binds once the element is added.
@@ -207,15 +213,19 @@ reason code, and a form posted without JavaScript gets a page a person can read.
 - Every toolkit error message ends with a full stop.
 - The form script returns focus to the submit button after a submission that doesn't swap the form, lets the
   success panel take focus without a `tabindex`, makes summary entries for fields without an `id` keyboard
-  links, announces upload progress in 25% steps, and warns when a form lacks a status element.
+  links, and announces upload progress in 25% steps.
 - Releases are published from CI through npm trusted publishing, with provenance.
 - File refusals name the field: `{ error, fieldErrors: { <input>: … } }`, so the script marks the file input and
   reports it like a validation failure. `jsonFormError` answers with `fieldErrors` for any error that names a field.
 - File refusals say what the limit is. The default copy is now `Please attach no more than {maxFiles} files.` (or
-  `Please attach only one file.`), `Each file must be {maxFileSize} or smaller.`, `Your files add up to more than
-{maxTotalSize}.` and `That file type is not accepted. Please attach {types}.`, and the files together over
-  `maxTotalBytes` are refused with `filesTooLarge` instead of `fileTooLarge`.
+  `Please attach only one file.`), `Each file must be {maxFileSize} or smaller.`,
+  `Your files add up to more than {maxTotalSize}.` and `That file type is not accepted. Please attach {types}.`, and
+  the files together over `maxTotalBytes` are refused with `filesTooLarge` instead of `fileTooLarge`.
 - A form posted without JavaScript is told a refusal that names a field once, not twice.
+
+### Removed
+
+- `DiscordDispatcher`'s `webhookUrl`, deprecated in 0.3.0 in favour of `webhookURL`.
 
 ### Fixed
 

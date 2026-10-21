@@ -31,6 +31,9 @@ what a site must do to move to it.
 - [The form (client enhancement)](#the-form-client-enhancement)
 - [Styling](#styling)
 - [Secrets](#secrets)
+- [Worked examples](#worked-examples)
+  - [An application form that emails the CV](#an-application-form-that-emails-the-cv)
+  - [A quote form with photos and video](#a-quote-form-with-photos-and-video)
 - [À la carte and bespoke flows](#à-la-carte-and-bespoke-flows)
 
 ## Quick start
@@ -1056,11 +1059,11 @@ email that reads `files` only compiles when some enricher provides `files`. Beca
 key needs a second type argument, pass both to the template builder — `submissionNotificationTemplates<Enquiry, 'files'>`
 — when the submission type is explicit (giving only `<Enquiry>` leaves the key at its `never` default).
 
-**Keep the limits in one place.** The client file UI you write (the `<input accept>`, any
-pre-submit size/count check, the error copy) must agree with the server's `maxFiles` / `maxFileBytes`.
-Declare them once in a module both import, with [`uploadRules`](#upload-rules), rather than re-typing the numbers in the endpoint and the `.astro` script, where
-they drift. The package also exports the enricher's own defaults (`DEFAULT_MAX_FILES`,
-`DEFAULT_MAX_FILE_BYTES`, `DEFAULT_MAX_TOTAL_BYTES`) if you want to reference them.
+**Keep the limits in one place.** The file input's `accept`, the limits the form script checks before sending,
+and the hint beside the field must agree with the server's `maxFiles`, `maxFileBytes` and `maxTotalBytes`. Declare
+them once in a module both import, with [`uploadRules`](#upload-rules), rather than re-typing the numbers in the
+endpoint and the component, where they drift. The package also exports the enricher's own defaults
+(`DEFAULT_MAX_FILES`, `DEFAULT_MAX_FILE_BYTES`, `DEFAULT_MAX_TOTAL_BYTES`) if you want to reference them.
 
 Files are **content-sniffed by magic bytes** (never the client MIME), and a file whose name doesn't end
 in its checked type's extension has it appended, so `invoice.js` that is really a GIF is stored and linked as
@@ -1268,11 +1271,11 @@ import { FILE_TYPES, FileAttachments, WORD_TYPES } from '@nialto-services/astro-
 
 // …inside the route config…
 enrichers: [
-  new FileAttachments<Application>({
+  new FileAttachments<Application, 'cv'>({
     field: 'cv',
     accept: [FILE_TYPES.pdf, ...WORD_TYPES],
     maxFiles: 1,
-    attachTo: 'attachments'
+    attachTo: 'cv'
   })
 ]
 ```
@@ -1523,6 +1526,15 @@ console warning, until the element is added. Each hook is an attribute you add t
 | `data-astro-form-upload-field`                                          | the `<form>`                    | Optional field the file descriptors post to the upload route under (default `uploads`); match the route's `field`.                                                         |
 | `data-astro-form-upload-receipt-field`                                  | the `<form>`                    | Optional field the receipts post under (default `upload`).                                                                                                                 |
 | `data-astro-form-message-uploading`                                     | the status element              | Optional copy while files upload, with `{current}`, `{total}` and `{percent}` filled in; it changes as each file starts and at each 25%, so a screen reader isn't flooded. |
+| `data-astro-form-file-drop-for="<name>"`                                | an element inside the form      | Optional place to drop files for a file field (see [Dropping files](#dropping-files)).                                                                                     |
+| `data-astro-form-upload-progress-for="<name>"`                          | an element inside the form      | Optional progress of a field's direct upload (see [Upload progress](#upload-progress)).                                                                                    |
+| `data-astro-form-analytics="<form name>"`                               | the `<form>`                    | Optional — push a `form_submission` event to `window.dataLayer` on success (see [Analytics](#analytics)).                                                                  |
+
+The file input and the parts inside a list item take attributes of their own, listed under [File fields](#file-fields).
+The script also writes some attributes for styling (see [Styling](#styling)), and keeps a few markers for its own
+bookkeeping: `data-astro-form-bound` and `data-astro-form-submitting` on the form, `data-astro-form-summary-item` on
+summary entries and `data-astro-form-described` on fields. Those markers aren't hooks: don't write them or style by
+them, since they can change in any release.
 
 The `data-astro-form-message-*` copy is a **different layer** from the server's `FormError` copy:
 these are client transport states the server never sees — sending (in-flight), success (delivery
@@ -1716,8 +1728,8 @@ Things to know:
 - **Only dragged files count.** A drag of text, a link or an element shows nothing and is left to the browser.
 - **A file dropped on the page anywhere else is cancelled.** By default a browser opens a dropped file in place of
   the page, which loses whatever the person has typed. While the page has a drop target, the script cancels that for
-  any file drag that misses every target, and the cursor shows the drop isn't allowed. Text drags, and drops on a
-  an enabled file input the script doesn't manage (one with neither a list nor a drop zone), are left alone. A
+  any file drag that misses every target, and the cursor shows the drop isn't allowed. Text drags, and drops on
+  an enabled file input the script doesn't manage (one with no list, drop zone or progress part), are left alone. A
   disabled file input takes no drop, so it is guarded like the rest of the page. The script stops guarding the page when
   the last form with a target leaves it. A drop zone of your own, outside these parts, has its file drops cancelled
   too; mark it with `data-astro-form-file-drop-for` and it becomes a target.
@@ -1851,8 +1863,8 @@ Two optional protections need **extra markup in your form** — nothing is auto-
   already-consumed token.
 
   Load `api.js` yourself, **once per page and only on pages that have a widget**. Without a widget it
-  is a request and a script the page doesn't need, and loading it twice makes Cloudflare warn and render
-  widgets twice.
+  is a request and a script the page doesn't need, and loading it twice makes Cloudflare warn in the console
+  (it still renders each widget once).
 
 #### Styling the Turnstile widget
 
@@ -2062,13 +2074,20 @@ so such a post is always refused, with that retry line.
 ## Styling
 
 Styling is **entirely yours** — the markup is too, so ordinary scoped `<style>` rules reach it with no
-`:global` and no package class names to track. The enhancement exposes two state hooks to key off:
+`:global` and no package class names to track. The enhancement exposes these state hooks to key off:
 
 - `data-astro-form-state` on the status element — `pending` / `success` / `error` while submitting.
 - `aria-invalid="true"` on each faulty field (plus your own `[data-astro-form-field-error-for]` /
   `[data-astro-form-field-error-summary]` elements, which the client fills).
 - `data-astro-form-file-state="invalid"` on a listed file with a problem, and `data-astro-form-invalid` on a file
   field's list while the field is invalid (see [File fields](#file-fields)).
+- `data-astro-form-file-drop="active"` on a drop target while a file is dragged over it (see
+  [Dropping files](#dropping-files)).
+- `data-astro-form-file-state` of `uploading` / `done` on a listed file and its progress parts during a direct upload
+  (see [Upload progress](#upload-progress)), and the `--astro-form-progress` custom property on a progress part that
+  isn't a `<progress>`.
+- `data-astro-form-turnstile` of `visible` / `invisible` on a Turnstile container (see
+  [Styling the Turnstile widget](#styling-the-turnstile-widget)).
 
 ```css
 [data-astro-form-status][data-astro-form-state='error'] {
@@ -2102,6 +2121,537 @@ throws a `MissingEnvError` listing every key that is absent or empty (never a va
 Leave optional ones, such as a Discord webhook, out of the list.
 
 `PUBLIC_TURNSTILE_SITE_KEY` stays a build-time public var (each host's `PUBLIC_`/build env) for the widget.
+
+## Worked examples
+
+Two complete forms, each a route and the markup that goes with it. Both run on Cloudflare Workers, so they read
+their secrets inside `defineLazyRoute` (see [The route](#the-route)); on a Node host, build the same route at module
+scope from `process.env`. The upload rules for both live in one shared module, `src/lib/uploads.ts`.
+
+### An application form that emails the CV
+
+A job application form takes a CV and an optional cover letter, and sends three emails:
+
+1. a **notification** to the site owner, with the files attached, which the owner can reply to;
+2. a **copy to a fixed inbox**, such as a shared hiring mailbox or an applicant-tracking system's intake address,
+   also with the files attached;
+3. an **acknowledgement** to the applicant, with no files and no links.
+
+The files travel inside the emails through [`FileAttachments`](#file-attachments), so nothing is stored, and there is
+no bucket, lifecycle rule or download route to set up.
+
+> **Never attach files to an email whose address the sender typed.** The applicant's `email` is whatever they
+> entered. An email that attaches the files and goes to that address sends any file the form accepts to any address
+> the sender chooses, from your verified sender, which makes the form a relay. Attach only to addresses your server
+> chooses: a fixed inbox, as here, or one looked up on the server (from a job id, say). The acknowledgement is the
+> one email addressed to the applicant, so it sets neither `attach` nor `attachments`. `replyTo` is safe to take from
+> the submission, since it only decides where a reply goes.
+
+The rules declare the field once, for the route, the input and its hint:
+
+```ts
+// src/lib/uploads.ts
+import { FILE_TYPES, uploadRules, WORD_TYPES } from '@nialto-services/astro-form-submissions'
+
+const MB = 1024 * 1024
+
+// A CV and an optional cover letter. The total stays well inside what one email can carry (see below).
+export const applicationUploads = uploadRules({
+  maxFiles: 2,
+  maxTotalBytes: 5 * MB,
+  accept: [FILE_TYPES.pdf, ...WORD_TYPES, FILE_TYPES.odt],
+  required: true
+})
+```
+
+```ts
+// src/pages/api/application.ts
+import {
+  createFormRoute,
+  defineLazyRoute,
+  EmailDispatcher,
+  FileAttachments,
+  HoneypotInspector,
+  PostmarkTransport,
+  RateLimitGuard,
+  requireEnv,
+  submissionAcknowledgementTemplates,
+  submissionNotificationTemplates,
+  TurnstileInspector
+} from '@nialto-services/astro-form-submissions'
+import { z } from 'zod'
+import { applicationUploads } from '../../lib/uploads'
+
+export const prerender = false
+
+const schema = z.object({
+  name: z.string().max(120),
+  email: z.email('Please enter a valid email address.').max(200),
+  phone: z.string().max(40).optional(),
+  role: z.enum(['driver', 'warehouse', 'office'], 'Please choose a role.'),
+  message: z.string().max(5000, 'Please keep your message under 5,000 characters.').optional()
+})
+
+type Application = z.infer<typeof schema>
+
+export const POST = defineLazyRoute(
+  async () => {
+    const { env } = await import('cloudflare:workers')
+    const secrets = requireEnv(env, [
+      'TURNSTILE_SECRET_KEY',
+      'POSTMARK_TOKEN',
+      'POSTMARK_FROM',
+      'APPLICATIONS_TO',
+      'HIRING_INBOX',
+      'APPLICATIONS_REPLY_TO'
+    ])
+    const transport = new PostmarkTransport({ token: secrets.POSTMARK_TOKEN })
+
+    const ownerNotification = new EmailDispatcher({
+      transport,
+      templates: submissionNotificationTemplates<Application>({
+        fields: ['name', 'email', 'phone', 'role', 'message'],
+        formName: 'Job application'
+      }),
+      from: secrets.POSTMARK_FROM,
+      to: secrets.APPLICATIONS_TO,
+      replyTo: (submission) => submission.email,
+      attach: 'cv'
+    })
+
+    const hiringInboxCopy = new EmailDispatcher({
+      transport,
+      templates: submissionNotificationTemplates<Application>({
+        fields: ['name', 'email', 'role'],
+        formName: 'Job application'
+      }),
+      from: secrets.POSTMARK_FROM,
+      to: secrets.HIRING_INBOX,
+      attach: 'cv'
+    })
+
+    // Addressed to what the applicant typed, so it carries no files, no links and none of their free text: `role`
+    // is one of the schema's three values.
+    const acknowledgement = new EmailDispatcher({
+      transport,
+      templates: submissionAcknowledgementTemplates<Application>({
+        fields: ['role'],
+        formName: 'Job application',
+        message: "Thanks for applying. We'll read your application and reply within two weeks."
+      }),
+      from: secrets.POSTMARK_FROM,
+      to: (submission) => submission.email,
+      replyTo: secrets.APPLICATIONS_REPLY_TO,
+      required: false
+    })
+
+    return createFormRoute({
+      schema,
+      guards: [new RateLimitGuard({ limiter: env.APPLICATION_LIMITER })],
+      inspectors: [
+        new HoneypotInspector({ fieldName: 'website' }),
+        new TurnstileInspector({ secretKey: secrets.TURNSTILE_SECRET_KEY })
+      ],
+      enrichers: [new FileAttachments({ ...applicationUploads, field: 'cv', attachTo: 'cv' })],
+      dispatchers: [[ownerNotification, hiringInboxCopy], [acknowledgement]]
+    })
+  },
+  { onError: (error) => console.error('Application form build error:', error) }
+)
+```
+
+The form gives the file field a list, so the applicant sees what they chose and can take a file out, and an error
+slot for each field. Load Cloudflare's `api.js` once in the page's `<head>` for the widget (see
+[Extras](#extras-honeypot-and-turnstile)):
+
+```astro
+---
+// src/components/ApplicationForm.astro
+import { describeUploadRules, uploadInputAttributes } from '@nialto-services/astro-form-submissions'
+import { applicationUploads } from '../lib/uploads'
+---
+
+<form data-astro-form action='/api/application' method='POST' enctype='multipart/form-data'>
+  <input type='text' name='website' tabindex='-1' autocomplete='off' hidden />
+
+  <div data-astro-form-field-error-summary hidden></div>
+
+  <label for='application-name'>Name</label>
+  <input id='application-name' name='name' autocomplete='name' required />
+  <p data-astro-form-field-error-for='name' id='application-name-error' hidden></p>
+
+  <label for='application-email'>Email</label>
+  <input id='application-email' name='email' type='email' autocomplete='email' required />
+  <p data-astro-form-field-error-for='email' id='application-email-error' hidden></p>
+
+  <label for='application-phone'>Phone (optional)</label>
+  <input id='application-phone' name='phone' type='tel' autocomplete='tel' />
+
+  <label for='application-role'>Role</label>
+  <select id='application-role' name='role' required>
+    <option value=''>Choose a role</option>
+    <option value='driver'>Driver</option>
+    <option value='warehouse'>Warehouse</option>
+    <option value='office'>Office</option>
+  </select>
+  <p data-astro-form-field-error-for='role' id='application-role-error' hidden></p>
+
+  <label for='application-message'>Anything else we should know? (optional)</label>
+  <textarea id='application-message' name='message'></textarea>
+  <p data-astro-form-field-error-for='message' id='application-message-error' hidden></p>
+
+  <div class='file-field'>
+    <label for='application-cv'>CV and cover letter</label>
+    <input
+      id='application-cv'
+      type='file'
+      name='cv'
+      aria-describedby='application-cv-hint'
+      data-astro-form-message-file-required='Please attach your CV.'
+      {...uploadInputAttributes(applicationUploads)}
+    />
+    <p id='application-cv-hint'>{describeUploadRules(applicationUploads)}</p>
+
+    <ul data-astro-form-file-list-for='cv' aria-label='Chosen files'>
+      <template>
+        <li>
+          <span data-astro-form-file-name></span>
+          <span data-astro-form-file-size></span>
+          <span data-astro-form-file-problem hidden></span>
+          <button type='button' data-astro-form-file-remove>
+            Remove <span class='visually-hidden' data-astro-form-file-name></span>
+          </button>
+        </li>
+      </template>
+    </ul>
+    <p data-astro-form-field-error-for='cv' id='application-cv-error' hidden></p>
+  </div>
+
+  <div class='cf-turnstile' data-sitekey={import.meta.env.PUBLIC_TURNSTILE_SITE_KEY}></div>
+
+  <button type='submit'>Send application</button>
+
+  <p
+    data-astro-form-status
+    data-astro-form-message-sending='Sending your application…'
+    data-astro-form-message-success='Thanks, your application has been sent.'
+    data-astro-form-message-generic-error='Something went wrong. Please try again.'
+    data-astro-form-message-network-error="We couldn't reach the server. Please check your connection and try again.">
+  </p>
+</form>
+
+<script>
+  import { initializeForms } from '@nialto-services/astro-form-submissions/form'
+
+  initializeForms()
+</script>
+```
+
+The hint reads "Up to 2 files, 5 MB in total. Accepted: PDF, Word or OpenDocument.", and the input's `accept`,
+`multiple`, `required` and limits come from the same rules, so the browser, the hint and the server never disagree.
+
+**How large the files can be.** Three limits stand between a file and the inbox, and the rules set the first two:
+
+1. **In the browser.** `uploadInputAttributes` writes the field's limits onto the input, so the script flags a file
+   that takes the field past 5 MB as soon as it is chosen, in the server's own `filesTooLarge` wording, and sends
+   nothing until the applicant takes it out. Without JavaScript there is no such check, and the server's own catches it.
+2. **On the server.** `FileAttachments` refuses files over `maxTotalBytes` with `filesTooLarge`, marked on the `cv`
+   field. Its total also widens the route's body cap to 1 MiB plus 5 MB, so a body far larger than any genuine
+   application is refused with `requestTooLarge` (413) before it is parsed.
+3. **At Postmark.** Postmark accepts at most 10 MB per message, **counted after base64**, which makes a file about a
+   third larger: 5 MB of files is about 7 MB in the message, which leaves room for the email itself.
+   `PostmarkTransport` measures each message before sending it and refuses one over the limit without calling
+   Postmark, logged as `postmark.message-too-large`; the delivery fails, and the applicant is answered with `send`
+   (502). Each attaching email is its own message, measured on its own.
+
+Raise `maxTotalBytes` only as far as the encoded files and the email still fit under 10,000,000 bytes
+(`POSTMARK_MAX_MESSAGE_BYTES`), which allows a little over 7 MB of files. For anything larger, store the files and
+email links to them, as the next example does.
+
+Things to know:
+
+- **The groups set the order.** The two attaching emails share the first [group](#dispatch-groups), so neither waits
+  on the other, and the acknowledgement waits in the second, so an applicant is thanked only once the application
+  has reached the owner. Both attaching emails are required (`EmailDispatcher`'s default), so if either fails the
+  applicant is asked to send again, and the retry repeats whichever one did arrive. Set `required: false` on the
+  copy if a missed copy matters less than a duplicate.
+- **`exposesResources` doesn't come into it.** Attached files are held in memory for the request and never stored,
+  so there is nothing to keep or roll back, and attaching leaves the flag as the templates set it: `false` here,
+  since none of them renders upload links.
+- **Quarantine withholds the files too.** None of the three emails sets `acceptsQuarantined`, so a submission an
+  inspector quarantines sends nothing, and its files go nowhere.
+- **Turnstile needs JavaScript**, so this form can't be sent without it: the route answers a plain post with the
+  retry line (see [Without JavaScript](#without-javascript)).
+
+### A quote form with photos and video
+
+A quote request takes up to ten photos or short videos of the job. Video is too large to pass through the route, so
+the files go [straight to storage](#direct-uploads) and the email links to them. A direct upload needs the script,
+so the field appears only when it can work, and the rest of the form still posts without JavaScript.
+
+```ts
+// src/lib/uploads.ts
+import { MEDIA_TYPES, uploadRules } from '@nialto-services/astro-form-submissions'
+
+const MB = 1024 * 1024
+
+// WorkerUploadTarget, used in local development, sends each file through the Worker, where Cloudflare refuses a
+// request over 100 MB; a per-file limit below that behaves the same in development and production.
+export const quoteMedia = uploadRules({
+  maxFiles: 10,
+  maxFileBytes: 90 * MB,
+  maxTotalBytes: 300 * MB,
+  accept: MEDIA_TYPES
+})
+```
+
+```ts
+// src/lib/quote-form.ts
+import { z } from 'zod'
+
+// The upload route admits a submission before anything uploads, so it validates the same fields as the form route.
+export const quoteSchema = z.object({
+  name: z.string().max(120),
+  email: z.email('Please enter a valid email address.').max(200),
+  postcode: z.string().max(10),
+  details: z.string().max(5000, 'Please keep the details under 5,000 characters.')
+})
+
+export type Quote = z.infer<typeof quoteSchema>
+```
+
+The upload route is step 1 of a [direct upload](#direct-uploads). The `uploadTarget` helper and, for
+`WorkerUploadTarget`, the `PUT` route are the ones shown there, with the target's `basePath` set to
+`/api/quote/uploads`:
+
+```ts
+// src/pages/api/quote/uploads/index.ts
+import {
+  createUploadRoute,
+  defineLazyRoute,
+  HoneypotInspector,
+  RateLimitGuard,
+  requireEnv
+} from '@nialto-services/astro-form-submissions'
+import { uploadTarget } from '../../../../lib/forms/upload-target'
+import { quoteSchema } from '../../../../lib/quote-form'
+import { quoteMedia } from '../../../../lib/uploads'
+
+export const prerender = false
+
+export const POST = defineLazyRoute(async () => {
+  const { env } = await import('cloudflare:workers')
+  const secrets = requireEnv(env, ['UPLOADS_LINK_SECRET'])
+
+  return createUploadRoute({
+    ...quoteMedia,
+    input: 'media',
+    schema: quoteSchema,
+    guards: [new RateLimitGuard({ limiter: env.QUOTE_LIMITER })],
+    inspectors: [new HoneypotInspector({ fieldName: 'website' })],
+    target: uploadTarget(env),
+    secret: secrets.UPLOADS_LINK_SECRET
+  })
+})
+```
+
+```ts
+// src/pages/api/quote.ts
+import {
+  createFormRoute,
+  defineLazyRoute,
+  EmailDispatcher,
+  HoneypotInspector,
+  PostmarkTransport,
+  R2Storage,
+  RateLimitGuard,
+  requireEnv,
+  signedLink,
+  submissionNotificationTemplates,
+  UploadedFiles
+} from '@nialto-services/astro-form-submissions'
+import { quoteSchema, type Quote } from '../../lib/quote-form'
+import { quoteMedia } from '../../lib/uploads'
+
+export const prerender = false
+
+export const POST = defineLazyRoute(async () => {
+  const { env } = await import('cloudflare:workers')
+  const secrets = requireEnv(env, ['UPLOADS_LINK_SECRET', 'POSTMARK_TOKEN', 'POSTMARK_FROM', 'QUOTES_TO'])
+  const storage = new R2Storage({ bucket: env.UPLOADS_BUCKET, prefix: 'uploads/' })
+
+  return createFormRoute({
+    schema: quoteSchema,
+    guards: [new RateLimitGuard({ limiter: env.QUOTE_LIMITER })],
+    inspectors: [new HoneypotInspector({ fieldName: 'website' })],
+    enrichers: [
+      new UploadedFiles<Quote>({
+        ...quoteMedia,
+        input: 'media',
+        storage,
+        secret: secrets.UPLOADS_LINK_SECRET,
+        link: signedLink({ secret: secrets.UPLOADS_LINK_SECRET }),
+        attachTo: 'files'
+      })
+    ],
+    dispatchers: [
+      new EmailDispatcher({
+        transport: new PostmarkTransport({ token: secrets.POSTMARK_TOKEN }),
+        templates: submissionNotificationTemplates<Quote, 'files'>({
+          fields: ['name', 'email', 'postcode', 'details'],
+          formName: 'Quote request',
+          attachments: 'files'
+        }),
+        from: secrets.POSTMARK_FROM,
+        to: secrets.QUOTES_TO,
+        replyTo: (submission) => submission.email
+      })
+    ],
+    successURL: '/quote/thanks/'
+  })
+})
+```
+
+The form marks the media field for direct upload and gives it every part: the list, a drop zone, a progress bar for
+each file and one for the whole field, and an error slot. The fieldset is `hidden` and marked
+`data-astro-form-requires-script`, so the script reveals it, and the `<noscript>` note beside it is the site's own:
+
+```astro
+---
+// src/components/QuoteForm.astro
+import { describeUploadRules, uploadInputAttributes } from '@nialto-services/astro-form-submissions'
+import { quoteMedia } from '../lib/uploads'
+
+const mediaHint = describeUploadRules(
+  quoteMedia,
+  'Up to {maxFiles} photos or videos, {maxFileSize} each, {maxTotalSize} in all.'
+)
+---
+
+<form data-astro-form data-astro-form-upload-action='/api/quote/uploads/' action='/api/quote/' method='POST'>
+  <input type='text' name='website' tabindex='-1' autocomplete='off' hidden />
+
+  <label for='quote-name'>Name</label>
+  <input id='quote-name' name='name' autocomplete='name' required />
+  <p data-astro-form-field-error-for='name' id='quote-name-error' hidden></p>
+
+  <label for='quote-email'>Email</label>
+  <input id='quote-email' name='email' type='email' autocomplete='email' required />
+  <p data-astro-form-field-error-for='email' id='quote-email-error' hidden></p>
+
+  <label for='quote-postcode'>Postcode of the job</label>
+  <input id='quote-postcode' name='postcode' autocomplete='postal-code' required />
+  <p data-astro-form-field-error-for='postcode' id='quote-postcode-error' hidden></p>
+
+  <label for='quote-details'>What needs doing?</label>
+  <textarea id='quote-details' name='details' required></textarea>
+  <p data-astro-form-field-error-for='details' id='quote-details-error' hidden></p>
+
+  <fieldset class='file-field' data-astro-form-requires-script hidden>
+    <legend>Photos and videos of the job (optional)</legend>
+    <input
+      id='quote-media'
+      type='file'
+      name='media'
+      aria-describedby='quote-media-hint'
+      data-astro-form-upload
+      {...uploadInputAttributes(quoteMedia)}
+    />
+    <p id='quote-media-hint'>{mediaHint}</p>
+
+    <div class='drop-zone' data-astro-form-file-drop-for='media'>Or drop them here</div>
+
+    <ul data-astro-form-file-list-for='media' aria-label='Chosen photos and videos'>
+      <template>
+        <li>
+          <span data-astro-form-file-name></span>
+          <span data-astro-form-file-size></span>
+          <progress data-astro-form-file-progress value='0' aria-label='Upload progress'></progress>
+          <span data-astro-form-file-problem hidden></span>
+          <button type='button' data-astro-form-file-remove>
+            Remove <span class='visually-hidden' data-astro-form-file-name></span>
+          </button>
+        </li>
+      </template>
+    </ul>
+
+    <progress data-astro-form-upload-progress-for='media' value='0' aria-label='All files'></progress>
+    <p data-astro-form-field-error-for='media' id='quote-media-error' hidden></p>
+  </fieldset>
+  <noscript>
+    <p>
+      Adding photos and videos needs JavaScript. You can still send your request without them, and we'll ask for them by
+      email.
+    </p>
+  </noscript>
+
+  <button type='submit'>Request a quote</button>
+
+  <p
+    data-astro-form-status
+    data-astro-form-message-sending='Sending your request…'
+    data-astro-form-message-uploading='Uploading file {current} of {total} ({percent}%)…'
+    data-astro-form-message-success="Thanks, we've got your request and will be in touch soon."
+    data-astro-form-message-generic-error='Something went wrong. Please try again.'
+    data-astro-form-message-network-error="We couldn't reach the server. Please check your connection and try again.">
+  </p>
+</form>
+
+<script>
+  import { initializeForms } from '@nialto-services/astro-form-submissions/form'
+
+  initializeForms()
+</script>
+
+<style>
+  .drop-zone {
+    padding: 1rem;
+    border: 2px dashed var(--color-grey);
+  }
+
+  .drop-zone[data-astro-form-file-drop='active'] {
+    border-color: var(--color-blue);
+  }
+
+  li[data-astro-form-file-state='invalid'] {
+    color: var(--color-red);
+  }
+
+  progress:not([data-astro-form-file-state]) {
+    display: none;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+</style>
+```
+
+Things to know:
+
+- **One rules object, four places.** `createUploadRoute` checks the declared files against `quoteMedia`, `UploadedFiles`
+  checks the receipts against it again, `uploadInputAttributes` gives the input its `accept`, `multiple` and limits,
+  and the hint states them. `input: 'media'` on both routes names the file input, so a refusal marks it.
+- **No `FileUploads`, and no `enctype`.** Without the script the media field stays hidden, so a plain post carries
+  only text and never needs a multipart path; the route answers it with a redirect to `successURL`. A form that
+  should take files without JavaScript too shows the field and adds `FileUploads` beside `UploadedFiles`, as in
+  [Direct uploads](#direct-uploads).
+- **No Turnstile**, so the form still posts without JavaScript; the honeypot and the rate limit screen it. Add
+  Turnstile to both routes and the form, as in the application form, where bot protection matters more than visitors
+  without JavaScript. The script then resets the widget between the upload route and the final post.
+- **The progress bars start at `value='0'`**, which keeps a native `<progress>` from showing as indeterminate before
+  anything uploads, and the style above hides each until it has a state. A failed or refused upload returns them
+  to `0` and takes the state off, so they hide again.
+- **The links need a trusted origin and a lifecycle rule.** `signedLink` builds them against Astro's `site`,
+  `createFileRoute` serves them, and the bucket needs a lifecycle rule (see [File uploads](#file-uploads)). The email
+  renders the links, so it exposes resources, and the files are kept once it is delivered.
+- **The drop zone guards the page.** While it is on the page, a file dropped anywhere else is cancelled rather than
+  opened in place of the form (see [Dropping files](#dropping-files)).
 
 ## À la carte and bespoke flows
 
