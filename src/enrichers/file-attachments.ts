@@ -132,11 +132,11 @@ export class FileAttachments<
       'file-attachments'
     )
     if ('reject' in checks) return checks
-    if (checks.files.length === 0) return {}
 
     const attached: AttachedFile[] = checks.files.map((checked) => new HeldFile(checked.file, checked))
 
-    // A computed-key object widens to `{ [x: string]: AttachedFile[] }`, so the assertion is the one spot TS
+    // The key is provided even when empty, so a dispatcher can tell "no files posted" from "no enricher provides
+    // this key". A computed-key object widens to `{ [x: string]: AttachedFile[] }`, so the assertion is the one spot TS
     // can't express the `Record<K, …>` literal; the key is config-owned, never user input.
     const provide = { [attachTo]: attached } as Record<K, AttachedFile[]>
     return { provide }

@@ -2,6 +2,7 @@ import { EmailRecipientError } from '#dispatchers/email-recipient-error.js'
 import { EmailDispatcher, renderEmail, type EmailTemplates } from '#dispatchers/email.js'
 import { submissionNotificationTemplates } from '#dispatchers/submission-notification.js'
 import { FileAttachments } from '#enrichers/file-attachments.js'
+import { OperationalError } from '#operational-error.js'
 import emailAddresses from 'email-addresses'
 import fc from 'fast-check'
 import { describe, expect, it, vi } from 'vitest'
@@ -523,9 +524,7 @@ describe('EmailDispatcher', () => {
 
     it('sends no attachments property when the form posted no file to attach', async () => {
       const deliver = vi.fn()
-
-      // `FileAttachments` provides nothing when the field is empty, so the key is absent at runtime.
-      const resources = {} as Awaited<ReturnType<typeof attachedResources>>
+      const resources = await attachedResources([])
       await new EmailDispatcher({
         transport: { deliver },
         templates,
@@ -535,6 +534,31 @@ describe('EmailDispatcher', () => {
       }).dispatch({ name: 'Ada' }, dispatchContext({ resources }))
 
       expect(deliveredMessage(deliver)).not.toHaveProperty('attachments')
+    })
+
+    it('fails, sending nothing, when no enricher provided the attach key', async () => {
+      const deliver = vi.fn()
+      const resources = {} as Awaited<ReturnType<typeof attachedResources>>
+      const failure = await new EmailDispatcher({
+        transport: { deliver },
+        templates,
+        from: 'from@example.com',
+        to: 'to@example.com',
+        attach: 'cv'
+      })
+        .dispatch({ name: 'Ada' }, dispatchContext({ resources }))
+        .then(
+          () => undefined,
+          (error: unknown) => error
+        )
+
+      expect(failure).toBeInstanceOf(OperationalError)
+      expect(failure).toMatchObject({
+        code: 'email.attach-missing',
+        message: expect.stringContaining("'cv'")
+      })
+      expect((failure as OperationalError).message).toMatch(/\.$/)
+      expect(deliver).not.toHaveBeenCalled()
     })
 
     it('leaves exposesResources to the templates, since attached files need no keeping', () => {

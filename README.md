@@ -462,6 +462,7 @@ The toolkit's own handled failures arrive as `OperationalError`s, which the defa
 | `enrichment` | `storage.delete-failed`           | `keys`           | Uploaded objects that couldn't be deleted. Delete them by key, or leave them to the bucket's lifecycle rule.                                                                                                     |
 | `enrichment` | `uploaded-files.read-failed`      | `key`            | The storage failed to read the object under `key` while its type was checked, so the submission was refused as unfinished, not as the wrong type.                                                                |
 | `delivery`   | `postmark.message-too-large`      | `bytes`, `limit` | The message was over the 10 MB Postmark accepts once its attachments were base64 encoded, so `PostmarkTransport` didn't send it. The delivery failed, and a required email answers the sender with `send` (502). |
+| `delivery`   | `email.attach-missing`            | `key`            | An `EmailDispatcher`'s `attach` names a key no enricher provides, so the email wasn't sent. The delivery failed, and a required email answers the sender with `send` (502).                                      |
 | `delivery`   | `delivery.links-kept`             | none             | A delivery carrying upload links failed in a way that may have reached the recipient, so the files were kept.                                                                                                    |
 | `unexpected` | `quarantine.undeliverable`        | none             | A submission was quarantined, but no dispatcher accepts quarantined submissions, so nothing was delivered.                                                                                                       |
 
@@ -899,9 +900,11 @@ dispatchers: [
 ]
 ```
 
-The key is checked when the route compiles, as the templates' `attachments` key is: naming a key no enricher
-provides, or one that holds `FileUploads` links rather than attachable files, fails to type-check, and so does a
-`FileAttachments` key given to the templates' `attachments`. One email can attach one key and link another.
+The key is checked when the route compiles, as the templates' `attachments` key is, for a dispatcher declared
+separately from the route: naming a key no enricher provides, or one that holds `FileUploads` links rather than
+attachable files, fails to type-check, and so does a `FileAttachments` key given to the templates' `attachments`.
+A dispatcher written inline in `dispatchers` isn't checked that way, so a key nothing provides fails the delivery
+with `email.attach-missing` instead, and nothing is sent. One email can attach one key and link another.
 
 > **Never attach to an address the sender typed.** A `to` that returns `submission.email` sends the files wherever
 > the sender points it, from your verified sender, which makes the form a relay for any file it accepts. The

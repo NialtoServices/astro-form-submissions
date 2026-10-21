@@ -1,12 +1,14 @@
 import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
+import { EmailDispatcher } from '#dispatchers/email.js'
 import { FileAttachments } from '#enrichers/file-attachments.js'
 import { FileUploads } from '#enrichers/file-uploads.js'
 import { formError } from '#errors.js'
 import { RateLimitGuard } from '#guards/rate-limit.js'
 import { HoneypotInspector } from '#inspectors/honeypot.js'
 import { TurnstileInspector } from '#inspectors/turnstile.js'
+import { OperationalError } from '#operational-error.js'
 import type { FormSubmission } from '#pipeline.js'
 import { REPORTER_TIMEOUT_MS } from '#reporting.js'
 import {
@@ -329,6 +331,35 @@ describe('createFormRoute', () => {
     )
     expect(response.status).toBe(502)
     expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery' })
+  })
+
+  it('a required email attaching a key nothing provides → 502, nothing sent, reported to onError', async () => {
+    const onError = vi.fn()
+    const deliver = vi.fn()
+    const response = await createFormRoute({
+      ...baseConfig,
+      enrichers: [new FileAttachments({ field: 'cv', attachTo: 'cv' })],
+      dispatchers: [
+        new EmailDispatcher({
+          transport: { deliver },
+          templates: { subject: () => 'Enquiry', text: () => 'text', html: () => '<p>html</p>' },
+          from: 'from@example.com',
+          to: 'to@example.com',
+
+          // A typo of the enricher's `cv` key, which the type check doesn't catch in an inline dispatcher.
+          attach: 'resume',
+          required: true
+        })
+      ],
+      onError
+    })(contextFor(validForm()))
+
+    expect(response.status).toBe(502)
+    expect(deliver).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'email.attach-missing' }), {
+      stage: 'delivery'
+    })
+    expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(OperationalError)
   })
 
   it('a non-required dispatcher failure → 200 and onError when another dispatcher delivered', async () => {

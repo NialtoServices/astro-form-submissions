@@ -147,6 +147,24 @@ describe('resource threading types', () => {
       })
     })
 
+    it('lets an inline email attach a key nothing provides, which the runtime catches', () => {
+      // Written inline in `dispatchers`, the dispatcher's key type widens and this compiles. `EmailDispatcher` throws
+      // `email.attach-missing` for it at runtime, failing that delivery (see the route and email specs).
+      createFormRoute({
+        schema,
+        enrichers: [new FileAttachments<Enquiry, 'cv'>({ field: 'cv', attachTo: 'cv' })],
+        dispatchers: [
+          new EmailDispatcher({
+            transport,
+            templates: plainTemplates,
+            from: 'a@b.test',
+            to: 'c@d.test',
+            attach: 'files'
+          })
+        ]
+      })
+    })
+
     it("refuses a FileAttachments key as the templates' attachments", () => {
       const linking = new EmailDispatcher({
         transport,

@@ -2,6 +2,7 @@ import { isPlainAddress } from '#dispatchers/address-check.js'
 import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
 import { EmailRecipientError } from '#dispatchers/email-recipient-error.js'
 import type { AttachedFile } from '#enrichers/index.js'
+import { OperationalError } from '#operational-error.js'
 import type { FormSubmission } from '#pipeline.js'
 
 /** The rendered, per-submission parts of an email — subject and bodies, no addressing. */
@@ -156,8 +157,9 @@ export interface EmailDispatcherOptions<
 
   /**
    * The `context.resources` key whose files this email carries as attachments, such as the `attachTo` of a
-   * `FileAttachments` enricher. The route refuses, at compile time, a key no enricher provides or one that holds
-   * links rather than attachable files. Omitted, the email attaches nothing.
+   * `FileAttachments` enricher. The type check refuses a key no enricher provides, or one that holds links rather
+   * than attachable files, for a dispatcher declared separately from the route. Written inline in `dispatchers`, a
+   * missing key instead fails the delivery with `email.attach-missing`. Omitted, the email attaches nothing.
    *
    * Pass no explicit type arguments (`new EmailDispatcher<Application>(...)`): the key's type parameter defaults
    * to `never`, so naming the others by hand leaves `attach` accepting nothing. Let the types infer.
@@ -244,6 +246,7 @@ export class EmailDispatcher<
    * @param context - The dispatch context, threaded into the templates so computed field values can be resolved.
    * @throws {EmailRecipientError} When a `to` or `replyTo` function returns anything but one plain address, bare
    * or as `Name <address>` (see `isPlainAddress`).
+   * @throws {OperationalError} With code `email.attach-missing` when `attach` names a key no enricher provided.
    */
   async dispatch(submission: E, context: DispatchContext<A & AttachedResources<K>>): Promise<void> {
     const { from, to, replyTo } = this.options
@@ -274,7 +277,7 @@ export class EmailDispatcher<
   // MARK: - Attachments
 
   /**
-   * Reads the `attach` key's files into attachments, or none when the email attaches nothing.
+   * Reads the `attach` key's files into attachments, or none when the email attaches nothing or the field was empty.
    *
    * @param resources - The resources the enrichers provided.
    * @returns The attachments, in the order the files were provided.
@@ -283,9 +286,16 @@ export class EmailDispatcher<
     const { attach } = this.options
     if (attach === undefined) return []
 
-    // `FileAttachments` provides nothing for an empty field, so the typed key can still be absent.
+    // The type check can't see a dispatcher written inline in the route's `dispatchers`, so the key can be absent.
+    // `FileAttachments` provides its key even for an empty field, so absence means no enricher provides it.
     const files: readonly AttachedFile[] | undefined = resources[attach]
-    if (files === undefined) return []
+    if (files === undefined) {
+      throw new OperationalError(
+        'email.attach-missing',
+        `The email attaches the '${attach}' resource, but no enricher provides that key, so it was not sent.`,
+        { details: { key: attach } }
+      )
+    }
 
     return Promise.all(
       files.map(async (file) => ({ filename: file.name, contentType: file.contentType, content: await file.bytes() }))

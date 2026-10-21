@@ -124,7 +124,7 @@ from its own wrappers" in the README says what each one was for.
   per-file limit, so no enricher default applies behind them. The rules spread into `FileAttachments` too.
 - `FileAttachments`, an enricher for files that go with the submission instead of into storage. It checks the form's
   files as `FileUploads` does, holds them in memory as `AttachedFile`s (`name`, `contentType`, `size` and `bytes()`)
-  under `context.resources[attachTo]`, and has nothing to roll back. Its total defaults to 5 MB
+  under `context.resources[attachTo]` (an empty list when the field is empty), and has nothing to roll back. Its total defaults to 5 MB
   (`DEFAULT_ATTACHMENT_TOTAL_BYTES`), `maxFileBytes` applies only when given, `required: true` refuses an empty field
   with `fileRequired`, and its reason codes are `file-attachments.*`. The route's default `maxBodyBytes` also adds
   each `FileAttachments` enricher's total. Also exports `AttachedFile` and `FileAttachmentsOptions`.
@@ -133,7 +133,8 @@ from its own wrappers" in the README says what each one was for.
 - `EmailDispatcher`'s `attach` option, naming the `context.resources` key whose files the email carries as
   attachments, such as a `FileAttachments` enricher's `attachTo`. They reach the transport on the new
   `EmailMessage.attachments` as `EmailAttachment`s (`filename`, `contentType`, `content`); a message without any has
-  no `attachments` property. A key no enricher provides, or one holding `FileUploads` links, fails to compile.
+  no `attachments` property. The type check refuses a key no enricher provides, or one holding `FileUploads` links, for a dispatcher declared
+  separately from the route; otherwise a missing key fails the delivery with `email.attach-missing`.
   Attaching leaves `exposesResources` alone. Also exports `EmailAttachment`.
 - `PostmarkTransport` sends a message's attachments (`Name`, base64 `Content`, `ContentType`) and leaves `Attachments`
   out of a message without any. Postmark accepts at most 10 MB per message after base64, which makes a file about a

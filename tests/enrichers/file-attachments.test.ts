@@ -37,10 +37,10 @@ async function attached(result: Awaited<ReturnType<FileAttachments<Enquiry>['enr
 }
 
 describe('FileAttachments', () => {
-  it('is a no-op when no files are attached', async () => {
+  it('provides an empty list when no files are attached', async () => {
     const result = await new FileAttachments<Enquiry>().enrich({ name: 'Ada' }, contextWith([]))
 
-    expect(result).toEqual({})
+    expect(result).toEqual({ provide: { files: [] } })
   })
 
   it('ignores empty zero-byte file parts', async () => {
@@ -49,7 +49,7 @@ describe('FileAttachments', () => {
       contextWith([new File([], 'empty.png')])
     )
 
-    expect(result).toEqual({})
+    expect(result).toEqual({ provide: { files: [] } })
   })
 
   it('provides checked files without storing anything', async () => {
