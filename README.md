@@ -954,6 +954,11 @@ they sent.
 > anywhere. Anything else throws an `EmailRecipientError`, so one submission can't fan out to many recipients or add
 > headers of its own; for another shape, pass a fixed string. Control characters in a rendered subject, or in what a
 > `from` function returns, become spaces for the same reason.
+>
+> Never put a name the sender typed into `to` or `replyTo`, as in `` `${submission.name} <${submission.email}>` ``.
+> An ideographic space, common in Japanese names, and half-width katakana are refused, so the email fails for those
+> people on every submission, and every retry fails the same way. Return the bare address
+> (`to: (submission) => submission.email`).
 
 ```ts
 new EmailDispatcher({

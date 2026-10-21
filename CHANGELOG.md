@@ -51,16 +51,18 @@ reported with a reason code, and a form posted without JavaScript gets a page a 
    `DiscordDeliveryError`.** A 502 or 504 from either provider now arrives as a `DestinationUnreachableError`, with
    the provider's error as its `cause`.
 10. **`DOCUMENT_TYPES` and `ALL_TYPES` now accept Word, OpenDocument text, RTF and plain text, and `ALL_TYPES`
-    also phone video.** A site relying on either default that wants the previous list sets
-    `accept: [...IMAGE_TYPES, FILE_TYPES.pdf]`.
+    also phone video.** To keep the previous list, a site relying on `ALL_TYPES`, or on the default `accept`, sets
+    `accept: [...IMAGE_TYPES, FILE_TYPES.pdf]`, and one relying on `DOCUMENT_TYPES` sets `accept: [FILE_TYPES.pdf]`.
 11. **A `fileTooLarge` override now applies only to a single file.** The files together over `maxTotalBytes` are
     refused with the new `filesTooLarge` key, so copy that reads as a per-file limit no longer shows for a total.
     Add a `filesTooLarge` entry beside it.
 12. **Check what `to` and `replyTo` functions return.** Each must return `local@domain` or `Name <local@domain>`;
     anything else now throws `EmailRecipientError`. The name must be plain text without `" ( ) , : ; < > @ [ \ ]`, or
     quoted with no `"` or `\` inside, and either way hold no control character, no whitespace but spaces, no
-    compatibility character (such as a fullwidth comma) and no `=?`. The simplest fix is to drop the name and return the
-    bare address (`to: (submission) => submission.email`).
+    compatibility character (such as a fullwidth comma) and no `=?`. Never put a name the sender typed into `to` or
+    `replyTo`: an ideographic space, common in Japanese names, and half-width katakana are refused, so the email fails
+    for those people every time, retries included. Return the bare address instead
+    (`to: (submission) => submission.email`).
 13. **Mark only one file input per form `data-astro-form-upload`.** A form has one upload action, one descriptor field
     and one receipt field, so the script now uploads directly from the first marked input only; the others post as
     ordinary file inputs, with a console warning. A form that marked several needs its extra fields on `FileUploads`
@@ -128,8 +130,8 @@ from its own wrappers" in the README says what each one was for.
   (`DEFAULT_ATTACHMENT_TOTAL_BYTES`), `maxFileBytes` applies only when given, `required: true` refuses an empty field
   with `fileRequired`, and its reason codes are `file-attachments.*`. The route's default `maxBodyBytes` also adds
   each `FileAttachments` enricher's total. Also exports `AttachedFile` and `FileAttachmentsOptions`.
-- The `accept` option of `FileUploads`, `UploadedFiles` and `createUploadRoute`, and the `sniffBytes`, `sniffType`
-  and `sniffWithReader` parameters, take a `readonly FileMatcher[]`.
+- The `accept` option of `FileUploads`, `UploadedFiles` and `createUploadRoute`, and the `sniffBytes` and `sniffType`
+  parameters, take a `readonly FileMatcher[]`.
 - `EmailDispatcher`'s `attach` option, naming the `context.resources` key whose files the email carries as
   attachments, such as a `FileAttachments` enricher's `attachTo`. They reach the transport on the new
   `EmailMessage.attachments` as `EmailAttachment`s (`filename`, `contentType`, `content`); a message without any has
@@ -237,7 +239,7 @@ from its own wrappers" in the README says what each one was for.
 - The form script stops waiting for a Turnstile widget that never rendered, after a 2-second grace period.
 - A submit timeout too long for a browser timer falls back to the default instead of firing at once.
 - A dispatcher whose properties throw when read no longer rejects its whole dispatch group.
-- A resolver that quotes the sender's name, as in `"Lovelace, Ada" <ada@example.com>`, is delivered.
+- A resolver that quotes a fixed display name, as in `"Lovelace, Ada" <ada@example.com>`, is delivered.
 - Downloads with an empty stored name are named `download` in both forms of the `Content-Disposition` header.
 - The published type declarations resolve the package's internal imports to files it ships. Earlier versions
   pointed TypeScript at source files that aren't published, leaving those types to its fallback resolution.

@@ -208,10 +208,10 @@ describe('EmailDispatcher', () => {
   it.each([
     'ada@example.com',
     "o'brien@example.com",
-    'ada.lovelace+forms@example.co.uk',
+    'ada.lovelace+forms@mail.example.com',
     'Ada Lovelace <ada@example.com>',
     'Ada L. Lovelace <ada@example.com>',
-    'Zoë <zoë@exämple.com>',
+    'Zoë <zoë@exämple.example>',
     '"Lovelace, Ada" <ada@example.com>',
     '"Ada; Byron" <ada@example.com>',
     '"ada@home" <ada@example.com>',

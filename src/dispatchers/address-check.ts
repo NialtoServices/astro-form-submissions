@@ -37,7 +37,7 @@ function isBareAddress(text: string): boolean {
  *
  * - `local@domain`: one `@`, with neither side empty or holding a space or any of `" ( ) , : ; < > @ [ \ ]`,
  *   and a domain of dot-separated parts with none empty (no leading, trailing or doubled dot). Non-ASCII is fine
- *   (`zoë@exämple.com`).
+ *   (`zoë@exämple.example`).
  * - `Name <local@domain>`: the address as above, nothing after the `>`, and any spaces (or none) before the
  *   `<`. The name is either plain text with none of those characters, or one double-quoted string with no quote
  *   or backslash inside (`"Lovelace, Ada" <ada@example.com>`). The name may be empty.
