@@ -204,15 +204,14 @@ describe('DiscordDispatcher when the webhook cannot be reached', () => {
 })
 
 describe('DiscordDispatcher webhook option', () => {
-  it('still posts to a webhook given under the deprecated `webhookUrl`', async () => {
+  it('no longer reads the removed `webhookUrl` spelling', () => {
     const fetchSpy = stubFetch(async () => new Response('', { status: 200 }))
 
-    await new DiscordDispatcher({ webhookUrl: 'https://discord.test/legacy', fields: [] }).dispatch(
-      {},
-      dispatchContext()
+    // @ts-expect-error `webhookUrl` was removed; the option is `webhookURL`
+    expect(() => new DiscordDispatcher({ webhookUrl: 'https://discord.test/legacy', fields: [] })).toThrow(
+      '`webhookURL`'
     )
-
-    expect(fetchSpy.mock.calls[0]?.[0]).toBe('https://discord.test/legacy')
+    expect(fetchSpy).not.toHaveBeenCalled()
   })
 
   it('refuses to construct without a webhook', () => {

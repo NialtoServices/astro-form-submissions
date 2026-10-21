@@ -93,21 +93,11 @@ export interface DiscordFieldSpec<E extends FormSubmission = FormSubmission> ext
 /** A bare submission key is shorthand for `{ key }`. */
 export type DiscordFieldInput<E extends FormSubmission = FormSubmission> = (keyof E & string) | DiscordFieldSpec<E>
 
-/**
- * The webhook a {@link DiscordDispatcher} posts to, under its current name or the deprecated one. Exactly one
- * of the two is given.
- */
-export type DiscordWebhook =
-  | {
-      /** The URL of the Discord webhook to send messages to. */
-      webhookURL: string
-      webhookUrl?: undefined
-    }
-  | {
-      /** @deprecated Renamed to `webhookURL`; this spelling will be removed in a future release. */
-      webhookUrl: string
-      webhookURL?: undefined
-    }
+/** The webhook a {@link DiscordDispatcher} posts to. */
+export interface DiscordWebhook {
+  /** The URL of the Discord webhook to send messages to. */
+  webhookURL: string
+}
 
 /** Options for constructing a {@link DiscordDispatcher}, besides its {@link DiscordWebhook}. */
 export interface DiscordDispatcherSettings<E extends FormSubmission = FormSubmission> {
@@ -182,7 +172,7 @@ export class DiscordDispatcher<E extends FormSubmission = FormSubmission> implem
   constructor(private readonly options: DiscordDispatcherOptions<E>) {
     // Checked here, so a malformed URL fails the build rather than every send, where it would read as an
     // outage and `fetch`'s error would quote the URL, token included. The message never echoes the value.
-    const webhookURL = options.webhookURL ?? options.webhookUrl
+    const { webhookURL } = options
     if (typeof webhookURL !== 'string' || !URL.canParse(webhookURL) || new URL(webhookURL).protocol !== 'https:') {
       throw new Error('DiscordDispatcher needs `webhookURL` to be an absolute https URL.')
     }

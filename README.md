@@ -479,6 +479,18 @@ const onError: ErrorReporter = (error, context) => {
 }
 ```
 
+### Migrating a site from its own wrappers
+
+A site written for an earlier release may carry code the route now makes redundant. Once it is on 0.4.0, it can
+drop:
+
+- **Logging wrappers.** A guard, inspector or enricher that logged its own refusals so a rejected submission could
+  be traced. The route reports every refused, dropped or quarantined submission with a reason code and details
+  (see [Logs](#logs)), so the default reporter, or your own `onError`, already carries what the wrapper wrote.
+- **Body-size guards.** A guard that read `Content-Length`, or a wrapper that measured the body before the route
+  saw it. `maxBodyBytes` and `maxTextBodyBytes` cap what the route reads, and a larger body is refused with
+  `requestTooLarge` (413), so the guard no longer adds a limit of its own.
+
 ## Guards
 
 A guard runs **before the request body is parsed**, so it sees only the request envelope (headers,
@@ -969,7 +981,7 @@ whole block stays absent by default.
 
 ### Discord
 
-`DiscordDispatcher` posts each submission to a webhook as an embed. **`fields` is required** — the
+`DiscordDispatcher` posts each submission to a webhook (`webhookURL`) as an embed. **`fields` is required** — the
 field set differs per site, so the dispatcher never guesses which fields exist; you declare which
 appear and in what order. Three forms, from simplest to most flexible (pass `[]` for a
 title-and-description-only embed):

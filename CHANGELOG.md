@@ -62,6 +62,10 @@ reason code, and a form posted without JavaScript gets a page a person can read.
     and one receipt field, so the script now uploads directly from the first marked input only; the others post as
     ordinary file inputs, with a console warning. A form that marked several needs its extra fields on `FileUploads`
     instead.
+15. **Rename `webhookUrl` to `webhookURL` on every `DiscordDispatcher`.** The old spelling is removed, no longer
+    type-checks and is no longer read, so a dispatcher given only `webhookUrl` throws at construction, as one
+    without a webhook does. Also drop any site-written logging wrappers and body-size guards the route now
+    covers (see "Migrating a site from its own wrappers" in the README).
 
 ### Added
 
