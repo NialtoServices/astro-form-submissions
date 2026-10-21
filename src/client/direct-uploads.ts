@@ -46,14 +46,41 @@ function readGrantedUploads(result: unknown): GrantedUpload[] | null {
 
 // MARK: - Upload Inputs
 
+/** Forms already warned about a second direct-upload input, so each is warned about once. */
+const warnedFormElements = new WeakSet<HTMLFormElement>()
+
 /**
- * The file inputs whose files upload directly, rather than joining the submission. A disabled input is left
- * out, as a form leaves a disabled control out of its submission.
+ * The file input whose files upload directly, rather than joining the submission: the first input in the form
+ * marked `data-astro-form-upload`, disabled or not. A form has one upload action, one descriptor field and one
+ * receipt field, so a second marked input is a markup mistake: it is reported once, in the console, and left as an
+ * ordinary file input.
+ */
+export function directUploadInput(formElement: HTMLFormElement): HTMLInputElement | null {
+  const inputElements = formElement.querySelectorAll<HTMLInputElement>('input[type="file"][data-astro-form-upload]')
+  const [firstElement, secondElement] = inputElements
+  if (firstElement && secondElement && !warnedFormElements.has(formElement)) {
+    warnedFormElements.add(formElement)
+    console.warn(
+      `[astro-form-submissions] A form can upload files directly from only one input. "${firstElement.name}" is used and "${secondElement.name}" is ignored.`,
+      formElement
+    )
+  }
+
+  return firstElement ?? null
+}
+
+/**
+ * The file inputs whose files upload directly: the form's {@link directUploadInput}, unless it is disabled, as a
+ * form leaves a disabled control out of its submission.
  */
 export function uploadInputs(formElement: HTMLFormElement): HTMLInputElement[] {
-  return Array.from(
-    formElement.querySelectorAll<HTMLInputElement>('input[type="file"][data-astro-form-upload]:not(:disabled)')
-  )
+  const inputElement = directUploadInput(formElement)
+  return inputElement && !inputElement.matches(':disabled') ? [inputElement] : []
+}
+
+/** Check the form's direct-upload markup when it is bound, so a second marked input is reported before any send. */
+export function checkDirectUploadMarkup(formElement: HTMLFormElement): void {
+  directUploadInput(formElement)
 }
 
 /** The form's data without any directly-uploaded file input. */

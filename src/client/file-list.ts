@@ -1,4 +1,10 @@
 import { formatFileSize } from './file-size.js'
+import {
+  clearUploadState,
+  resetUploadProgress,
+  showUploadProgress,
+  type UploadProgressState
+} from './upload-progress.js'
 
 // MARK: - Types
 
@@ -16,6 +22,7 @@ const NAME_SLOT = '[data-astro-form-file-name]'
 const SIZE_SLOT = '[data-astro-form-file-size]'
 const PROBLEM_SLOT = '[data-astro-form-file-problem]'
 const REMOVE_SLOT = '[data-astro-form-file-remove]'
+const PROGRESS_SLOT = '[data-astro-form-file-progress]'
 
 /** The item element itself when it is the slot, otherwise the first slot inside it. */
 function findSlot(itemElement: Element, selector: string): HTMLElement | null {
@@ -141,6 +148,27 @@ export class FileItemList {
 
     const siteIds = (removeElement.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean)
     removeElement.setAttribute('aria-describedby', [...siteIds, ...describingIds].join(' '))
+  }
+
+  // MARK: - Progress
+
+  /** Show how much of the item's file has gone up, on its progress slot and as the item's state. */
+  showProgress(index: number, sent: number, total: number, state: UploadProgressState): void {
+    const itemElement = this.itemElements[index]
+    if (!itemElement) return
+
+    const progressElement = findSlot(itemElement, PROGRESS_SLOT)
+    if (progressElement) showUploadProgress(progressElement, sent, total, state)
+    itemElement.setAttribute('data-astro-form-file-state', state)
+  }
+
+  /** Return every item's progress slot to nothing sent, and take the upload state off the items. */
+  resetProgress(): void {
+    for (const itemElement of this.itemElements) {
+      const progressElement = findSlot(itemElement, PROGRESS_SLOT)
+      if (progressElement) resetUploadProgress(progressElement)
+      clearUploadState(itemElement)
+    }
   }
 
   // MARK: - Lookup

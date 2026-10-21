@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Quote request with direct photo uploads</title>
+    <style>
+      .meter {
+        height: 0.5rem;
+        background: lightgray;
+      }
+
+      .meter::before {
+        display: block;
+        height: 100%;
+        background: blue;
+        content: '';
+        width: calc(var(--astro-form-progress, 0) * 100%);
+      }
+    </style>
+    <script type="module">
+      import { initializeForms } from '/client/form.js'
+
+      initializeForms()
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>Request a quote</h1>
+
+      <form
+        data-astro-form
+        data-astro-form-upload-action="/api/photos/uploads/"
+        action="/api/photos"
+        method="POST"
+        enctype="multipart/form-data"
+        novalidate>
+        <label>Name <input name="name" /></label>
+
+        <fieldset data-astro-form-requires-script hidden>
+          <legend>Photos</legend>
+          <input id="quote-photos" type="file" name="photos" multiple data-astro-form-upload aria-label="Photos" />
+          <p data-astro-form-field-error-for="photos" id="quote-photos-error" hidden></p>
+          <ul data-astro-form-file-list-for="photos" aria-label="Chosen photos">
+            <template>
+              <li>
+                <span data-astro-form-file-name></span>
+                <progress data-astro-form-file-progress aria-label="Upload progress"></progress>
+              </li>
+            </template>
+          </ul>
+          <progress data-astro-form-upload-progress-for="photos" aria-label="Overall progress"></progress>
+          <div class="meter" data-astro-form-upload-progress-for="photos" id="photos-meter"></div>
+        </fieldset>
+        <noscript><p>Photos can only be added with JavaScript turned on.</p></noscript>
+
+        <button type="submit">Send</button>
+
+        <p
+          data-astro-form-status
+          data-astro-form-message-sending="Sending…"
+          data-astro-form-message-success="Thanks, we'll be in touch."
+          data-astro-form-message-generic-error="Something went wrong."></p>
+      </form>
+    </main>
+  </body>
+</html>

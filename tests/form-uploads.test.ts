@@ -560,3 +560,203 @@ describe('form script — direct uploads', () => {
     expect((fetchSpy.mock.calls[1]![1]!.body as FormData).getAll('attachment')).toEqual(['receipt-a'])
   })
 })
+
+const PROGRESS_ITEM_TEMPLATE = `
+  <template>
+    <li>
+      <span data-astro-form-file-name></span>
+      <progress data-astro-form-file-progress aria-label="Upload progress"></progress>
+    </li>
+  </template>`
+
+/** Mount a form whose direct-upload field lists its files, each with a progress slot, and shows overall progress. */
+function mountProgressForm() {
+  document.body.innerHTML = `
+    <form data-astro-form data-astro-form-upload-action="/api/contact/uploads/" action="/api/contact/" method="POST">
+      <input type="file" name="file" multiple data-astro-form-upload />
+      <p data-astro-form-field-error-for="file" hidden></p>
+      <ul data-astro-form-file-list-for="file">${PROGRESS_ITEM_TEMPLATE}</ul>
+      <progress data-astro-form-upload-progress-for="file"></progress>
+      <div data-astro-form-upload-progress-for="file"></div>
+      <button type="submit">Send</button>
+      <p data-astro-form-status data-astro-form-message-generic-error="Something went wrong."></p>
+    </form>`
+  initializeForms()
+
+  const form = document.querySelector<HTMLFormElement>('form')!
+  const fileInput = document.querySelector<HTMLInputElement>('input[type="file"]')!
+  const status = document.querySelector<HTMLElement>('[data-astro-form-status]')!
+  const fieldBar = document.querySelector<HTMLProgressElement>('progress[data-astro-form-upload-progress-for]')!
+  const fieldMeter = document.querySelector<HTMLElement>('div[data-astro-form-upload-progress-for]')!
+  const itemBars = () => Array.from(document.querySelectorAll<HTMLProgressElement>('li progress'))
+  return { form, fileInput, status, fieldBar, fieldMeter, itemBars, submit: () => form.requestSubmit() }
+}
+
+/** Choose files in the picker, as a browser does, so the field lists them. */
+function pickFiles(fileInput: HTMLInputElement, files: File[]) {
+  const dataTransfer = new DataTransfer()
+  for (const file of files) dataTransfer.items.add(file)
+  fileInput.files = dataTransfer.files
+  fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+describe('form script — upload progress', () => {
+  it("each file's progress slot and the field's progress move while uploading and finish done", async () => {
+    installFakeXHR()
+    stubFetch(async (url) =>
+      String(url).includes('/uploads/') ? jsonResponse({ ok: true, uploads: grants }) : jsonResponse({ ok: true })
+    )
+    const { form, fileInput, status, fieldBar, fieldMeter, itemBars, submit } = mountProgressForm()
+    pickFiles(fileInput, [photo, video])
+
+    const seen: {
+      items: [number, number, string | null][]
+      field: [number, number, string | null]
+      meter: string
+    }[] = []
+    form.addEventListener('astro-form:upload-progress', () => {
+      seen.push({
+        items: itemBars().map((bar) => [
+          bar.value,
+          bar.max,
+          bar.closest('li')!.getAttribute('data-astro-form-file-state')
+        ]),
+        field: [fieldBar.value, fieldBar.max, fieldBar.getAttribute('data-astro-form-file-state')],
+        meter: fieldMeter.style.getPropertyValue('--astro-form-progress')
+      })
+    })
+
+    submit()
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'), { timeout: 2000 })
+
+    expect(seen.map((snapshot) => snapshot.field)).toEqual([
+      [0, 4000, 'uploading'],
+      [500, 4000, 'uploading'],
+      [1000, 4000, 'uploading'],
+      [1000, 4000, 'uploading'],
+      [2500, 4000, 'uploading'],
+      [4000, 4000, 'done']
+    ])
+    expect(seen.map((snapshot) => snapshot.meter)).toEqual(['0', '0.125', '0.25', '0.25', '0.625', '1'])
+    expect(seen[1]!.items).toEqual([
+      [500, 1000, 'uploading'],
+      [0, 1, null]
+    ])
+    expect(seen[2]!.items[0]).toEqual([1000, 1000, 'done'])
+    expect(seen[5]!.items).toEqual([
+      [1000, 1000, 'done'],
+      [3000, 3000, 'done']
+    ])
+  })
+
+  it('a failed upload returns every progress part to nothing', async () => {
+    installFakeXHR([200, 'network-error'])
+    stubFetch(async () => jsonResponse({ ok: true, uploads: grants }))
+    const { fileInput, status, fieldBar, fieldMeter, itemBars, submit } = mountProgressForm()
+    pickFiles(fileInput, [photo, video])
+
+    submit()
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('error'), { timeout: 2000 })
+
+    expect(fieldBar.value).toBe(0)
+    expect(fieldBar.hasAttribute('data-astro-form-file-state')).toBe(false)
+    expect(fieldMeter.style.getPropertyValue('--astro-form-progress')).toBe('0')
+    expect(itemBars().map((bar) => [bar.value, bar.closest('li')!.hasAttribute('data-astro-form-file-state')])).toEqual(
+      [
+        [0, false],
+        [0, false]
+      ]
+    )
+  })
+
+  it('a refusal from the upload route lands on the direct-upload input', async () => {
+    const sent = installFakeXHR()
+    stubFetch(async () =>
+      jsonResponse(
+        { error: 'Each file must be 1 MB or smaller.', fieldErrors: { file: 'Each file must be 1 MB or smaller.' } },
+        400
+      )
+    )
+    const { fileInput, status, submit } = mountProgressForm()
+    pickFiles(fileInput, [photo])
+
+    submit()
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('error'))
+
+    expect(fileInput.getAttribute('aria-invalid')).toBe('true')
+    expect(document.querySelector('[data-astro-form-field-error-for="file"]')!.textContent).toBe(
+      'Each file must be 1 MB or smaller.'
+    )
+    expect(sent).toHaveLength(0)
+  })
+})
+
+describe('form script — script-only fields', () => {
+  it('a script-only field is revealed when the script runs', () => {
+    document.body.innerHTML = `
+      <form data-astro-form action="/api/contact/" method="POST">
+        <fieldset data-astro-form-requires-script hidden><input type="file" name="photos" /></fieldset>
+        <p id="note" hidden>Only shown by the site</p>
+        <p data-astro-form-status></p>
+      </form>
+      <p data-astro-form-requires-script hidden id="outside">Another form's part</p>`
+
+    expect(document.querySelector('fieldset')!.hidden).toBe(true)
+
+    initializeForms()
+
+    expect(document.querySelector('fieldset')!.hidden).toBe(false)
+    expect(document.querySelector<HTMLElement>('#note')!.hidden).toBe(true)
+    expect(document.querySelector<HTMLElement>('#outside')!.hidden).toBe(true)
+  })
+})
+
+describe('form script — one direct-upload input per form', () => {
+  /** A form marking two file inputs for direct upload, each with its own progress part. */
+  function mountTwoUploadInputs() {
+    document.body.innerHTML = `
+      <form data-astro-form data-astro-form-upload-action="/api/contact/uploads/" action="/api/contact/" method="POST">
+        <input type="file" name="photos" data-astro-form-upload />
+        <input type="file" name="videos" data-astro-form-upload />
+        <progress data-astro-form-upload-progress-for="videos"></progress>
+        <button type="submit">Send</button>
+        <p data-astro-form-status data-astro-form-message-generic-error="Something went wrong."></p>
+      </form>`
+    initializeForms()
+    return {
+      form: document.querySelector<HTMLFormElement>('form')!,
+      photosInput: document.querySelector<HTMLInputElement>('[name="photos"]')!,
+      videosInput: document.querySelector<HTMLInputElement>('[name="videos"]')!,
+      status: document.querySelector<HTMLElement>('[data-astro-form-status]')!
+    }
+  }
+
+  it('a second direct-upload input in one form is ignored with a warning', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const sent = installFakeXHR()
+    const fetchSpy = stubFetch(async (url) =>
+      String(url).includes('/uploads/')
+        ? jsonResponse({ ok: true, uploads: grants.slice(0, 1) })
+        : jsonResponse({ ok: true })
+    )
+    const { form, photosInput, videosInput, status } = mountTwoUploadInputs()
+    choose(photosInput, [photo])
+    choose(videosInput, [video])
+
+    form.requestSubmit()
+    await vi.waitFor(() => expect(status.dataset.astroFormState).toBe('success'), { timeout: 2000 })
+    form.requestSubmit()
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(4), { timeout: 2000 })
+
+    const warnings = warnSpy.mock.calls.filter(([text]) => String(text).includes('directly from only one input'))
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]![0]).toContain('"photos"')
+    expect(warnings[0]![0]).toContain('"videos"')
+
+    expect(sent.map((upload) => (upload.body as File).name)).toEqual(['garden.jpg', 'garden.jpg'])
+    const uploadRequest = fetchSpy.mock.calls[0]![1]!.body as FormData
+    expect(JSON.parse(uploadRequest.get('uploads') as string)).toEqual([
+      { name: 'garden.jpg', size: 1000, type: 'image/jpeg' }
+    ])
+  })
+})

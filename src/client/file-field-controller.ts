@@ -1,3 +1,4 @@
+import { directUploadInput } from './direct-uploads.js'
 import { clearFieldError, replaceFieldErrorMessage } from './field-errors.js'
 import { checkFiles, describeAcceptedTypes, readFileLimits, type FileLimits, type FileProblem } from './file-checks.js'
 import { FILE_COPY } from './file-copy.js'
@@ -6,6 +7,7 @@ import { FileItemList } from './file-list.js'
 import { formatFileSize } from './file-size.js'
 import type { FormPartHost, FormTeardown, SubmitRefusal } from './form-controller.js'
 import { message } from './messages.js'
+import { resetUploadProgress, showUploadProgress } from './upload-progress.js'
 
 // MARK: - Configuration
 
@@ -35,7 +37,7 @@ function fileKey(file: File): string {
 
 /**
  * Manages one file input that has a `[data-astro-form-file-list-for]` list, a `[data-astro-form-file-drop-for]`
- * drop zone, or both: picks accumulate (a single-file
+ * drop zone, a `[data-astro-form-upload-progress-for]` part, or any of them: picks accumulate (a single-file
  * input's pick replaces), an identical file is listed once, each file can be removed, each is checked against
  * the input's limits, and the form won't send while any file has a problem. The input always holds exactly the
  * listed files, so the form, and a direct upload, sends what the person sees. Files dropped on the input, or on
@@ -77,6 +79,10 @@ export class FileFieldController {
     listElement?.addEventListener('click', (event) => this.handleListClick(event), { signal })
     host.formElement.addEventListener('reset', (event) => this.handleReset(event), { signal })
     host.addSubmitCheck(() => this.refusal())
+    host.formElement.addEventListener('astro-form:upload-progress', (event) => this.showUploadProgress(event), {
+      signal
+    })
+    host.formElement.addEventListener('astro-form:error', () => this.resetUploadProgress(), { signal })
 
     // The server's refusals mark the input `aria-invalid` as well as the field's own checks, so the mirror
     // follows the attribute itself.
@@ -325,6 +331,50 @@ export class FileFieldController {
     }
   }
 
+  // MARK: - Upload Progress
+
+  /** Whether this input's files go up as a direct upload, the only upload whose progress the field shows. */
+  private get uploadsDirectly(): boolean {
+    return directUploadInput(this.formElement) === this.inputElement
+  }
+
+  /** The field's `[data-astro-form-upload-progress-for]` parts. */
+  private get progressElements(): NodeListOf<HTMLElement> {
+    return this.formElement.querySelectorAll<HTMLElement>(
+      `[data-astro-form-upload-progress-for="${CSS.escape(this.name)}"]`
+    )
+  }
+
+  /**
+   * Follow a direct upload's progress event: the file's own progress slot and item state, and the field's, which
+   * counts the bytes sent of every file the upload carries. The upload skips empty files, so the event's file
+   * number counts the non-empty ones.
+   */
+  private showUploadProgress(event: Event): void {
+    if (!(event instanceof CustomEvent) || !this.uploadsDirectly) return
+
+    const { current, loaded, size } = event.detail as { current: number; loaded: number; size: number }
+    const uploadedFiles = this.files.filter((file) => file.size > 0)
+    const uploadedFile = uploadedFiles[current - 1]
+    if (!uploadedFile) return
+
+    this.fileList?.showProgress(this.files.indexOf(uploadedFile), loaded, size, loaded >= size ? 'done' : 'uploading')
+
+    const totalBytes = uploadedFiles.reduce((sum, file) => sum + file.size, 0)
+    const sentBytes = uploadedFiles.slice(0, current - 1).reduce((sum, file) => sum + file.size, 0) + loaded
+    for (const progressElement of this.progressElements) {
+      showUploadProgress(progressElement, sentBytes, totalBytes, sentBytes >= totalBytes ? 'done' : 'uploading')
+    }
+  }
+
+  /** Return the field's progress to nothing sent, as after a failed or refused upload or a new selection. */
+  private resetUploadProgress(): void {
+    if (!this.uploadsDirectly) return
+
+    this.fileList?.resetProgress()
+    for (const progressElement of this.progressElements) resetUploadProgress(progressElement)
+  }
+
   // MARK: - Presentation
 
   private render(): void {
@@ -335,6 +385,7 @@ export class FileFieldController {
         return { file, problem: problem ? this.problemMessage(problem) : null }
       })
     )
+    this.resetUploadProgress()
   }
 
   /** Mark the field's parts `data-astro-form-invalid` while the input is `aria-invalid`, for styling a wrapper. */
@@ -356,7 +407,7 @@ export class FileFieldController {
 // MARK: - Initialisation
 
 /**
- * Bind a {@link FileFieldController} to each file input in a form that has a file list, so a field without the
+ * Bind a {@link FileFieldController} to each file input in a form that has a file list, drop zone or progress part, so a field without the
  * list markup stays as the browser provides it. A field whose markup is broken is reported and left alone, and
  * the form's other fields carry on.
  */
@@ -369,7 +420,10 @@ export function attachFileFields(formElement: HTMLFormElement, host: FormPartHos
     const dropZoneElement = formElement.querySelector(
       `[data-astro-form-file-drop-for="${CSS.escape(inputElement.name)}"]`
     )
-    if (!listElement && !dropZoneElement) continue
+    const progressElement = formElement.querySelector(
+      `[data-astro-form-upload-progress-for="${CSS.escape(inputElement.name)}"]`
+    )
+    if (!listElement && !dropZoneElement && !progressElement) continue
 
     try {
       controllers.push(new FileFieldController(inputElement, listElement, host))

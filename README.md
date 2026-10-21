@@ -1503,7 +1503,8 @@ console warning, until the element is added. Each hook is an attribute you add t
 | `data-astro-form-file-list-for="<name>"`                                | an element inside the form      | Optional list of a file field's chosen files (see [File fields](#file-fields)).                                                                                            |
 | `data-astro-form-submit-timeout`                                        | the `<form>`                    | Optional per-form request timeout, in ms (default 30000).                                                                                                                  |
 | `data-astro-form-upload-action`                                         | the `<form>`                    | Optional — the upload route, opting into [direct uploads](#direct-uploads-in-the-form).                                                                                    |
-| `data-astro-form-upload`                                                | a file input                    | Its files upload directly and never join a submission (with `data-astro-form-upload-action`).                                                                              |
+| `data-astro-form-upload`                                                | a file input                    | Its files upload directly and never join a submission (with `data-astro-form-upload-action`). One per form: the first is used.                                             |
+| `data-astro-form-requires-script`                                       | an element inside the form      | Optional — a `hidden` element the script reveals (see [Fields that need the script](#fields-that-need-the-script)).                                                        |
 | `data-astro-form-upload-field`                                          | the `<form>`                    | Optional field the file descriptors post to the upload route under (default `uploads`); match the route's `field`.                                                         |
 | `data-astro-form-upload-receipt-field`                                  | the `<form>`                    | Optional field the receipts post under (default `upload`).                                                                                                                 |
 | `data-astro-form-message-uploading`                                     | the status element              | Optional copy while files upload, with `{current}`, `{total}` and `{percent}` filled in; it changes as each file starts and at each 25%, so a screen reader isn't flooded. |
@@ -1643,7 +1644,7 @@ Styling is yours. Key off the state attributes, and use `:has()` for a wrapper:
 
 Without JavaScript the template stays inert and the input is a plain file input: the browser posts whatever the
 last pick chose, every file of it for a `multiple` input, and the server's checks refuse what the field doesn't
-accept. A file input with neither a list nor a [drop zone](#dropping-files) is left exactly as the browser provides it, with JavaScript or without.
+accept. A file input with no list, [drop zone](#dropping-files) or progress part is left exactly as the browser provides it, with JavaScript or without.
 
 #### Dropping files
 
@@ -1730,6 +1731,79 @@ one by one with `XMLHttpRequest` so it can report progress, resets the form's Tu
 `astro-form:upload-progress` event (`{ current, total, loaded, size, percent }`). With no files chosen, the
 form submits exactly as before, minus the marked inputs. Without JavaScript the browser posts the files
 as multipart, which `FileUploads` handles — so keep that path's limits small.
+
+**A form has one direct-upload field.** The upload protocol has one upload action, one descriptor field and one
+receipt field, so one `createUploadRoute` and one `UploadedFiles` (with the same `input`, the field's name) serve one
+file input. When a form marks several inputs `data-astro-form-upload`, the first in the document is the direct
+upload; the script ignores the others, leaving them as ordinary file inputs, and writes one warning to the console
+naming both. Ordinary uploads, handled by `FileUploads`, may have any number of fields in a form, each with its own
+enricher and rules.
+
+#### Upload progress
+
+While files go up, the script reports how far each has got in two optional places, both found by the field's name:
+
+| Attribute                                      | On                     | Purpose                                                                     |
+| ---------------------------------------------- | ---------------------- | --------------------------------------------------------------------------- |
+| `data-astro-form-file-progress`                | an element in the item | That file's progress.                                                       |
+| `data-astro-form-upload-progress-for="<name>"` | an element in the form | The whole field's progress: bytes sent over the bytes of every file chosen. |
+
+A native `<progress>` gets its `value` (bytes sent) and `max` (bytes in all). Any other element gets the
+`--astro-form-progress` custom property, from `0` to `1`, to scale a bar of your own by. Each part also carries
+`data-astro-form-file-state` of `uploading` while bytes go up and `done` once all of its bytes are sent, and the item
+shows the same state. A failed or refused upload returns every part to `0` and takes the state off, so a retry
+starts from nothing. Only a direct upload moves them; the parts of an ordinary file field are left alone. The status
+region's own announcement and the `astro-form:upload-progress` event are unchanged.
+
+```html
+<ul data-astro-form-file-list-for="photos" aria-label="Chosen photos">
+  <template>
+    <li>
+      <span data-astro-form-file-name></span>
+      <progress data-astro-form-file-progress aria-label="Upload progress"></progress>
+    </li>
+  </template>
+</ul>
+<div class="meter" data-astro-form-upload-progress-for="photos"></div>
+```
+
+```css
+.meter {
+  height: 0.5rem;
+  background: var(--color-grey);
+}
+
+.meter::before {
+  display: block;
+  height: 100%;
+  background: var(--color-blue);
+  content: '';
+  width: calc(var(--astro-form-progress, 0) * 100%);
+}
+
+[data-astro-form-upload-progress-for][data-astro-form-file-state='done'] {
+  opacity: 0.6;
+}
+```
+
+A progress part on a field is enough to make the script manage it, as a list or a drop zone is.
+
+#### Fields that need the script
+
+A direct upload has no use without JavaScript, so render its field `hidden`, mark it
+`data-astro-form-requires-script`, and the script reveals it when it binds the form. Without JavaScript the field
+stays hidden and the rest of the form still posts. Put a `<noscript>` note beside it for visitors who would
+otherwise wonder where the photos went; the note is yours to write, as the package ships no markup.
+
+```html
+<fieldset data-astro-form-requires-script hidden>
+  <legend>Photos</legend>
+  <input type="file" name="photos" multiple data-astro-form-upload />
+</fieldset>
+<noscript><p>Photos can only be added with JavaScript turned on. Please email them to us instead.</p></noscript>
+```
+
+The script removes `hidden` from every such element inside a form it binds, and from nowhere else on the page.
 
 ### Extras: honeypot and Turnstile
 

@@ -98,7 +98,88 @@ const applicationUploads = toolkit.uploadRules({
   accept: [toolkit.FILE_TYPES.pdf, toolkit.FILE_TYPES.text]
 })
 
+const quoteSchema = z.object({
+  name: z.string('Please enter your name.').max(120)
+})
+
+const UPLOAD_SECRET = 'a-fixture-secret-of-sufficient-length'
+const UPLOAD_PUT_PATH = '/api/photos/uploads'
+const PHOTO_LIMITS = { maxFiles: 3, maxFileBytes: 256 * 1024, maxTotalBytes: 512 * 1024 }
+
+/** Objects a direct upload stored, held in memory for the run, each tagged with its claim. */
+const storedObjects = new Map<string, { bytes: Uint8Array<ArrayBuffer>; contentType: string; claimed: boolean }>()
+
+/** The storage the upload routes and the enricher share, in memory in place of a bucket. */
+const memoryStorage: Toolkit.FileStorage = {
+  async put(key, file, options) {
+    storedObjects.set(key, {
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      contentType: options.contentType,
+      claimed: false
+    })
+  },
+  async putStream(key, body, options) {
+    if (storedObjects.has(key)) throw new toolkit.ObjectExistsError(key)
+
+    storedObjects.set(key, {
+      bytes: new Uint8Array(await new Response(body).arrayBuffer()),
+      contentType: options.contentType,
+      claimed: false
+    })
+  },
+  async get(key) {
+    const stored = storedObjects.get(key)
+    return stored ? { body: new Response(stored.bytes).body!, contentType: stored.contentType } : null
+  },
+  async peek(key, length) {
+    const stored = storedObjects.get(key)
+    return stored
+      ? { size: stored.bytes.length, contentType: stored.contentType, header: stored.bytes.slice(0, length) }
+      : null
+  },
+  async delete(key) {
+    storedObjects.delete(key)
+  },
+  async claim(key) {
+    const stored = storedObjects.get(key)
+    if (!stored || stored.claimed) return false
+
+    stored.claimed = true
+    return true
+  }
+}
+
+const uploadPutRoute = toolkit.createUploadPutRoute({ storage: memoryStorage, secret: UPLOAD_SECRET })
+
 const formRoutes: Record<string, APIRoute> = {
+  '/api/photos/uploads/': toolkit.createUploadRoute({
+    schema: quoteSchema,
+    target: new toolkit.WorkerUploadTarget({ secret: UPLOAD_SECRET, basePath: UPLOAD_PUT_PATH }),
+    secret: UPLOAD_SECRET,
+    input: 'photos',
+    ...PHOTO_LIMITS
+  }),
+  '/api/photos': toolkit.createFormRoute({
+    schema: quoteSchema,
+    enrichers: [
+      new toolkit.UploadedFiles({
+        storage: memoryStorage,
+        secret: UPLOAD_SECRET,
+        input: 'photos',
+        attachTo: 'photos',
+        link: async (stored) => `https://example.com/files/${stored.filename}`,
+        ...PHOTO_LIMITS
+      })
+    ],
+    dispatchers: [
+      new toolkit.EmailDispatcher({
+        transport: recordingTransport,
+        templates: toolkit.submissionNotificationTemplates({ fields: ['name'], formName: 'Quote form' }),
+        from: 'site@example.com',
+        to: 'owner@example.com'
+      })
+    ]
+  }),
   '/api/contact': toolkit.createFormRoute({
     schema: contactSchema,
     inspectors: [new toolkit.HoneypotInspector({ fieldName: 'website' })],
@@ -179,9 +260,10 @@ async function toFetchRequest(incoming: IncomingMessage, url: URL): Promise<Requ
  * The `APIContext` members a form route reads. Astro's context carries many more, which a route never touches,
  * so this is the one place the partial shape stands in for the whole.
  */
-function routeContext(request: Request, incoming: IncomingMessage): APIContext {
+function routeContext(request: Request, incoming: IncomingMessage, params: Record<string, string> = {}): APIContext {
   return {
     request,
+    params,
     url: new URL(request.url),
     site: new URL(FIXTURE_ORIGIN),
     clientAddress: incoming.socket.remoteAddress ?? '127.0.0.1',
@@ -228,6 +310,14 @@ async function handleRequest(incoming: IncomingMessage, outgoing: ServerResponse
   if (formRoute && incoming.method === 'POST') {
     const request = await toFetchRequest(incoming, url)
     const response = await currentRun.run(runId, () => formRoute(routeContext(request, incoming)))
+    await writeResponse(response, outgoing)
+    return
+  }
+
+  const uploadTokenMatch = /^\/api\/photos\/uploads\/([^/]+)\/$/.exec(url.pathname)
+  if (uploadTokenMatch && incoming.method === 'PUT') {
+    const request = await toFetchRequest(incoming, url)
+    const response = await uploadPutRoute(routeContext(request, incoming, { token: uploadTokenMatch[1] ?? '' }))
     await writeResponse(response, outgoing)
     return
   }

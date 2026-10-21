@@ -46,6 +46,8 @@
 //   `{current}`, `{total}` and `{percent}` filled in, as each file starts and at each 25%.
 // - `astro-form:upload-progress` — emitted on the form as bytes go up, with
 //   `{ current, total, loaded, size, percent }`.
+// - A form has one direct-upload input: when several are marked, the first is used, the rest are left as ordinary
+//   file inputs, and the console warns once.
 //
 // ## File fields (opt-in)
 //
@@ -63,10 +65,21 @@
 //   cancelled rather than opened by the browser.
 // - `data-astro-form-file-state="invalid"` on a flagged item, and `data-astro-form-invalid` on the list while the
 //   field is `aria-invalid`.
+// - `[data-astro-form-file-progress]` — a slot in a list item, and `[data-astro-form-upload-progress-for="<name>"]` —
+//   a part of the form for the whole field. For a direct upload only, a `<progress>` has its `value` and `max` set
+//   (bytes sent and total) and any other element has `--astro-form-progress` (0 to 1) set, and each carries
+//   `data-astro-form-file-state` of `uploading` or `done`; a failed or refused upload returns them to 0 and takes
+//   the state off.
+// - `[data-astro-form-requires-script]` — anything the site renders `hidden` that needs the script, a direct-upload
+//   field say; the script removes `hidden` from each such element inside a form when it binds the form.
 
 import { registerFormPart } from './binding.js'
+import { checkDirectUploadMarkup } from './direct-uploads.js'
 import { attachFileFields } from './file-field-controller.js'
+import { revealScriptOnlyParts } from './script-only-parts.js'
 
 export { initializeForms } from './binding.js'
 
+registerFormPart(revealScriptOnlyParts)
+registerFormPart(checkDirectUploadMarkup)
 registerFormPart(attachFileFields)

@@ -58,6 +58,10 @@ reason code, and a form posted without JavaScript gets a page a person can read.
     quoted with no `"` or `\` inside, and either way hold no control character, no whitespace but spaces, no
     compatibility character (such as a fullwidth comma) and no `=?`. The simplest fix is to drop the name and return the
     bare address (`to: (submission) => submission.email`).
+14. **Mark only one file input per form `data-astro-form-upload`.** A form has one upload action, one descriptor field
+    and one receipt field, so the script now uploads directly from the first marked input only; the others post as
+    ordinary file inputs, with a console warning. A form that marked several needs its extra fields on `FileUploads`
+    instead.
 
 ### Added
 
@@ -150,6 +154,17 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   anywhere else, which would replace the page and lose what was typed; text drags, and drops on an enabled file input with
   neither a list nor a drop zone, are left alone. A site's own drop zone outside these parts has its file drops cancelled: marking the zone
   `data-astro-form-file-drop-for` makes it a target. See "Dropping files" in the README.
+- The form script shows upload progress for a direct upload. A `[data-astro-form-file-progress]` slot in a listed item,
+  and any `[data-astro-form-upload-progress-for="<name>"]` element in the form (which alone makes the field
+  managed), follow the upload: a `<progress>` has its `value` and `max` set in bytes, and any other element has
+  `--astro-form-progress` set from `0` to `1`. The field's part counts the bytes of every file, and each part, and
+  the item, carries `data-astro-form-file-state` of `uploading` or `done`; a failed or refused upload returns them
+  to `0` and removes the state. An ordinary file field's parts are never touched. See "Upload progress" in the README.
+- Mark an element `data-astro-form-requires-script`, and render it `hidden`, for the script to reveal it when it binds
+  the form, so a direct-upload field only appears when it can work. Without JavaScript it stays hidden and the rest
+  of the form posts; a `<noscript>` note beside it is the site's own. See "Fields that need the script" in the README.
+- A form has one direct-upload field. When several file inputs in a form carry `data-astro-form-upload`, the script
+  uses the first, leaves the others as ordinary file inputs and warns once in the console, naming both inputs.
 
 ### Changed
 
