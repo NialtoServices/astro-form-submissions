@@ -255,6 +255,21 @@ describe('video types', () => {
     expect(sniffBytes(new Uint8Array([0, 0, 0, 7, ...ascii('wide')]), VIDEO_TYPES)).toBeNull()
   })
 
+  it('read text that opens with blank lines, tabs or form feeds as text, not a legacy QuickTime atom', async () => {
+    for (const text of [
+      '\n\n\n\nwidespread damage to the fence.\n',
+      '\r\n\r\nmdat figures for the report.\r\n',
+      '\t\t\t\tmoov notes about the film.\n',
+      '\f\n\f\nwide angle shots.\n'
+    ]) {
+      const file = new File([text], 'notes.txt')
+      expect(await sniffType(file, ALL_TYPES), JSON.stringify(text)).toBe('text/plain')
+      expect(sniffBytes(new TextEncoder().encode(text), VIDEO_TYPES), JSON.stringify(text)).toBeNull()
+    }
+
+    expect(await sniffType(fixtureFile('legacy.mov'), VIDEO_TYPES)).toBe(QUICKTIME)
+  })
+
   it('never throw on a header too short to hold their signatures', () => {
     for (const length of [0, 1, 4, 7, 8, 11, 12, 15]) {
       expect(sniffBytes(ftypHeader('isom', ['isom']).subarray(0, length), VIDEO_TYPES)).toBeNull()

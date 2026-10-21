@@ -28,11 +28,25 @@ const MP4_BRANDS = [
 /** The atoms a QuickTime file may open with when it has no `ftyp`; every one sits at offset 4, after its size. */
 const LEGACY_QUICKTIME_ATOMS = ['moov', 'mdat', 'wide']
 
+/** The whitespace control characters plain text uses: tab, line feed, form feed and carriage return. */
+const TEXT_CONTROL_BYTES = [0x09, 0x0a, 0x0c, 0x0d]
+
+/**
+ * Tests whether a byte could be part of plain ASCII text.
+ *
+ * @param byte - The byte to test.
+ * @returns `true` for a printable ASCII character or a whitespace control character.
+ */
+function isTextByte(byte: number): boolean {
+  return (byte >= 0x20 && byte <= 0x7e) || TEXT_CONTROL_BYTES.includes(byte)
+}
+
 /**
  * Tests whether a header opens with one of the atoms a QuickTime file starts with when it has no `ftyp`.
  *
- * Text can carry the same four letters at offset 4 ("The wide road"), so the atom's size, the four bytes before its
- * type, must be a plausible one: at least 8, and not four printable ASCII characters.
+ * Text can carry the same four letters at offset 4 ("The wide road", or "wide" after four blank lines), so the atom's
+ * size, the four bytes before its type, must be a plausible one: at least 8, and not four bytes of text, which are
+ * printable ASCII characters, tabs, line feeds, form feeds and carriage returns.
  *
  * @param bytes - The file's leading bytes.
  * @returns `true` when the header opens with a legacy QuickTime atom.
@@ -41,7 +55,7 @@ function opensWithLegacyQuickTimeAtom(bytes: Uint8Array): boolean {
   if (!LEGACY_QUICKTIME_ATOMS.some((atom) => hasSignature(bytes, atom, 4))) return false
 
   const size = new DataView(bytes.buffer, bytes.byteOffset, 4).getUint32(0)
-  const sizeLooksLikeText = [...bytes.subarray(0, 4)].every((byte) => byte >= 0x20 && byte <= 0x7e)
+  const sizeLooksLikeText = [...bytes.subarray(0, 4)].every(isTextByte)
 
   return size >= 8 && !sizeLooksLikeText
 }
