@@ -53,7 +53,13 @@ function noise(length: number): Uint8Array<ArrayBuffer> {
 
 describe('document types', () => {
   it('recognises Word documents however they were produced', async () => {
-    for (const name of ['cv.docx', 'cv-libreoffice.docx', 'cv-with-comment.docx', 'cv-data-descriptor.docx']) {
+    for (const name of [
+      'cv.docx',
+      'cv-libreoffice.docx',
+      'cv-with-comment.docx',
+      'cv-data-descriptor.docx',
+      'cv-numbered-part.docx'
+    ]) {
       expect(await sniffType(fixtureFile(name), DOCUMENT_MATCHERS), name).toBe(DOCX)
     }
 
@@ -65,6 +71,7 @@ describe('document types', () => {
   it('refuses look-alikes', async () => {
     for (const name of [
       'cv.docm',
+      'cv-numbered-part.docm',
       'book.xlsx',
       'slides.pptx',
       'plain.zip',

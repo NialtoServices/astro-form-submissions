@@ -169,6 +169,25 @@ function nameIs(name: Uint8Array, expected: string): boolean {
   return true
 }
 
+/** How the main document part's name starts and ends, in lower case; only digits may come between. */
+const MAIN_DOCUMENT_PREFIX = 'word/document'
+const MAIN_DOCUMENT_SUFFIX = '.xml'
+
+/**
+ * Tests whether an entry is a Word package's main document part: `word/document.xml` as Word writes it, or a
+ * numbered `word/document2.xml` as some other producers do.
+ *
+ * @param name - The entry's name, as raw bytes.
+ */
+function isMainDocumentPart(name: Uint8Array): boolean {
+  const numberEnd = name.length - MAIN_DOCUMENT_SUFFIX.length
+  if (numberEnd < MAIN_DOCUMENT_PREFIX.length) return false
+  if (!nameIs(name.subarray(0, MAIN_DOCUMENT_PREFIX.length), MAIN_DOCUMENT_PREFIX)) return false
+  if (!nameIs(name.subarray(numberEnd), MAIN_DOCUMENT_SUFFIX)) return false
+
+  return name.subarray(MAIN_DOCUMENT_PREFIX.length, numberEnd).every((byte) => byte >= 0x30 && byte <= 0x39)
+}
+
 /** The name Word stores a document's macro project under, in lower case. */
 const MACRO_PROJECT_NAME = 'vbaproject.bin'
 
@@ -230,7 +249,7 @@ export const DOCX_TYPE: FileMatcher = {
 
     // Word stores a macro project as `word/vbaProject.bin`; refusing the name in any folder also covers a package
     // whose relationships point at it elsewhere.
-    return names.some((name) => nameIs(name, 'word/document.xml')) && !names.some(isMacroProject)
+    return names.some(isMainDocumentPart) && !names.some(isMacroProject)
   }
 }
 

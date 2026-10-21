@@ -90,8 +90,21 @@ WORD_SETTINGS = f'{XML_DECLARATION}<w:settings xmlns:w="{WORDPROCESSING_NAMESPAC
 WORD_FONT_TABLE = f'{XML_DECLARATION}<w:fonts xmlns:w="{WORDPROCESSING_NAMESPACE}"><w:font w:name="Serif"/></w:fonts>'
 
 
-def word_parts(main_type=WORD_MAIN_TYPE, extra_document_relationships=(), extra_defaults=()):
-    """The parts of a one-page Word document, keyed by name, before any producer has ordered them."""
+MAIN_DOCUMENT_PART = "word/document.xml"
+
+# A main document part some tools write in place of `word/document.xml`, numbered as a second document would be.
+NUMBERED_MAIN_PART = "word/document2.xml"
+
+
+def word_parts(
+    main_type=WORD_MAIN_TYPE, extra_document_relationships=(), extra_defaults=(), main_part=MAIN_DOCUMENT_PART
+):
+    """The parts of a one-page Word document, keyed by name, before any producer has ordered them.
+
+    `main_part` names the main document part, which the package relationships point at; Word names it
+    `word/document.xml`, and some tools number it (`word/document2.xml`).
+    """
+    main_part_name = main_part.removeprefix("word/")
     document_relationships = [
         (f"{OFFICE_RELATIONSHIPS}/styles", "styles.xml"),
         (f"{OFFICE_RELATIONSHIPS}/settings", "settings.xml"),
@@ -101,7 +114,7 @@ def word_parts(main_type=WORD_MAIN_TYPE, extra_document_relationships=(), extra_
     return {
         "[Content_Types].xml": content_types(
             [
-                ("/word/document.xml", main_type),
+                (f"/{main_part}", main_type),
                 ("/word/styles.xml", "application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"),
                 ("/word/settings.xml", "application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"),
                 ("/word/fontTable.xml", "application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml"),
@@ -110,9 +123,9 @@ def word_parts(main_type=WORD_MAIN_TYPE, extra_document_relationships=(), extra_
             ],
             extra_defaults,
         ),
-        "_rels/.rels": package_relationships("word/document.xml"),
-        "word/_rels/document.xml.rels": relationships(document_relationships),
-        "word/document.xml": WORD_DOCUMENT,
+        "_rels/.rels": package_relationships(main_part),
+        f"word/_rels/{main_part_name}.rels": relationships(document_relationships),
+        main_part: WORD_DOCUMENT,
         "word/styles.xml": WORD_STYLES,
         "word/settings.xml": WORD_SETTINGS,
         "word/fontTable.xml": WORD_FONT_TABLE,
@@ -146,6 +159,13 @@ LIBREOFFICE_ORDER = [
     "word/settings.xml",
     "[Content_Types].xml",
 ]
+
+
+def with_main_part(order, main_part):
+    """A Word producer's entry order with the main document part, and its relationships, renamed to `main_part`."""
+    main_part_name = main_part.removeprefix("word/")
+    renamed = {MAIN_DOCUMENT_PART: main_part, "word/_rels/document.xml.rels": f"word/_rels/{main_part_name}.rels"}
+    return [renamed.get(name, name) for name in order]
 
 
 def entry(name, compress_type=zipfile.ZIP_DEFLATED):
@@ -685,6 +705,14 @@ def main():
         extra_defaults=[("bin", "application/vnd.ms-office.vbaProject")],
     )
     macro_parts["word/vbaProject.bin"] = macro_project_bytes()
+    numbered_order = with_main_part(WORD_ORDER, NUMBERED_MAIN_PART)
+    numbered_macro_parts = word_parts(
+        main_type=WORD_MACRO_MAIN_TYPE,
+        extra_document_relationships=[("http://schemas.microsoft.com/office/2006/relationships/vbaProject", "vbaProject.bin")],
+        extra_defaults=[("bin", "application/vnd.ms-office.vbaProject")],
+        main_part=NUMBERED_MAIN_PART,
+    )
+    numbered_macro_parts["word/vbaProject.bin"] = macro_project_bytes()
     cv = archive_bytes(ordered(word, WORD_ORDER))
 
     fixtures = {
@@ -693,6 +721,10 @@ def main():
         "cv-with-comment.docx": archive_bytes(ordered(word, WORD_ORDER), comment=b"Exported for review."),
         "cv-data-descriptor.docx": streamed_archive_bytes(ordered(word, WORD_ORDER)),
         "cv.docm": archive_bytes(ordered(macro_parts, [*WORD_ORDER[:4], "word/vbaProject.bin", *WORD_ORDER[4:]])),
+        "cv-numbered-part.docx": archive_bytes(ordered(word_parts(main_part=NUMBERED_MAIN_PART), numbered_order)),
+        "cv-numbered-part.docm": archive_bytes(
+            ordered(numbered_macro_parts, [*numbered_order[:4], "word/vbaProject.bin", *numbered_order[4:]])
+        ),
         "book.xlsx": archive_bytes([(name, data, zipfile.ZIP_DEFLATED) for name, data in spreadsheet_parts().items()]),
         "slides.pptx": archive_bytes([(name, data, zipfile.ZIP_DEFLATED) for name, data in presentation_parts().items()]),
         "plain.zip": archive_bytes(
