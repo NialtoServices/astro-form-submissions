@@ -165,6 +165,11 @@ reason code, and a form posted without JavaScript gets a page a person can read.
   of the form posts; a `<noscript>` note beside it is the site's own. See "Fields that need the script" in the README.
 - A form has one direct-upload field. When several file inputs in a form carry `data-astro-form-upload`, the script
   uses the first, leaves the others as ordinary file inputs and warns once in the console, naming both inputs.
+- `data-astro-form-analytics="<form name>"` on a form makes the script push `{ event: 'form_submission', form_name }` to
+  `window.dataLayer` each time the form is sent successfully, creating the array if the page has none and never
+  replacing one. A submission the server quietly drops as spam is answered as a success, so it is counted too; a
+  refusal and a form posted without JavaScript are not. An empty value warns once and pushes nothing. Google Tag
+  Manager needs a trigger for the event; see "Analytics" in the README.
 
 ### Changed
 

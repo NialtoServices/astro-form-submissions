@@ -1871,6 +1871,34 @@ document.addEventListener('astro-form:success', (event) => {
 })
 ```
 
+### Analytics
+
+Add `data-astro-form-analytics` to a form, with the form's name as its value, and each successful submission pushes
+one event to `window.dataLayer`, creating the array if the page has none:
+
+```astro
+<form data-astro-form data-astro-form-analytics='quote' action='/api/quote' method='POST'></form>
+```
+
+```js
+{ event: 'form_submission', form_name: 'quote' }
+```
+
+A submission the server quietly drops as spam is answered as a success, so the script counts it as one; a refusal is
+not counted, and neither is a form posted without JavaScript. An empty value is a markup mistake: the script warns once
+and pushes nothing.
+
+The event is `form_submission` rather than `form_submit`, because Google Analytics 4's enhanced measurement sends its
+own `form_submit` for forms it detects, and a trigger on that name would count a submission twice.
+
+In Google Tag Manager, each container needs two things before a tag can use the event:
+
+1. A **Custom Event** trigger whose event name is `form_submission`.
+2. A **Data Layer Variable** named `form_name` (version 2), if a tag should know which form was sent. Add a filter
+   to the trigger, such as `form_name` equals `quote`, to fire a tag for one form only.
+
+Use the trigger on a GA4 event tag, for instance, and pass `form_name` along as an event parameter.
+
 ### Presenting errors
 
 On a validation failure the server emits `{ error: <generic summary>, fieldErrors: { name: '…' } }` — the

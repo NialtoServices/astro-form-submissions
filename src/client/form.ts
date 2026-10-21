@@ -29,6 +29,8 @@
 // - `data-astro-form-submit-timeout` — optional per-form request timeout override, in milliseconds
 //   (a non-positive or non-finite value is ignored in favour of the default). A direct upload uses it as
 //   an idle deadline: it fails once that long passes with no progress.
+// - `data-astro-form-analytics="<form name>"` — opts the form into analytics: each successful submission pushes
+//   `{ event: 'form_submission', form_name }` to `window.dataLayer`, which is created if the page has none.
 // - `.cf-turnstile` — an optional Turnstile widget container (Cloudflare's own convention); the
 //   script refreshes it after each attempt so a retry never resubmits a spent token.
 //
@@ -73,6 +75,7 @@
 // - `[data-astro-form-requires-script]` — anything the site renders `hidden` that needs the script, a direct-upload
 //   field say; the script removes `hidden` from each such element inside a form when it binds the form.
 
+import { attachFormAnalytics } from './analytics.js'
 import { registerFormPart } from './binding.js'
 import { checkDirectUploadMarkup } from './direct-uploads.js'
 import { attachFileFields } from './file-field-controller.js'
@@ -83,3 +86,4 @@ export { initializeForms } from './binding.js'
 registerFormPart(revealScriptOnlyParts)
 registerFormPart(checkDirectUploadMarkup)
 registerFormPart(attachFileFields)
+registerFormPart(attachFormAnalytics)
