@@ -48,7 +48,7 @@ describe('TurnstileInspector', () => {
   })
 
   it('does not check the hostname by default — a token solved elsewhere still passes', async () => {
-    mockSiteverify(JSON.stringify({ success: true, hostname: 'other.com' }))
+    mockSiteverify(JSON.stringify({ success: true, hostname: 'example.org' }))
     const result = await new TurnstileInspector({ secretKey: 'secret' }).inspect(contextFor('token'))
     expect(result).toEqual({ action: 'accept' })
   })
@@ -222,28 +222,28 @@ describe('TurnstileInspector reasons', () => {
 
 describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () => {
   it('rejects on a hostname mismatch', async () => {
-    mockSiteverify(JSON.stringify({ success: true, hostname: 'other.com' }))
+    mockSiteverify(JSON.stringify({ success: true, hostname: 'example.org' }))
     const inspector = new TurnstileInspector({ secretKey: 'secret', verifyHostname: true })
     expect(await inspector.inspect(contextFor('token'))).toEqual(
-      rejected('turnstile.hostname-mismatch', { expected: ['example.com'], solved: 'other.com' })
+      rejected('turnstile.hostname-mismatch', { expected: ['example.com'], solved: 'example.org' })
     )
   })
 
   it('binds against the configured site host, not the request host', async () => {
     mockSiteverify(JSON.stringify({ success: true, hostname: 'example.com' }))
-    const context = contextFor('token', { host: 'preview.example.dev', siteURL: new URL('https://example.com/') })
+    const context = contextFor('token', { host: 'preview.example.net', siteURL: new URL('https://example.com/') })
     const inspector = new TurnstileInspector({ secretKey: 'secret', verifyHostname: true })
     expect(await inspector.inspect(context)).toEqual({ action: 'accept' })
   })
 
   it('rejects a replayed token even when the request host matches it', async () => {
-    // The replay scenario: a token solved on evil.com arrives with a spoofed Host header of
-    // evil.com, so the request-derived host would match — the configured site host must not.
-    mockSiteverify(JSON.stringify({ success: true, hostname: 'evil.com' }))
-    const context = contextFor('token', { host: 'evil.com', siteURL: new URL('https://example.com/') })
+    // The replay scenario: a token solved on attacker.example arrives with a spoofed Host header of
+    // attacker.example, so the request-derived host would match — the configured site host must not.
+    mockSiteverify(JSON.stringify({ success: true, hostname: 'attacker.example' }))
+    const context = contextFor('token', { host: 'attacker.example', siteURL: new URL('https://example.com/') })
     const inspector = new TurnstileInspector({ secretKey: 'secret', verifyHostname: true })
     expect(await inspector.inspect(context)).toEqual(
-      rejected('turnstile.hostname-mismatch', { expected: ['example.com'], solved: 'evil.com' })
+      rejected('turnstile.hostname-mismatch', { expected: ['example.com'], solved: 'attacker.example' })
     )
   })
 
@@ -377,7 +377,7 @@ describe('TurnstileInspector hostname binding (opt-in via verifyHostname)', () =
   })
 
   it('skips the hostname check entirely when disabled', async () => {
-    mockSiteverify(JSON.stringify({ success: true, hostname: 'other.com' }))
+    mockSiteverify(JSON.stringify({ success: true, hostname: 'example.org' }))
     const inspector = new TurnstileInspector({ secretKey: 'secret', verifyHostname: false })
     expect(await inspector.inspect(contextFor('token'))).toEqual({ action: 'accept' })
   })
