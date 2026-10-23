@@ -9,6 +9,8 @@ every Upgrading section from the oldest version skipped to the newest.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-23
+
 Emails can carry uploaded files as attachments, files are recognised as Word, OpenDocument text, RTF, plain text and
 phone video as well as images and PDF, and a file field's limits are declared once for the route, the input and its
 hint. The form script lists, checks and manages chosen files, takes dropped files, shows direct-upload progress, binds
@@ -471,7 +473,8 @@ The first release.
 - Helpers for bespoke flows: `jsonOk`, `jsonError`, `jsonFormError`, `jsonValidationError`, `getField`,
   `formDataToObject` and `mapIssues`.
 
-[Unreleased]: https://github.com/NialtoServices/astro-form-submissions/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/NialtoServices/astro-form-submissions/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/NialtoServices/astro-form-submissions/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/NialtoServices/astro-form-submissions/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/NialtoServices/astro-form-submissions/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/NialtoServices/astro-form-submissions/compare/v0.2.0...v0.2.1
