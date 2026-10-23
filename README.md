@@ -1192,6 +1192,9 @@ also declares a 3GP brand, which `FILE_TYPES.threeGPP` claims instead.
 
 Anything that falls outside what can be read is refused rather than guessed at. The limits worth knowing:
 
+- **Every check reads at most 64 KiB of a file in at most four reads** (`MAX_INSPECTED_BYTES` and
+  `MAX_INSPECTED_READS`), however large the file is, so checking a large or hostile file costs no more than a small
+  one. A custom matcher's `inspect` is held to the same budget, and one that reads past it doesn't match.
 - **`.doc`** is recognised when its `WordDocument` stream is listed in the first two directory sectors of the
   compound file. A Word file that embeds an Excel or PowerPoint object whose stream sits there is refused.
 - **`.docx`** is refused when the archive is ZIP64, has a comment of more than about 32 KiB, or has a central
