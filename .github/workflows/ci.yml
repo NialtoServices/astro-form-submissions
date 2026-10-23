@@ -72,4 +72,10 @@ jobs:
 
       # `prepublishOnly` runs the full gate, the browser suite included, so publishing needs the browsers too.
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
-      - run: npm publish --provenance
+
+      # `npm stage` needs npm 11.15.0 or later, which not every Node 24 release bundles.
+      - run: npm install --global npm@^11.15.0
+
+      # Staging uploads the release without making it installable: it goes live only once a maintainer approves it on
+      # npmjs.com with two-factor authentication, which this workflow's token can't do.
+      - run: npm stage publish --provenance

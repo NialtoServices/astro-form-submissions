@@ -42,5 +42,7 @@ Releases publish from CI, never from a workstation: bump `version` in `package.j
 `CHANGELOG.md` to `## [<version>] - <date>` with a fresh empty `## [Unreleased]` above it, update the compare links at
 the foot of the file, commit, tag the commit `v<version>` and push the tag. `pnpm test:dist` fails if the changelog has
 no section for the package's version. The `publish` job in `.github/workflows/ci.yml` runs only after `verify` passes for
-that tag, and publishes through npm trusted publishing, which needs no npm token and attaches provenance. The owner
-cuts releases; don't tag or publish unless asked.
+that tag, and stages the release through npm trusted publishing, which needs no npm token and attaches provenance.
+A staged release isn't installable until the owner approves it on npmjs.com (Staged Packages) or with
+`npm stage approve <stage-id>`, both behind two-factor authentication; the trusted publisher allows staging only, so a
+plain `npm publish` from CI is refused. The owner cuts releases; don't tag or publish unless asked.
