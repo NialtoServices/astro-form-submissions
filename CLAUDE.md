@@ -8,6 +8,8 @@ A public, general-purpose form submissions toolkit for Astro sites, published to
   and examples use placeholders such as `ada@example.com` and `my-site.example.workers.dev`.
 - **Type-narrowing guards use the negated form** (`if (!(error instanceof Error)) return`,
   `if (!isRecord(value)) return`), not the `!== true` comparison; the codebase is uniform in it.
+- **Tests are titled as plain behaviour statements** (`it('refuses a …')`), not `is expected to …`. A `describe` names
+  its unit bare (`createFormRoute body limit`), and conditions sit in titles rather than `when …` / `with …` groups.
 - **The `astro` peer range rises only when the implementation needs the newer version.** Development dependencies can
   be bumped freely, for a security advisory or otherwise, but `peerDependencies` is what every site must install.
 - **The owner cuts releases; don't tag or publish unless asked.** The steps are in `docs/releasing.md`.
