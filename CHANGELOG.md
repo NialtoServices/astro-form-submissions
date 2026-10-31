@@ -9,6 +9,11 @@ every Upgrading section from the oldest version skipped to the newest.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-31
+
+A failed delivery is reported under its dispatcher, so a lost owner notification no longer reads the same as a missed
+acknowledgement.
+
 ### Upgrading
 
 1. **Check any dispatcher of your own that has a `name` property.** The route now reads `name` as the dispatcher's
@@ -494,7 +499,8 @@ The first release.
 - Helpers for bespoke flows: `jsonOk`, `jsonError`, `jsonFormError`, `jsonValidationError`, `getField`,
   `formDataToObject` and `mapIssues`.
 
-[Unreleased]: https://github.com/NialtoServices/astro-form-submissions/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/NialtoServices/astro-form-submissions/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/NialtoServices/astro-form-submissions/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/NialtoServices/astro-form-submissions/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/NialtoServices/astro-form-submissions/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/NialtoServices/astro-form-submissions/compare/v0.2.1...v0.3.0
