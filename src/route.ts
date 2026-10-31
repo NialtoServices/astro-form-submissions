@@ -15,7 +15,13 @@ import { assertPositiveNumberOption } from '#numeric-options.js'
 import { OperationalError } from '#operational-error.js'
 import type { FormSubmission } from '#pipeline.js'
 import { isRedirectTarget, PLAIN_COPY, plainResponse, wantsPlainResponse } from '#plain-responses.js'
-import { containedReporter, withReportingBudget, type ErrorReporter, type FormErrorStage } from '#reporting.js'
+import {
+  containedReporter,
+  isSafeName,
+  withReportingBudget,
+  type ErrorReporter,
+  type FormErrorStage
+} from '#reporting.js'
 import { jsonFormError, jsonOk } from '#responses.js'
 import type { SchemaInput, Submission } from '#schema.js'
 import { SubmissionVerdictError } from '#submission-verdict-error.js'
@@ -191,6 +197,31 @@ function dispatchGroupsFrom<D>(dispatchers: readonly (D | readonly D[])[]): (rea
   return groups
 }
 
+/**
+ * Refuses a dispatcher `name` that isn't a bounded identifier, or that another dispatcher in the route already has.
+ * The name is how a delivery failure's log line says which delivery failed, so it has to be unique, and its shape
+ * is what keeps free text and submission data out of that line.
+ */
+function assertDispatcherNames(groups: readonly (readonly { readonly name?: unknown }[])[]): void {
+  const names = new Set<string>()
+  for (const dispatcher of groups.flat()) {
+    const { name } = dispatcher
+    if (name === undefined) continue
+
+    if (!isSafeName(name)) {
+      throw new Error(
+        'createFormRoute dispatcher `name` must be 1 to 64 letters, digits, `_`, `.`, `:` or `-`, such as `acknowledgement`.'
+      )
+    }
+
+    if (names.has(name)) {
+      throw new Error(`createFormRoute has two dispatchers named \`${name}\`; each name must be unique.`)
+    }
+
+    names.add(name)
+  }
+}
+
 // MARK: - Factory
 
 /**
@@ -222,6 +253,7 @@ export function createFormRoute<
     )
 
   const dispatchGroups = dispatchGroupsFrom<Dispatcher<Submission<S>, MergedProvided<Es>>>(config.dispatchers ?? [])
+  assertDispatcherNames(dispatchGroups)
 
   // A browser that posted the form itself shows whatever comes back, so it gets a redirect or plain text in
   // place of the JSON the script reads; `admitted` carries the form data out for a localising copy resolver.
@@ -369,7 +401,9 @@ export function createFormRoute<
             // request is safer than reporting a delivery that may matter as sent.
             let required = true
             let exposesResources: boolean | undefined
+            let name: string | undefined
             try {
+              name = dispatcher.name
               required = Boolean(dispatcher.required)
               exposesResources = dispatcher.exposesResources
 
@@ -388,7 +422,8 @@ export function createFormRoute<
               // resources, treat it as having exposed them to a recipient.
               if (exposesResources !== false) resourcesExposed = true
             } catch (error) {
-              await report(error, 'delivery')
+              const delivery = { name, required }
+              await report(error, 'delivery', delivery)
               failed += 1
               if (required) requiredFailed = true
 
@@ -401,7 +436,8 @@ export function createFormRoute<
                     'delivery.links-kept',
                     `${error.destination} may have delivered the upload links before failing; the files were kept.`
                   ),
-                  'delivery'
+                  'delivery',
+                  delivery
                 )
               }
             }
@@ -520,7 +556,7 @@ export function defineLazyRoute(build: () => APIRoute | Promise<APIRoute>, optio
         // Clear the slot so a construction failure retries on the next request instead of being cached.
         cached = undefined
 
-        await report?.(error, 'build')
+        await report?.(error, { stage: 'build' })
         throw error
       }))
     return pending.then((route) => route(context))

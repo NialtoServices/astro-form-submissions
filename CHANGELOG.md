@@ -9,6 +9,27 @@ every Upgrading section from the oldest version skipped to the newest.
 
 ## [Unreleased]
 
+### Upgrading
+
+1. **Check any dispatcher of your own that has a `name` property.** The route now reads `name` as the dispatcher's
+   name in delivery reports, and refuses to build when it isn't 1 to 64 letters, digits, `_`, `.`, `:` or `-`, or
+   when two dispatchers share one. Rename the property if it means something else.
+
+### Added
+
+- An optional `name` on every dispatcher, including `EmailDispatcher` and `DiscordDispatcher`, such as
+  `owner-notification`, `acknowledgement` or `team-chat`. A failed delivery is reported under it.
+- A delivery failure's report names the dispatcher: `onError` receives `dispatcher: { name, required }` beside
+  `stage`, on the failure and on any `delivery.links-kept` report that follows it. The context is exported as
+  `ErrorReportContext`.
+
+### Changed
+
+- The default reporter's delivery line starts with `dispatcher=` (when the dispatcher has a name) and `required=`,
+  so a lost owner notification reads differently from a missed acknowledgement:
+  `delivery error: dispatcher=acknowledgement required=false PostmarkDeliveryError code=10 status=401`. A log alert
+  that matches the old line exactly needs updating.
+
 ## [0.4.0] - 2026-10-23
 
 Emails can carry uploaded files as attachments, files are recognised as Word, OpenDocument text, RTF, plain text and

@@ -2,6 +2,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec'
 import { DestinationUnreachableError } from '#dispatchers/destination-unreachable-error.js'
 import type { DispatchContext, Dispatcher } from '#dispatchers/dispatcher.js'
 import { EmailDispatcher } from '#dispatchers/email.js'
+import { PostmarkDeliveryError } from '#dispatchers/postmark-delivery-error.js'
 import { FileAttachments } from '#enrichers/file-attachments.js'
 import { FileUploads } from '#enrichers/file-uploads.js'
 import { formError } from '#errors.js'
@@ -85,6 +86,7 @@ function validForm(overrides: Record<string, string> = {}) {
 /** A controllable dispatcher stub whose dispatch calls are recorded with their context. */
 function stubDispatcher(
   options: {
+    name?: string
     acceptsQuarantined?: boolean
     required?: boolean
     exposesResources?: boolean
@@ -96,6 +98,7 @@ function stubDispatcher(
     options.failWith ? Promise.reject(options.failWith) : Promise.resolve()
   )
   const dispatcher: Dispatcher = {
+    name: options.name,
     acceptsQuarantined: options.acceptsQuarantined,
     required: options.required,
     exposesResources: options.exposesResources,
@@ -330,7 +333,7 @@ describe('createFormRoute', () => {
       contextFor(validForm())
     )
     expect(response.status).toBe(502)
-    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery' })
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery', dispatcher: { required: true } })
   })
 
   it('a required email attaching a key nothing provides → 502, nothing sent, reported to onError', async () => {
@@ -357,7 +360,8 @@ describe('createFormRoute', () => {
     expect(response.status).toBe(502)
     expect(deliver).not.toHaveBeenCalled()
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'email.attach-missing' }), {
-      stage: 'delivery'
+      stage: 'delivery',
+      dispatcher: { required: true }
     })
     expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(OperationalError)
   })
@@ -373,7 +377,7 @@ describe('createFormRoute', () => {
     })(contextFor(validForm()))
     expect(response.status).toBe(200)
     expect(other.dispatch).toHaveBeenCalledOnce()
-    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery' })
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery', dispatcher: { required: false } })
   })
 
   it('every attempted delivery failing → 502, even with no required dispatcher', async () => {
@@ -414,7 +418,7 @@ describe('createFormRoute', () => {
       )
 
       expect(response.status).toBe(200)
-      expect(consoleSpy).toHaveBeenCalledWith('[astro-form-submissions] delivery error: Error')
+      expect(consoleSpy).toHaveBeenCalledWith('[astro-form-submissions] delivery error: required=false Error')
 
       // Neither the message nor the raw Error object (which carries it) is logged.
       const logged = consoleSpy.mock.calls.flat().join(' ')
@@ -966,7 +970,7 @@ describe('createFormRoute enrichers', () => {
     expect(rolledBack).toEqual([])
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({ message: expect.stringContaining('the files were kept') }),
-      { stage: 'delivery' }
+      { stage: 'delivery', dispatcher: { required: true } }
     )
   })
 
@@ -983,7 +987,10 @@ describe('createFormRoute enrichers', () => {
 
     expect(response.status).toBe(502)
     expect(onError).toHaveBeenCalledTimes(1)
-    expect(onError).toHaveBeenCalledWith(expect.any(DestinationUnreachableError), { stage: 'delivery' })
+    expect(onError).toHaveBeenCalledWith(expect.any(DestinationUnreachableError), {
+      stage: 'delivery',
+      dispatcher: { required: true }
+    })
   })
 
   it('waits for a sibling delivery when another dispatcher throws from a property, keeping what it sent', async () => {
@@ -1835,7 +1842,7 @@ describe('createFormRoute deliverWhen', () => {
 
     expect(response.status).toBe(502)
     expect(dispatch).not.toHaveBeenCalled()
-    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery' })
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery', dispatcher: { required: true } })
   })
 })
 
@@ -1894,7 +1901,7 @@ describe('createFormRoute dispatch groups', () => {
     expect(acknowledgement.dispatch).not.toHaveBeenCalled()
     expect(followUp.dispatch).not.toHaveBeenCalled()
     expect(onError).toHaveBeenCalledTimes(1)
-    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery' })
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery', dispatcher: { required: true } })
   })
 
   it('still runs the rest of a group when a required sibling in it fails', async () => {
@@ -1925,7 +1932,7 @@ describe('createFormRoute dispatch groups', () => {
 
     expect(response.status).toBe(200)
     expect(notification.dispatch).toHaveBeenCalledOnce()
-    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery' })
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), { stage: 'delivery', dispatcher: { required: false } })
   })
 
   it('a deliverWhen skip on a required dispatcher does not stop later groups', async () => {
@@ -2380,7 +2387,10 @@ describe('createFormRoute report wiring', () => {
 
     expect(response.status).toBe(502)
     expect(notifier.dispatch).not.toHaveBeenCalled()
-    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'hostile getter' }), { stage: 'delivery' })
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'hostile getter' }), {
+      stage: 'delivery',
+      dispatcher: { required: false }
+    })
   })
 
   it('rolls back the files when the only exposing delivery skips the submission', async () => {
@@ -2413,6 +2423,173 @@ describe('createFormRoute report wiring', () => {
     )
 
     expect(seen).toEqual(['192.0.2.10'])
+  })
+})
+
+describe('createFormRoute delivery reports', () => {
+  /** An owner notification and an acknowledgement sending through one transport Postmark refuses. */
+  function emailsSharingAFailingTransport(names: { owner?: string; acknowledgement?: string } = {}) {
+    const transport = { deliver: async () => Promise.reject(new PostmarkDeliveryError(401, 10)) }
+    const templates = { subject: () => 'Enquiry', text: () => 'text', html: () => '<p>html</p>' }
+    return [
+      new EmailDispatcher({
+        transport,
+        templates,
+        from: 'site@example.com',
+        to: 'office@example.com',
+        name: names.owner
+      }),
+      new EmailDispatcher({
+        transport,
+        templates,
+        from: 'site@example.com',
+        to: 'ada@example.com',
+        name: names.acknowledgement,
+        required: false
+      })
+    ]
+  }
+
+  /** Every line the default reporter wrote on `console.error` while the route answered one valid submission. */
+  async function loggedLines(dispatchers: Dispatcher[]): Promise<string[]> {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      await createFormRoute({ ...baseConfig, dispatchers })(contextFor(validForm()))
+      return consoleSpy.mock.calls.map((call) => String(call[0]))
+    } finally {
+      consoleSpy.mockRestore()
+    }
+  }
+
+  it('tells a failed owner notification from a failed acknowledgement sharing its transport', async () => {
+    expect(await loggedLines(emailsSharingAFailingTransport())).toEqual(
+      expect.arrayContaining([
+        '[astro-form-submissions] delivery error: required=true PostmarkDeliveryError code=10 status=401',
+        '[astro-form-submissions] delivery error: required=false PostmarkDeliveryError code=10 status=401'
+      ])
+    )
+  })
+
+  it('names each failed delivery by its dispatcher', async () => {
+    const dispatchers = emailsSharingAFailingTransport({
+      owner: 'owner-notification',
+      acknowledgement: 'acknowledgement'
+    })
+
+    expect(await loggedLines(dispatchers)).toEqual(
+      expect.arrayContaining([
+        '[astro-form-submissions] delivery error: dispatcher=owner-notification required=true PostmarkDeliveryError code=10 status=401',
+        '[astro-form-submissions] delivery error: dispatcher=acknowledgement required=false PostmarkDeliveryError code=10 status=401'
+      ])
+    )
+  })
+
+  it("hands onError the failed dispatcher's name and whether it was required", async () => {
+    const onError = vi.fn()
+    const failing = stubDispatcher({ name: 'team-chat', failWith: new Error('discord down') })
+    const other = stubDispatcher()
+
+    await createFormRoute({ ...baseConfig, dispatchers: [failing.dispatcher, other.dispatcher], onError })(
+      contextFor(validForm())
+    )
+
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), {
+      stage: 'delivery',
+      dispatcher: { name: 'team-chat', required: false }
+    })
+  })
+
+  it('names the dispatcher on the report that its upload links were kept', async () => {
+    const onError = vi.fn()
+    const enricher = { enrich: async () => ({ provide: { files: [] }, rollback: async () => {} }) }
+    const failing = stubDispatcher({
+      name: 'owner-notification',
+      required: true,
+      failWith: new DestinationUnreachableError('Postmark', { cause: new TypeError('fetch failed') })
+    })
+
+    await createFormRoute({ ...baseConfig, enrichers: [enricher], dispatchers: [failing.dispatcher], onError })(
+      contextFor(validForm())
+    )
+
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'delivery.links-kept' }), {
+      stage: 'delivery',
+      dispatcher: { name: 'owner-notification', required: true }
+    })
+  })
+
+  it('names no dispatcher on a report from another stage', async () => {
+    const onError = vi.fn()
+
+    await createFormRoute({
+      ...baseConfig,
+      guards: [{ guard: async () => ({ action: 'reject' as const, error: verificationError }) }],
+      dispatchers: [stubDispatcher({ name: 'team-chat' }).dispatcher],
+      onError
+    })(contextFor(validForm()))
+
+    expect(onError).toHaveBeenCalledOnce()
+    expect(onError.mock.calls[0]?.[1]).toEqual({ stage: 'guard' })
+    expect(onError.mock.calls[0]?.[1]).not.toHaveProperty('dispatcher')
+  })
+
+  it("reports a dispatcher whose `required` can't be read as required", async () => {
+    const onError = vi.fn()
+    const dispatcher: Dispatcher = {
+      name: 'owner-notification',
+      get required(): boolean {
+        throw new Error('hostile getter')
+      },
+      dispatch: vi.fn(async () => {})
+    }
+
+    await createFormRoute({ ...baseConfig, dispatchers: [dispatcher], onError })(contextFor(validForm()))
+
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), {
+      stage: 'delivery',
+      dispatcher: { name: 'owner-notification', required: true }
+    })
+  })
+})
+
+describe('createFormRoute dispatcher names', () => {
+  /** An email dispatcher with the given name, which the route checks when it's built. */
+  function emailNamed(name: string) {
+    return new EmailDispatcher({
+      transport: { deliver: async () => {} },
+      templates: { subject: () => 'Enquiry', text: () => 'text', html: () => '<p>html</p>' },
+      from: 'site@example.com',
+      to: 'office@example.com',
+      name
+    })
+  }
+
+  it.each([
+    ['an empty name', ''],
+    ['a name with a space', 'owner notification'],
+    ['a name with an @', 'ada@example.com'],
+    ['a name with an =', 'dispatcher=owner'],
+    ['a name longer than 64 characters', 'a'.repeat(65)]
+  ])('refuses %s when the route is built', (_case, name) => {
+    expect(() => createFormRoute({ ...baseConfig, dispatchers: [emailNamed(name)] })).toThrow(/dispatcher `name`/)
+  })
+
+  it("refuses a bad name on a dispatcher of the site's own", () => {
+    const dispatcher: Dispatcher = { name: 'Ada Lovelace', dispatch: async () => {} }
+
+    expect(() => createFormRoute({ ...baseConfig, dispatchers: [dispatcher] })).toThrow(/dispatcher `name`/)
+  })
+
+  it('refuses two dispatchers with one name, even in different groups', () => {
+    const dispatchers = [[emailNamed('acknowledgement')], [stubDispatcher({ name: 'acknowledgement' }).dispatcher]]
+
+    expect(() => createFormRoute({ ...baseConfig, dispatchers })).toThrow(/two dispatchers named `acknowledgement`/)
+  })
+
+  it('builds with names of up to 64 letters, digits and separators', () => {
+    const dispatchers = [emailNamed('owner-notification'), emailNamed('team.chat:ops_2'), emailNamed('a'.repeat(64))]
+
+    expect(() => createFormRoute({ ...baseConfig, dispatchers })).not.toThrow()
   })
 })
 

@@ -156,7 +156,7 @@ export {
 
 export type { ClientAddressResolver } from '#admission.js'
 
-export { defaultErrorReporter, type ErrorReporter } from '#reporting.js'
+export { defaultErrorReporter, type ErrorReportContext, type ErrorReporter } from '#reporting.js'
 export { SubmissionVerdictError, type ReportedVerdictAction } from '#submission-verdict-error.js'
 
 export { requireEnv } from '#env.js'

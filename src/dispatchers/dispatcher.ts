@@ -43,6 +43,13 @@ export interface DispatchContext<A = object> {
  */
 export interface Dispatcher<E extends FormSubmission = FormSubmission, A = object> {
   /**
+   * A short identifier for this destination, such as `owner-notification`, `acknowledgement` or `team-chat`, that a
+   * delivery failure is reported under. Up to 64 letters, digits, `_`, `.`, `:` or `-`, and unique within a route,
+   * which refuses anything else when it's built. Omitted, a failure is told apart only by whether it was `required`.
+   */
+  readonly name?: string
+
+  /**
    * Whether this destination receives quarantined submissions. Default false — a quarantined submission
    * (e.g. spam) reaches a destination only by explicit opt-in; set true on an internal/ops destination
    * (an owner notification, a team chat channel) that should see flagged submissions.

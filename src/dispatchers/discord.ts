@@ -127,6 +127,9 @@ export interface DiscordDispatcherSettings<E extends FormSubmission = FormSubmis
    */
   escapeMarkdown?: boolean
 
+  /** The name a failed post to this webhook is reported under, such as `team-chat`. See {@link Dispatcher.name}. */
+  name?: string
+
   /**
    * Whether this webhook receives quarantined submissions. Default false; set true on an ops channel
    * that should still be pinged about flagged (e.g. spam) submissions.
@@ -181,6 +184,10 @@ export class DiscordDispatcher<E extends FormSubmission = FormSubmission> implem
   }
 
   // MARK: - Dispatcher API
+
+  get name(): string | undefined {
+    return this.options.name
+  }
 
   get acceptsQuarantined(): boolean {
     return this.options.acceptsQuarantined ?? false

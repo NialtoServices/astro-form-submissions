@@ -10,22 +10,39 @@ import { SubmissionVerdictError, VERDICT_PAST_TENSE } from '#submission-verdict-
 export type FormErrorStage =
   'build' | 'guard' | 'validation' | 'inspection' | 'enrichment' | 'delivery' | 'upload' | 'unexpected'
 
+/** What an {@link ErrorReporter} learns alongside a failure besides the error itself. */
+export interface ErrorReportContext {
+  /** The stage the failure happened in, or that turned the submission away. */
+  stage: FormErrorStage
+
+  /**
+   * The dispatcher whose delivery failed, on a `delivery` report: its site-chosen `name`, `undefined` when it has
+   * none, and whether the delivery was `required`. Absent on every other stage.
+   */
+  dispatcher?: { name?: string; required: boolean }
+}
+
 /**
  * A route's error hook: called with each failure the route handles itself, and with each refused, dropped or
  * quarantined submission as a {@link SubmissionVerdictError}, together with the stage it came from.
  */
-export type ErrorReporter = (error: unknown, context: { stage: FormErrorStage }) => void | Promise<void>
+export type ErrorReporter = (error: unknown, context: ErrorReportContext) => void | Promise<void>
 
 /**
- * A bounded machine-identifier shape for `error.code`: short, and free of the spaces/`@`/`=` that
- * free-text or interpolated submission data would carry. Provider `code`s aren't guaranteed PII-free
- * (one set `code = 'recipient=ada@example.com'`), so anything outside this is dropped.
+ * A bounded machine-identifier shape for `error.code` and a dispatcher's `name`: short, and free of the
+ * spaces/`@`/`=` that free-text or interpolated submission data would carry. Provider `code`s aren't guaranteed
+ * PII-free (one set `code = 'recipient=ada@example.com'`), so anything outside this is dropped.
  */
 const SAFE_ERROR_CODE = /^[A-Za-z0-9_.:-]{1,64}$/
 
+/** Whether a value is a string of {@link SAFE_ERROR_CODE} shape, and so can be logged as a name. */
+export function isSafeName(value: unknown): value is string {
+  return typeof value === 'string' && SAFE_ERROR_CODE.test(value)
+}
+
 /** Whether a value can be logged as a machine identifier: a number, or a string of {@link SAFE_ERROR_CODE} shape. */
 function isSafeIdentifier(value: unknown): value is number | string {
-  return typeof value === 'number' || (typeof value === 'string' && SAFE_ERROR_CODE.test(value))
+  return typeof value === 'number' || isSafeName(value)
 }
 
 /**
@@ -83,27 +100,47 @@ function summarizeVerdict(verdict: SubmissionVerdictError): string {
 }
 
 /**
+ * The fields that say which delivery failed: `dispatcher=` with its name when it has a safe one, then `required=`.
+ * None when the report names no dispatcher.
+ */
+function dispatcherFields(dispatcher: ErrorReportContext['dispatcher']): string[] {
+  if (!dispatcher) return []
+
+  const fields = isSafeName(dispatcher.name) ? [`dispatcher=${dispatcher.name}`] : []
+  fields.push(`required=${dispatcher.required}`)
+  return fields
+}
+
+/**
  * The {@link ErrorReporter} a route uses when the site configures none. A reported verdict is expected
  * behaviour, so it goes to `console.warn` as its stage, action, code and safe details; anything else is a
- * failure, and goes to `console.error` as a PII-safe summary.
+ * failure, and goes to `console.error` as a PII-safe summary, led by which dispatcher failed on a delivery.
  *
  * @param error - The swallowed failure or reported verdict.
- * @param context - The stage it happened in.
+ * @param context - The stage it happened in, and the dispatcher on a delivery failure.
  */
-export function defaultErrorReporter(error: unknown, { stage }: { stage: FormErrorStage }): void {
+export function defaultErrorReporter(error: unknown, { stage, dispatcher }: ErrorReportContext): void {
   if (error instanceof SubmissionVerdictError) {
     console.warn(`[astro-form-submissions] ${stage} ${VERDICT_PAST_TENSE[error.action]}: ${summarizeVerdict(error)}`)
     return
   }
 
-  console.error(`[astro-form-submissions] ${stage} error: ${summarizeError(error)}`)
+  const summary = [...dispatcherFields(dispatcher), summarizeError(error)].join(' ')
+  console.error(`[astro-form-submissions] ${stage} error: ${summary}`)
 }
 
 /** How long a request waits on its reports, in all, before abandoning them and answering anyway. */
 export const REPORTER_TIMEOUT_MS = 5_000
 
 /** A contained reporter: reports one failure, waiting at most `waitMs` for the site's hook. */
-export type ContainedReport = (error: unknown, stage: FormErrorStage, waitMs?: number) => Promise<void>
+export type ContainedReport = (error: unknown, context: ErrorReportContext, waitMs?: number) => Promise<void>
+
+/** Reports one failure from a stage, naming the dispatcher on a delivery failure. */
+export type StageReport = (
+  error: unknown,
+  stage: FormErrorStage,
+  dispatcher?: ErrorReportContext['dispatcher']
+) => Promise<void>
 
 /**
  * Wraps a reporter so every call is awaited (an async hook can't detach into an unhandled rejection),
@@ -118,7 +155,7 @@ export type ContainedReport = (error: unknown, stage: FormErrorStage, waitMs?: n
 export function containedReporter(onError: ErrorReporter | undefined): ContainedReport {
   const reporter = onError ?? defaultErrorReporter
 
-  return async (error, stage, waitMs = REPORTER_TIMEOUT_MS) => {
+  return async (error, context, waitMs = REPORTER_TIMEOUT_MS) => {
     let timer: ReturnType<typeof setTimeout> | undefined
     const timeout =
       waitMs > 0
@@ -128,7 +165,7 @@ export function containedReporter(onError: ErrorReporter | undefined): Contained
         : Promise.resolve()
 
     try {
-      await Promise.race([reporter(error, { stage }), timeout])
+      await Promise.race([reporter(error, context), timeout])
     } catch {
       /* see above */
     } finally {
@@ -147,7 +184,7 @@ export function containedReporter(onError: ErrorReporter | undefined): Contained
  * @param report - The route's contained reporter.
  * @returns The reporter one request uses.
  */
-export function withReportingBudget(report: ContainedReport): (error: unknown, stage: FormErrorStage) => Promise<void> {
+export function withReportingBudget(report: ContainedReport): StageReport {
   let remainingMs = REPORTER_TIMEOUT_MS
   let pendingReports = 0
   let pendingSince = 0
@@ -160,13 +197,13 @@ export function withReportingBudget(report: ContainedReport): (error: unknown, s
     pendingSince = now
   }
 
-  return async (error, stage) => {
+  return async (error, stage, dispatcher) => {
     spendPendingTime()
     if (pendingReports === 0) pendingSince = Date.now()
     pendingReports += 1
 
     try {
-      await report(error, stage, remainingMs)
+      await report(error, dispatcher ? { stage, dispatcher } : { stage }, remainingMs)
     } finally {
       spendPendingTime()
       pendingReports -= 1

@@ -171,6 +171,12 @@ export interface EmailDispatcherOptions<
   attach?: K
 
   /**
+   * The name a failed delivery of this email is reported under, such as `owner-notification` or `acknowledgement`.
+   * See {@link Dispatcher.name}.
+   */
+  name?: string
+
+  /**
    * Whether this email receives quarantined submissions. Default false — a spam-flagged submission is
    * withheld from customer/owner email unless you opt in; set true on an internal ops mailbox.
    */
@@ -215,6 +221,10 @@ export class EmailDispatcher<
   constructor(private readonly options: EmailDispatcherOptions<E, A, K>) {}
 
   // MARK: - Dispatcher API
+
+  get name(): string | undefined {
+    return this.options.name
+  }
 
   get acceptsQuarantined(): boolean {
     return this.options.acceptsQuarantined ?? false

@@ -58,6 +58,33 @@ describe('defaultErrorReporter', () => {
   })
 })
 
+describe('defaultErrorReporter on a delivery failure', () => {
+  /** The line the default reporter writes for a failed delivery by the given dispatcher. */
+  async function deliveryLine(dispatcher: { name?: string; required: boolean }): Promise<string> {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await defaultErrorReporter(new PostmarkDeliveryError(401, 10), { stage: 'delivery', dispatcher })
+    return String(consoleSpy.mock.lastCall?.[0])
+  }
+
+  it("leads with the dispatcher's name and whether its delivery was required", async () => {
+    expect(await deliveryLine({ name: 'owner-notification', required: true })).toBe(
+      '[astro-form-submissions] delivery error: dispatcher=owner-notification required=true PostmarkDeliveryError code=10 status=401'
+    )
+  })
+
+  it('says only whether the delivery was required for a dispatcher with no name', async () => {
+    expect(await deliveryLine({ required: false })).toBe(
+      '[astro-form-submissions] delivery error: required=false PostmarkDeliveryError code=10 status=401'
+    )
+  })
+
+  it('leaves out a name that could be free text', async () => {
+    expect(await deliveryLine({ name: 'ada@example.com', required: false })).toBe(
+      '[astro-form-submissions] delivery error: required=false PostmarkDeliveryError code=10 status=401'
+    )
+  })
+})
+
 /** The line the default reporter warns with for one verdict report. */
 async function warnedLine(error: unknown, stage: FormErrorStage = 'inspection'): Promise<string> {
   const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -185,7 +212,9 @@ describe('containedReporter', () => {
   it('abandons a report that never settles once the timeout passes', async () => {
     vi.useFakeTimers()
     let settled = false
-    const report = containedReporter(() => new Promise<void>(() => {}))(new Error('outage'), 'delivery').then(() => {
+    const report = containedReporter(() => new Promise<void>(() => {}))(new Error('outage'), {
+      stage: 'delivery'
+    }).then(() => {
       settled = true
     })
 
@@ -199,7 +228,7 @@ describe('containedReporter', () => {
 
   it('leaves no timer behind once a report settles', async () => {
     vi.useFakeTimers()
-    await containedReporter(async () => {})(new Error('outage'), 'delivery')
+    await containedReporter(async () => {})(new Error('outage'), { stage: 'delivery' })
 
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -209,7 +238,7 @@ describe('containedReporter', () => {
     const report = containedReporter(
       () =>
         new Promise<void>((_resolve, reject) => setTimeout(() => reject(new Error('late')), REPORTER_TIMEOUT_MS * 2))
-    )(new Error('outage'), 'delivery')
+    )(new Error('outage'), { stage: 'delivery' })
 
     await vi.advanceTimersByTimeAsync(REPORTER_TIMEOUT_MS * 2)
     await expect(report).resolves.toBeUndefined()

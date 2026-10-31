@@ -466,6 +466,20 @@ The toolkit's own handled failures arrive as `OperationalError`s, which the defa
 | `delivery`   | `delivery.links-kept`             | none             | A delivery carrying upload links failed in a way that may have reached the recipient, so the files were kept.                                                                                                    |
 | `unexpected` | `quarantine.undeliverable`        | none             | A submission was quarantined, but no dispatcher accepts quarantined submissions, so nothing was delivered.                                                                                                       |
 
+A failed delivery's line says which delivery it was: `required=` always, and `dispatcher=` first when the
+dispatcher has a [`name`](#dispatchers). So with two emails sharing one transport, a lost owner notification and a
+missed acknowledgement read differently even when neither is named:
+
+```
+[astro-form-submissions] delivery error: required=true PostmarkDeliveryError code=10 status=401
+[astro-form-submissions] delivery error: dispatcher=acknowledgement required=false PostmarkDeliveryError code=10 status=401
+```
+
+`required=` says whether that delivery was required, not whether the submission was lost: when every attempted
+delivery fails, the sender gets a 502 even if none was required. A custom `onError` gets the same as
+`context.dispatcher`, `{ name, required }`, on a delivery failure, and on the `delivery.links-kept` report that
+follows one; reports from other stages carry no `dispatcher`.
+
 A custom `onError` receives each verdict as a `SubmissionVerdictError` carrying `action`, `code` and
 `details` exactly as the stage gave them. To keep forwarding only real failures to an error tracker, hand
 verdicts to the default reporter:
@@ -486,7 +500,7 @@ const onError: ErrorReporter = (error, context) => {
 ### Migrating a site from its own wrappers
 
 A site written for an earlier release may carry code the route now makes redundant. Once it is on 0.4.0, it can
-drop:
+drop the first two of these, and from 0.5.0 the third:
 
 - **Logging wrappers.** A guard, inspector or enricher that logged its own refusals so a rejected submission could
   be traced. The route reports every refused, dropped or quarantined submission with a reason code and details
@@ -494,6 +508,11 @@ drop:
 - **Body-size guards.** A guard that read `Content-Length`, or a wrapper that measured the body before the route
   saw it. `maxBodyBytes` and `maxTextBodyBytes` cap what the route reads, and a larger body is refused with
   `requestTooLarge` (413), so the guard no longer adds a limit of its own.
+- **Transport wrappers that logged which email failed.** A route sending an owner notification and an
+  acknowledgement through one `EmailTransport` reported both failures alike, so a site could wrap the transport and
+  compare each message's recipient with the owner's address to tell them apart. Each failure's line now says
+  whether its delivery was `required`, and names its dispatcher when you give it a `name` (see [Logs](#logs)), so
+  the wrapper can go.
 
 ## Guards
 
@@ -693,6 +712,11 @@ whose host a proxy or client can influence) and `siteURL` (Astro's configured `s
 origin**, or `undefined` when unset). Derive whatever you need and pick your own trust/fallback — the
 built-in templates show the trusted `context.siteURL`'s host and leave it out when `site` is unset, since
 `requestURL`'s host can come from a header the sender sets.
+
+- **`name`** — a short identifier a failed delivery is reported under, such as `owner-notification`,
+  `acknowledgement` or `team-chat` (see [Logs](#logs)). Optional; up to 64 letters, digits, `_`, `.`, `:` or `-`,
+  and unique within the route, which refuses anything else when it's built. Without one, a failure is told apart
+  by whether it was `required`.
 
 - **`acceptsQuarantined`** — whether this destination receives quarantined submissions. **Default
   `false`**, so the pipeline is safe by construction: a submission an inspector quarantines (e.g. spam)

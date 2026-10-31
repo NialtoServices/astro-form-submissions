@@ -272,7 +272,7 @@ describe('PostmarkTransport attachments', () => {
       expect(fetchMock).not.toHaveBeenCalled()
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringMatching(
-          /^\[astro-form-submissions\] delivery error: OperationalError code=postmark\.message-too-large bytes=\d+ limit=10000000$/
+          /^\[astro-form-submissions\] delivery error: required=true OperationalError code=postmark\.message-too-large bytes=\d+ limit=10000000$/
         )
       )
     })
