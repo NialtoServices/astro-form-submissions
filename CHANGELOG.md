@@ -98,6 +98,11 @@ reported with a reason code, and a form posted without JavaScript gets a page a 
 14. **Rename `webhookUrl` to `webhookURL` on every `DiscordDispatcher`.** The old spelling is removed, no longer
     type-checks and is no longer read, so a dispatcher given only `webhookUrl` throws at construction, as one
     without a webhook does.
+15. **Make any stand-in for an R2 bucket honour conditional writes.** `R2Storage` now writes with
+    `onlyIf: new Headers({ 'If-None-Match': '*' })` and treats a `null` result as `ObjectExistsError`. A fake
+    `R2Bucket` passed to `R2Storage`, usually in a site's tests, must store nothing and resolve `null` when `onlyIf`
+    carries `If-None-Match: *` and the key already holds an object. Otherwise those tests overwrite objects the real
+    bucket refuses. A site whose tests pass no fake bucket to `R2Storage` has nothing to do.
 
 Once on this release, a site can also drop the logging wrappers and body-size guards it wrote for earlier ones,
 since the route now reports every refusal and caps the body itself. Nothing breaks if they stay; "Migrating a site
