@@ -50,6 +50,39 @@ export function escapeDiscordMarkdown(text: string): string {
 
 const DISCORD_TIMEOUT_MS = 5000
 
+/**
+ * Discord's rules for a webhook's name, which a `username` override must also meet.
+ * => https://docs.discord.com/developers/resources/webhook
+ */
+const USERNAME_LIMIT = 80
+const FORBIDDEN_USERNAME_SUBSTRINGS = /clyde|discord/i
+
+/**
+ * Whether a name meets Discord's rules for a webhook's name.
+ *
+ * @param username - The name to check.
+ * @returns `true` when the name is 1 to 80 characters with no forbidden substring.
+ */
+function isValidWebhookUsername(username: unknown): boolean {
+  if (typeof username !== 'string') return false
+
+  const length = [...username.trim()].length
+  return length >= 1 && length <= USERNAME_LIMIT && !FORBIDDEN_USERNAME_SUBSTRINGS.test(username)
+}
+
+/**
+ * Whether a value is an absolute http(s) URL.
+ *
+ * @param value - The value to check.
+ * @returns `true` when the value parses as a URL with an `http:` or `https:` scheme.
+ */
+function isHTTPURL(value: unknown): boolean {
+  if (typeof value !== 'string' || !URL.canParse(value)) return false
+
+  const { protocol } = new URL(value)
+  return protocol === 'http:' || protocol === 'https:'
+}
+
 const DEFAULT_EMBED_COLOR = 0xffde00
 const DEFAULT_TITLE = 'New form submission'
 
@@ -121,6 +154,15 @@ export interface DiscordDispatcherSettings<E extends FormSubmission = FormSubmis
   color?: number
 
   /**
+   * The name the message is posted under, in place of the name set on the webhook. 1 to 80 characters, and never
+   * containing `clyde` or `discord` in any case, which Discord refuses.
+   */
+  username?: string
+
+  /** An absolute http(s) URL of the image the message is posted with, in place of the webhook's own avatar. */
+  avatarURL?: string
+
+  /**
    * Whether values resolved from `fields` keys and specs are escaped with {@link escapeDiscordMarkdown}, so a
    * submission can't put formatting, masked links or mentions in the channel. Default `true`; set `false` only
    * when every such value is markdown you wrote. A `fields` builder's values are posted as given.
@@ -178,6 +220,18 @@ export class DiscordDispatcher<E extends FormSubmission = FormSubmission> implem
     const { webhookURL } = options
     if (typeof webhookURL !== 'string' || !URL.canParse(webhookURL) || new URL(webhookURL).protocol !== 'https:') {
       throw new Error('DiscordDispatcher needs `webhookURL` to be an absolute https URL.')
+    }
+
+    // Discord refuses every post that carries an invalid override, so both are checked once, here.
+    const { username, avatarURL } = options
+    if (username !== undefined && !isValidWebhookUsername(username)) {
+      throw new Error(
+        'DiscordDispatcher needs `username` to be 1 to 80 characters, without `clyde` or `discord` in any case.'
+      )
+    }
+
+    if (avatarURL !== undefined && !isHTTPURL(avatarURL)) {
+      throw new Error('DiscordDispatcher needs `avatarURL` to be an absolute http(s) URL.')
     }
 
     this.webhookURL = webhookURL
@@ -247,7 +301,12 @@ export class DiscordDispatcher<E extends FormSubmission = FormSubmission> implem
         },
 
         // Mentions in an embed never notify; this keeps any mention inert even if the payload ever carries `content`.
-        body: JSON.stringify({ embeds: [embed], allowed_mentions: { parse: [] } }),
+        body: JSON.stringify({
+          embeds: [embed],
+          allowed_mentions: { parse: [] },
+          username: this.options.username,
+          avatar_url: this.options.avatarURL
+        }),
         signal: controller.signal
       })
     } catch (error) {

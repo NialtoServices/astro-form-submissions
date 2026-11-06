@@ -9,6 +9,12 @@ every Upgrading section from the oldest version skipped to the newest.
 
 ## [Unreleased]
 
+### Added
+
+- `username` and `avatarURL` options on `DiscordDispatcher`, which post each message under that name and avatar in
+  place of the ones set on the webhook. A username Discord would refuse (empty, over 80 characters, or containing
+  `clyde` or `discord`) or an avatar URL that isn't absolute http(s) throws at construction.
+
 ## [0.5.0] - 2026-10-31
 
 A failed delivery is reported under its dispatcher, so a lost owner notification no longer reads the same as a missed

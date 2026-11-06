@@ -1048,6 +1048,11 @@ mentions to your channel. A bare URL is left as typed, so it still links. Pass `
 `title`, `description` or `fields` builder is posted as given, so wrap any submission text it includes in
 the exported `escapeDiscordMarkdown`.
 
+Messages post under the name and avatar set on the webhook. To post under others without changing the webhook, pass
+`username` (1 to 80 characters, without `clyde` or `discord`, which Discord refuses) and `avatarURL` (an absolute
+http(s) URL of the image). A value Discord would refuse throws when the dispatcher is constructed rather than failing
+every send.
+
 ## File uploads
 
 A form takes files by adding a file input to your form — `<input type="file" name="file"

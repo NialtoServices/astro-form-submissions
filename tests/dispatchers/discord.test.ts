@@ -235,6 +235,58 @@ describe('DiscordDispatcher webhook option', () => {
   })
 })
 
+describe('DiscordDispatcher sender override', () => {
+  /** Send via the notifier and return the whole body Discord would have received. */
+  async function captureBody(options: Partial<DiscordDispatcherSettings> = {}): Promise<Record<string, unknown>> {
+    let body: Record<string, unknown> = {}
+    stubFetch((_requestURL, requestInit) => {
+      body = JSON.parse(requestInit?.body as string)
+      return new Response('', { status: 200 })
+    })
+
+    await new DiscordDispatcher({ webhookURL: 'https://discord.test/hook', fields: [], ...options }).dispatch(
+      base,
+      dispatchContext()
+    )
+    return body
+  }
+
+  it('posts under the webhook’s own name and avatar by default', async () => {
+    const body = await captureBody()
+    expect(body).not.toHaveProperty('username')
+    expect(body).not.toHaveProperty('avatar_url')
+  })
+
+  it('posts under the given username and avatar', async () => {
+    const body = await captureBody({ username: 'Website enquiries', avatarURL: 'https://my-site.example/avatar.png' })
+    expect(body).toMatchObject({ username: 'Website enquiries', avatar_url: 'https://my-site.example/avatar.png' })
+  })
+
+  it.each(['', '   ', 'A'.repeat(81), 'Clyde helper', 'My Discord bot'])(
+    'refuses the username %j at construction',
+    (username) => {
+      expect(() => new DiscordDispatcher({ webhookURL: 'https://discord.test/hook', fields: [], username })).toThrow(
+        '`username`'
+      )
+    }
+  )
+
+  it('accepts an 80-character username', () => {
+    expect(
+      () => new DiscordDispatcher({ webhookURL: 'https://discord.test/hook', fields: [], username: 'A'.repeat(80) })
+    ).not.toThrow()
+  })
+
+  it.each(['avatar.png', '/avatar.png', 'ftp://my-site.example/avatar.png'])(
+    'refuses the avatar URL %j at construction',
+    (avatarURL) => {
+      expect(() => new DiscordDispatcher({ webhookURL: 'https://discord.test/hook', fields: [], avatarURL })).toThrow(
+        '`avatarURL`'
+      )
+    }
+  )
+})
+
 describe('DiscordDispatcher markdown', () => {
   const hostile = '[Verify payment](https://evil.example) @everyone <@&123>\n# Urgent **now**'
 
